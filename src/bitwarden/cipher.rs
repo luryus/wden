@@ -1,0 +1,251 @@
+use failure::err_msg;
+use failure::Error;
+use std::convert::TryInto;
+use std::str::FromStr;
+use ring::{digest, pbkdf2, hkdf};
+use std::num;
+use base64;
+use std::fmt;
+use itertools::Itertools;
+use failure::Fail;
+use aes::{Aes256};
+use block_modes::{BlockMode, Cbc};
+use block_modes::block_padding::Pkcs7;
+use serde::{Deserialize, Deserializer};
+use serde::de;
+
+static PBKDF2_ALG: pbkdf2::Algorithm = pbkdf2::PBKDF2_HMAC_SHA256;
+const CREDENTIAL_LEN: usize = digest::SHA256_OUTPUT_LEN;
+pub type MasterKey = [u8; CREDENTIAL_LEN];
+pub type MasterPasswordHash = [u8; CREDENTIAL_LEN];
+pub type EncryptionKey = [u8; CREDENTIAL_LEN];
+pub type MacKey = [u8; CREDENTIAL_LEN];
+
+pub fn create_master_key(user_email: &str, user_password: &str, hash_iterations: std::num::NonZeroU32) -> MasterKey {
+    let mut res: MasterKey = [0u8; CREDENTIAL_LEN];
+
+    pbkdf2::derive(PBKDF2_ALG, hash_iterations, user_email.as_bytes(), user_password.as_bytes(), &mut res);
+
+    res
+}
+
+pub fn create_master_password_hash(master_key: MasterKey, user_password: &str) -> MasterPasswordHash {
+    let mut res: MasterPasswordHash = [0; CREDENTIAL_LEN];
+
+    pbkdf2::derive(PBKDF2_ALG, num::NonZeroU32::new(1).unwrap(), user_password.as_bytes(), &master_key, &mut res);
+
+    res
+}
+
+pub fn decrypt_symmetric_keys(key_cipher: &Cipher, master_key: MasterKey) -> Result<(EncryptionKey, MacKey), Error> {
+    let (master_enc, master_mac) = 
+        expand_master_key(master_key).ok_or(err_msg("Stretching master key failed"))?;
+    
+    let dec_cipher = key_cipher.decrypt(&master_enc, &master_mac).or(Err(err_msg("Decryption failed")))?;
+
+    let enc_key = dec_cipher.iter().take(32).copied().collect::<Vec<_>>();
+    let mac_key = dec_cipher.into_iter().skip(32).take(32).collect::<Vec<_>>();
+
+    if enc_key.len() != 32 || mac_key.len() != 32 {
+        return Err(err_msg("Key decryption failed"))
+    }
+
+    let enc_key: EncryptionKey = enc_key[..].try_into().unwrap();
+    let mac_key: MacKey = mac_key[..].try_into().unwrap();
+
+    Ok((enc_key, mac_key))
+}
+
+fn expand_master_key(master_key: MasterKey) -> Option<([u8; 32], [u8; 32])> {
+    let prk = hkdf::Prk::new_less_safe(hkdf::HKDF_SHA256, &master_key);
+    let enc_info = ["enc".as_bytes()];
+    let mac_info = ["mac".as_bytes()];
+    let enc_okm = prk.expand(&enc_info, hkdf::HKDF_SHA256).ok()?;
+    let mut enc_out = [0u8; 32];
+    enc_okm.fill(&mut enc_out).ok()?;
+    
+    let mac_okm = prk.expand(&mac_info, hkdf::HKDF_SHA256).ok()?;
+    let mut mac_out = [0u8; 32];
+    mac_okm.fill(&mut mac_out).ok()?;
+
+    Some((enc_out, mac_out))
+}
+
+pub struct Cipher {
+    enc_type: EncType,
+    iv: Vec::<u8>,
+    ct: Vec::<u8>,
+    mac: Vec::<u8>
+}
+
+impl fmt::Display for Cipher {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(formatter, "Cipher")
+    }
+}
+
+impl fmt::Debug for Cipher {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Cipher: iv {} bytes, ct {} bytes, mac {} bytes",
+            self.iv.len(), self.ct.len(), self.mac.len())
+    }
+}
+
+impl<'de> Deserialize<'de> for Cipher {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Cipher, D::Error> {
+        let s = String::deserialize(deserializer)?;
+        s.parse().map_err(de::Error::custom)
+    }
+}
+
+impl FromStr for Cipher {
+    type Err = Error;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        let (enc_type_str, rest) = s.split(".").collect_tuple()
+            .ok_or(err_msg("Cipher string did not contain two parts"))?;
+        let enc_type = EncType::from_str(enc_type_str)?;
+
+        let (iv_b64, ct_b64, mac_b64) = rest.split("|").collect_tuple()
+            .ok_or(err_msg("Cipher string did not contain three encoded parts"))?;
+
+        let iv = base64::decode(iv_b64)?;
+        let ct = base64::decode(ct_b64)?;
+        let mac = base64::decode(mac_b64)?;
+
+        Ok(Cipher { enc_type, iv, ct, mac })
+    }
+}
+
+impl Cipher {
+    pub fn decrypt(&self, enc_key: &EncryptionKey, mac_key: &MacKey) -> Result<Vec<u8>, Error> {
+        match self.enc_type {
+            EncType::AesCbc256_B64 => self.decrypt_aescbc256(enc_key, mac_key),
+            EncType::AesCbc128_HmacSha256_B64 => self.decrypt_aescbc128_hmac_sha256(enc_key, mac_key),
+            EncType::AesCbc256_HmacSha256_B64 => self.decrypt_aescbc256_hmac_sha256(enc_key, mac_key),
+            EncType::Rsa2048_OaepSha256_B64 => self.decrypt_rsa2048_oaepsha256(enc_key, mac_key),
+            EncType::Rsa2048_OaepSha1_B64 => self.decrypt_rsa2048_oaepsha1(enc_key, mac_key),
+            EncType::Rsa2048_OaepSha256_HmacSha256_B64 => self.decrypt_rsa2048_oaepsha256_hmacsha256(enc_key, mac_key),
+            EncType::Rsa2048_OaepSha1_HmacSha256_B64 => self.decrypt_rsa2048_oaepsha1_hmacsha256(enc_key, mac_key)
+        }
+    }
+
+    fn decrypt_aescbc256(&self, enc_key: &EncryptionKey, mac_key: &MacKey) -> Result<Vec<u8>, Error> {
+        unimplemented!()
+    }
+    fn decrypt_aescbc128_hmac_sha256(&self, enc_key: &EncryptionKey, mac_key: &MacKey) -> Result<Vec<u8>, Error> {
+        unimplemented!()
+    }
+    fn decrypt_aescbc256_hmac_sha256(&self, enc_key: &EncryptionKey, mac_key: &MacKey) -> Result<Vec<u8>, Error> {
+        type Aes256Cbc = Cbc<Aes256, Pkcs7>;
+
+        let mac_key = ring::hmac::Key::new(ring::hmac::HMAC_SHA256, mac_key);
+        let data = [&self.iv[..], &self.ct[..]].concat();
+        ring::hmac::verify(&mac_key, &data, &self.mac)
+            .or(Err(err_msg("Hmac verification failed")))?;
+        
+        let aes = Aes256Cbc::new_var(enc_key, self.iv.as_slice())?;
+
+        aes.decrypt_vec(self.ct.as_slice()).or(Err(err_msg("Aes decryption failed")))
+    }
+    fn decrypt_rsa2048_oaepsha256(&self, enc_key: &EncryptionKey, mac_key: &MacKey) -> Result<Vec<u8>, Error> {
+        unimplemented!()
+    }
+    fn decrypt_rsa2048_oaepsha1(&self, enc_key: &EncryptionKey, mac_key: &MacKey) -> Result<Vec<u8>, Error> {
+        unimplemented!()
+    }
+    fn decrypt_rsa2048_oaepsha256_hmacsha256(&self, enc_key: &EncryptionKey, mac_key: &MacKey) -> Result<Vec<u8>, Error> {
+        unimplemented!()
+    }
+    fn decrypt_rsa2048_oaepsha1_hmacsha256(&self, enc_key: &EncryptionKey, mac_key: &MacKey) -> Result<Vec<u8>, Error> {
+        unimplemented!()
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub enum EncType {
+    AesCbc256_B64,
+    AesCbc128_HmacSha256_B64,
+    AesCbc256_HmacSha256_B64,
+    Rsa2048_OaepSha256_B64,
+    Rsa2048_OaepSha1_B64,
+    Rsa2048_OaepSha256_HmacSha256_B64,
+    Rsa2048_OaepSha1_HmacSha256_B64
+}
+
+#[derive(Debug, Fail)]
+#[fail(display = "The enc type is invalid")]
+pub struct UnknownEncTypeError;
+
+impl FromStr for EncType {
+    type Err = UnknownEncTypeError;
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        match s {
+            "0" => Ok(EncType::AesCbc256_B64),
+            "1" => Ok(EncType::AesCbc128_HmacSha256_B64),
+            "2" => Ok(EncType::AesCbc256_HmacSha256_B64),
+            "3" => Ok(EncType::Rsa2048_OaepSha256_B64),
+            "4" => Ok(EncType::Rsa2048_OaepSha1_B64),
+            "5" => Ok(EncType::Rsa2048_OaepSha256_HmacSha256_B64),
+            "6" => Ok(EncType::Rsa2048_OaepSha1_HmacSha256_B64),
+            _ => Err(UnknownEncTypeError{})
+        }
+    }
+}
+
+
+#[test]
+fn test_create_master_password_hash() {
+    let key = create_master_key(
+        "foobar@example.com",
+        "asdasdasd",
+        num::NonZeroU32::new(100000).unwrap(),
+    );
+    let pass_hash = create_master_password_hash(key, "asdasdasd");
+    assert_eq!(
+        base64::encode(&pass_hash),
+        "7jACo78yJ4rlybclGvCGjcE1bqPBXO3Gjvvg9mkFnl8="
+    );
+}
+
+#[test]
+fn test_create_master_key() {
+    let key = create_master_key(
+        "foobar@example.com",
+        "asdasdasd",
+        num::NonZeroU32::new(100000).unwrap(),
+    );
+    assert_eq!(
+        base64::encode(&key),
+        "WKBariwK2lofMJ27IZhzWlXvrriiH6Tht66VjxcRF7c="
+    )
+}
+
+#[test]
+fn test_parse_cipher() {
+    let cipher_string = "2.ZgmAs5yxnEpBr7PoAnN9DA==|R8LcKh6xdKqzXm9s3yr2cw==|iAmlUJJFzPT/u7pVzyub44iwbVEpG7e9NDnwNubzV6M=";
+    let cipher = Cipher::from_str(cipher_string).unwrap();
+
+    assert!(cipher.enc_type == EncType::AesCbc256_HmacSha256_B64);
+}
+
+#[test]
+fn test_decrypt_cipher() {
+    let cipher_string = "2.OixUIKgN6/vWRoSvC0aTCA==|Ts7tpWXO28X2l7XSU4trsA==|q6Vz+/1QADVZRwZ1qoPoRoSvVd01A6le+nbSQxjmGDI=";
+    let cipher = Cipher::from_str(cipher_string).unwrap();
+
+    let master_key = create_master_key(
+        "foobar@example.com",
+        "asdasdasd",
+        num::NonZeroU32::new(100000).unwrap(),
+    );
+    let enc_key = "2.BztLR8IR0LVpkRL222P4rg==|cBSzwekYt1RPgYAEHI29mtqrjRge8U+FOSmtJtheAMnaEq4eCEurazgzRweksbE9abJYxriOXFnzTR/13HyCJqO9ytLK11N+G0kmhdW/scM=|nLLHbuK4KnVJnRyVIfOu396iI7xJ/ZXWYHRscMFugTI=";
+
+    let (dec_enc_key, dec_mac_key) = decrypt_symmetric_keys(&enc_key.parse().unwrap(), master_key).unwrap();
+
+    let res = cipher.decrypt(&dec_enc_key, &dec_mac_key).unwrap();
+
+    let res = String::from_utf8(res).unwrap();
+
+    assert_eq!("Test", res);
+}
