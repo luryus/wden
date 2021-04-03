@@ -21,3 +21,5 @@ crossterm = "0.19"
 cursive = { version = "0.16", default_features = false, features = ["crossterm-backend"] }
 cursive_table_view = "0.13"
 log = "0.4"
+lazy_static = "1.4"
+clipboard = "0.5"

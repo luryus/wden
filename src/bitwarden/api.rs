@@ -1,3 +1,4 @@
+use itertools::Itertools;
 use reqwest;
 use reqwest::Url;
 use std::collections::HashMap;
@@ -79,12 +80,14 @@ impl ApiClient {
 
     pub async fn sync(&self) -> Result<SyncResponse, Error> {
         assert!(self.access_token.is_some());
-        let url = self.base_url.join("api/sync")?;
+        let mut url = self.base_url.join("api/sync")?;
+        url.set_query(Some("excludeDomains=true"));
         let res = self.http_client.get(url)
             .bearer_auth(self.access_token.as_ref().unwrap())
             .send().await?
             .error_for_status()?
-            .json::<SyncResponse>().await?;
+            .json::<SyncResponseInternal>().await?
+            .into();
 
         return Ok(res);
     }
@@ -104,24 +107,148 @@ pub struct TokenResponse {
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "PascalCase")]
+struct SyncResponseInternal {
+    ciphers: Vec<CipherItemInternal>
+}
+
 pub struct SyncResponse {
     pub ciphers: Vec<CipherItem>
 }
 
+impl From<SyncResponseInternal> for SyncResponse {
+    fn from(sri: SyncResponseInternal) -> Self {
+        SyncResponse {
+            ciphers: sri.ciphers.into_iter().map_into::<CipherItem>().collect_vec()
+        }
+    }
+}
+
+
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "PascalCase")]
+struct CipherItemInternal {
+    id: String,
+    #[serde(alias = "Type")]
+    cipher_type: i32,
+    #[serde(default)]
+    name: Cipher,
+    #[serde(default)]
+    notes: Cipher,
+    login: Option<LoginItem>,
+    card: Option<CardItem>,
+    identity: Option<IdentityItem>,
+    favorite: bool,
+    collection_ids: Vec<String>,
+    organization_id: Option<String>
+}
+
+#[derive(Debug)]
+pub enum CipherData {
+    None,
+    Login(LoginItem),
+    Card(CardItem),
+    Identity(IdentityItem),
+    SecureNote,
+}
+
+impl From<CipherItemInternal> for CipherItem {
+    fn from(cii: CipherItemInternal) -> Self {
+        CipherItem {
+            id: cii.id,
+            name: cii.name,
+            notes: cii.notes,
+            favorite: cii.favorite,
+            collection_ids: cii.collection_ids,
+            organization_id: cii.organization_id,
+            data: match cii.cipher_type {
+                1 => CipherData::Login(cii.login.unwrap()),
+                2 => CipherData::SecureNote,
+                3 => CipherData::Card(cii.card.unwrap()),
+                4 => CipherData::Identity(cii.identity.unwrap()),
+                _ => CipherData::None
+            }
+        }
+    }
+}
+
+#[derive(Debug)]
 pub struct CipherItem {
     pub id: String,
-    #[serde(alias = "Type")]
-    pub cipher_type: i32,
-    pub name: Option<Cipher>,
-    pub notes: Option<Cipher>,
-    pub login: Option<LoginItem>,
+    pub name: Cipher,
+    pub notes: Cipher,
+    pub data: CipherData,
+    pub favorite: bool,
+    pub collection_ids: Vec<String>,
+    pub organization_id: Option<String>
 }
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "PascalCase")]
 pub struct LoginItem {
-    pub username: Option<Cipher>,
-    pub password: Option<Cipher>
+    #[serde(default)]
+    pub username: Cipher,
+    #[serde(default)]
+    pub password: Cipher,
+    #[serde(default)]
+    pub uri: Cipher,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "PascalCase")]
+pub struct CardItem {
+    #[serde(default)]
+    pub brand: Cipher,
+    #[serde(default)]
+    pub card_holder_name: Cipher,
+    #[serde(default)]
+    pub code: Cipher,
+    #[serde(default)]
+    pub exp_month: Cipher,
+    #[serde(default)]
+    pub exp_year: Cipher,
+    #[serde(default)]
+    pub number: Cipher,
+}
+
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "PascalCase")]
+pub struct IdentityItem {
+    #[serde(default)]
+    pub address_1: Cipher,
+    #[serde(default)]
+    pub address_2: Cipher,
+    #[serde(default)]
+    pub address_3: Cipher,
+    #[serde(default)]
+    pub city: Cipher,
+    #[serde(default)]
+    pub company: Cipher,
+    #[serde(default)]
+    pub country: Cipher,
+    #[serde(default)]
+    pub email: Cipher,
+    #[serde(default)]
+    pub first_name: Cipher,
+    #[serde(default)]
+    pub last_name: Cipher,
+    #[serde(default)]
+    pub license_number: Cipher,
+    #[serde(default)]
+    pub middle_name: Cipher,
+    #[serde(default)]
+    pub passport_number: Cipher,
+    #[serde(default)]
+    pub phone: Cipher,
+    #[serde(default)]
+    pub postal_code: Cipher,
+    #[serde(alias = "SSN")]
+    #[serde(default)]
+    pub ssn: Cipher,
+    #[serde(default)]
+    pub state: Cipher,
+    #[serde(default)]
+    pub title: Cipher,
+    #[serde(default)]
+    pub username: Cipher,
 }
