@@ -1,5 +1,5 @@
 [package]
-name = "wardenwise"
+name = "bitwarden-tui"
 version = "0.1.0"
 authors = ["Lauri Koskela <lk@lkoskela.com>"]
 edition = "2018"

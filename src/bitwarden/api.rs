@@ -48,7 +48,7 @@ impl ApiClient {
             .error_for_status()?;
 
         let res: Value = res.json().await?;
-        
+
         let iterations = res.as_object()
             .and_then(|o| o.get("KdfIterations"))
             .and_then(|v| v.as_u64()).ok_or(err_msg("Parsing response failed"))?;
@@ -63,7 +63,7 @@ impl ApiClient {
         body.insert("password", password);
         body.insert("scope", "api offline_access");
         body.insert("client_id", "web");
-        body.insert("deviceName", "wardenwise");
+        body.insert("deviceName", "bitwarden-tui");
         body.insert("deviceIdentifier", "asd");
         body.insert("deviceType", "9");
 

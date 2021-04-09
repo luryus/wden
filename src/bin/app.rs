@@ -1,9 +1,6 @@
 use std::{convert::TryInto, error::Error};
 use cursive::{Cursive, traits::{Boxable, Nameable}, views::{Dialog, EditView, LinearLayout, Panel, TextView}};
-use ui::vault_table::vault_table_view;
-use wardenwise::{bitwarden, ui::data::UserData};
-use wardenwise::ui;
-
+use bitwarden_tui::{ui::data::UserData, bitwarden, ui::vault_table::vault_table_view};
 
 #[tokio::main]
 async fn main() {
