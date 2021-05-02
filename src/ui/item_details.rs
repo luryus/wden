@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use super::data::UserData;
+use super::{data::UserData, vault_table::show_copy_notification};
 use crate::bitwarden::{
     api::{CipherData, CipherItem},
     cipher::{Cipher, EncryptionKey, MacKey},
@@ -64,27 +64,6 @@ pub fn item_detail_dialog(ud: &mut UserData, item_id: &str) -> impl View {
     }
 
     ev
-}
-
-fn show_copy_notification(cursive: &mut Cursive, message: &'static str) {
-    // Not using Dialog::info here so that a named view can be added to the dialog
-    // The named view is used later to find the dialog
-    cursive.add_layer(Dialog::info(message).with_name("copy_notification"));
-
-    let cb = cursive.cb_sink().clone();
-
-    tokio::spawn(async move {
-        tokio::time::sleep(Duration::from_millis(500)).await;
-        cb.send(Box::new(|siv| {
-            let sc = siv.screen_mut();
-            if let Some(LayerPosition::FromBack(l)) = sc.find_layer_from_name("copy_notification") {
-                if l == sc.len() - 1 {
-                    // If the dialog is the topmost layer, pop it
-                    siv.pop_layer();
-                }
-            }
-        })).expect("Sending message failed");
-    });
 }
 
 fn login_dialog_contents(

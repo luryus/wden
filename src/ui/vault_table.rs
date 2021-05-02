@@ -1,20 +1,13 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, time::Duration};
 
-use crate::bitwarden::{
-    self,
-    cipher::{Cipher, EncryptionKey, MacKey},
-};
+use crate::bitwarden::{self, api::{CipherItem, LoginItem}, cipher::{Cipher, EncryptionKey, MacKey}};
 use bitwarden::api::CipherData;
-use cursive::{
-    traits::{Nameable, Resizable},
-    views::{EditView, LinearLayout, OnEventView, PaddedView, TextView},
-    Cursive, View,
-};
+use cursive::{Cursive, View, theme::{BaseColor, Color}, traits::{Nameable, Resizable}, view::Margins, views::{Dialog, EditView, LayerPosition, LinearLayout, OnEventView, PaddedView, TextView}};
 use cursive_table_view::{TableView, TableViewItem};
 use itertools::Itertools;
 use sublime_fuzzy::FuzzySearch;
 
-use super::{data::UserData, item_details::item_detail_dialog};
+use super::{data::UserData, item_details::item_detail_dialog, login::do_sync};
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub enum VaultTableColumn {
@@ -69,14 +62,56 @@ pub fn vault_view(user_data: &mut UserData) -> impl View {
     let mut ll = LinearLayout::vertical()
         .child(filter_edit_view())
         .child(table)
-        .weight(100);
+        .weight(100)
+        .child(key_hint_view());
 
     ll.set_focus_index(1).expect("Focusing table failed");
 
-    OnEventView::new(ll).on_event('/', |siv| {
-        siv.focus_name("search_edit")
-            .expect("Focusing search failed");
-    })
+    OnEventView::new(ll)
+        .on_event('/', |siv| {
+            siv.focus_name("search_edit")
+                .expect("Focusing search failed");
+        })
+        .on_event('q', |siv| {
+            let dialog = Dialog::text("Quit?")
+                .dismiss_button("Cancel")
+                .button("Quit", |siv| siv.quit());
+            siv.add_layer(dialog);
+        })
+        .on_event(cursive::event::Event::CtrlChar('s'), |siv| {
+            do_sync(siv);
+        })
+        .on_event('p', |siv| {
+            copy_current_item_field(siv, Copyable::Password);
+        })
+        .on_event('u', |siv| {
+            copy_current_item_field(siv, Copyable::Username);
+        })
+}
+
+fn copy_current_item_field(siv: &mut Cursive, field: Copyable) {
+    let table = siv.find_name::<TableView<Row, VaultTableColumn>>("vault_table").unwrap();
+    let row = table.borrow_item(table.item().unwrap()).unwrap();
+    let ud: &mut UserData = siv.user_data().unwrap();
+    let (enc_key, mac_key) = ud.decrypt_keys().unwrap();
+
+    let vd = ud.vault_data.as_ref().unwrap();
+    match (vd.get(&row.id), field) {
+        (Some(CipherItem { data: CipherData::Login(LoginItem { password, ..}), .. }), Copyable::Password) => {
+            super::clipboard::clip_exipiring_string(password.decrypt_to_string(&enc_key, &mac_key), 30);
+            show_copy_notification(siv, "Password copied");
+        },
+        (Some(CipherItem { data: CipherData::Login(LoginItem { username, ..}), .. }), Copyable::Username) => {
+            super::clipboard::clip_string(username.decrypt_to_string(&enc_key, &mac_key));
+            show_copy_notification(siv, "Username copied");
+        },
+        _ => ()
+    };
+}
+
+enum Copyable {
+    Password,
+    Username
 }
 
 fn filter_edit_view() -> impl View {
@@ -179,4 +214,43 @@ fn show_item_details(sink: cursive::CbSink, row: &Row) {
         siv.add_layer(dialog);
     }))
     .unwrap();
+}
+
+fn key_hint_view() -> impl View {
+    fn hint_text(content: &str) -> impl View {
+        PaddedView::new(
+            Margins::lr(2, 2),
+            TextView::new(content).style(Color::Light(BaseColor::Black)),
+        )
+    }
+
+    LinearLayout::horizontal()
+        .child(hint_text("</> Search"))
+        .child(hint_text("<p> Copy password"))
+        .child(hint_text("<u> Copy username"))
+        .child(hint_text("<q> Quit"))
+        .child(hint_text("<^s> Sync"))
+        .full_width()
+}
+
+
+pub fn show_copy_notification(cursive: &mut Cursive, message: &'static str) {
+    // Not using Dialog::info here so that a named view can be added to the dialog
+    // The named view is used later to find the dialog
+    cursive.add_layer(Dialog::info(message).with_name("copy_notification"));
+
+    let cb = cursive.cb_sink().clone();
+
+    tokio::spawn(async move {
+        tokio::time::sleep(Duration::from_millis(500)).await;
+        cb.send(Box::new(|siv| {
+            let sc = siv.screen_mut();
+            if let Some(LayerPosition::FromBack(l)) = sc.find_layer_from_name("copy_notification") {
+                if l == sc.len() - 1 {
+                    // If the dialog is the topmost layer, pop it
+                    siv.pop_layer();
+                }
+            }
+        })).expect("Sending message failed");
+    });
 }
