@@ -1,6 +1,6 @@
 use std::{convert::TryInto, error::Error};
 use cursive::{Cursive, traits::{Boxable, Nameable}, views::{Dialog, EditView, LinearLayout, Panel, TextView}};
-use bitwarden_tui::{ui::data::UserData, bitwarden, ui::vault_table::vault_table_view};
+use bitwarden_tui::{ui::data::UserData, bitwarden, ui::vault_table::vault_view};
 
 #[tokio::main]
 async fn main() {
@@ -139,10 +139,8 @@ fn do_sync(cursive: &mut Cursive) {
 
 fn show_item_list(c: &mut Cursive) {
     let ud: &mut UserData = c.user_data().unwrap();
-    let (enc_key, mac_key) = bitwarden::cipher::decrypt_symmetric_keys(
-        &ud.token.as_ref().unwrap().key, ud.master_key.unwrap()).unwrap();
 
-    let table = vault_table_view(ud, &enc_key, &mac_key);
+    let table = vault_view(ud);
     let panel = Panel::new(table)
         .title("Vault")
         .full_screen();
