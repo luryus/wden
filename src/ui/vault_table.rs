@@ -13,8 +13,7 @@ use super::{data::UserData, item_details::item_detail_dialog, login::do_sync};
 pub enum VaultTableColumn {
     ItemType,
     Name,
-    Username,
-    Url,
+    Username
 }
 
 #[derive(Clone, Debug)]
@@ -37,7 +36,6 @@ impl TableViewItem<VaultTableColumn> for Row {
         match column {
             VaultTableColumn::ItemType => self.item_type.clone(),
             VaultTableColumn::Name => self.name.clone(),
-            VaultTableColumn::Url => self.url.clone(),
             VaultTableColumn::Username => self.username.clone(),
         }
     }
@@ -49,7 +47,6 @@ impl TableViewItem<VaultTableColumn> for Row {
         match column {
             VaultTableColumn::ItemType => self.item_type.cmp(&other.item_type),
             VaultTableColumn::Name => self.name.cmp(&other.name),
-            VaultTableColumn::Url => self.url.cmp(&other.url),
             VaultTableColumn::Username => self.username.cmp(&other.username),
         }
     }
@@ -189,7 +186,6 @@ fn vault_table_view(
         .column(VaultTableColumn::ItemType, "T", |c| c.width(1))
         .column(VaultTableColumn::Name, "Name", |c| c)
         .column(VaultTableColumn::Username, "Username", |c| c)
-        .column(VaultTableColumn::Url, "Url", |c| c)
         .default_column(VaultTableColumn::Name)
         .items(rows)
         .on_submit(|siv: &mut Cursive, _, index| {

@@ -3,12 +3,18 @@ use std::{convert::TryInto, error::Error};
 
 use crate::bitwarden;
 
-use super::{data::UserData, vault_table::vault_view};
+use super::{data::{ProfileData, UserData}, vault_table::vault_view};
 
-pub fn login_dialog() -> Dialog {
+pub fn login_dialog(saved_email: &Option<String>) -> Dialog {
+    let email_field = if let Some(em) = saved_email {
+        EditView::new().content(em)
+    } else {
+        EditView::new()
+    };
+
     let layout = LinearLayout::vertical()
         .child(TextView::new("Email address"))
-        .child(EditView::new().with_name("email").fixed_width(40))
+        .child(email_field.with_name("email").fixed_width(40))
         .child(TextView::new("Password"))
         .child(
             EditView::new()
@@ -49,7 +55,7 @@ fn handle_login(c: &mut cursive::Cursive) {
                             .button("OK", move |siv| {
                                 // Remove this dialog, and show the login dialog again
                                 siv.pop_layer();
-                                siv.add_layer(login_dialog());
+                                siv.add_layer(login_dialog(&Some(email.clone())));
                             }),
                     );
                 }))
@@ -59,6 +65,13 @@ fn handle_login(c: &mut cursive::Cursive) {
                 cb.send(Box::new(move |c: &mut Cursive| {
                     c.pop_layer();
                     c.with_user_data(|dat: &mut UserData| {
+                        // Try to store the email
+                        let store_res = dat.profile_store.store(
+                            &ProfileData { saved_email: Some(email.clone()) });
+                        if let Err(e) = store_res {
+                            log::error!("Failed to store profile data: {}", e);
+                        }
+
                         dat.email = Some(email);
                         dat.master_key = Some(key);
                         dat.master_password_hash = Some(pwhash);
