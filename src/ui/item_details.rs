@@ -1,11 +1,15 @@
-use std::time::Duration;
-
 use super::{data::UserData, vault_table::show_copy_notification};
 use crate::bitwarden::{
     api::{CipherData, CipherItem},
     cipher::{Cipher, EncryptionKey, MacKey},
 };
-use cursive::{Cursive, View, theme::{BaseColor, Color, Effect, Style}, traits::{Boxable, Nameable}, view::Margins, views::{Dialog, EditView, LayerPosition, LinearLayout, OnEventView, PaddedView, TextView}};
+use cursive::{
+    theme::{BaseColor, Color, Effect, Style},
+    traits::Boxable,
+    view::Margins,
+    views::{Dialog, LinearLayout, OnEventView, PaddedView, TextView},
+    View,
+};
 use lazy_static::lazy_static;
 
 lazy_static! {
@@ -25,6 +29,8 @@ pub fn item_detail_dialog(ud: &mut UserData, item_id: &str) -> impl View {
 
     let dialog_contents = match item.data {
         CipherData::Login(..) => login_dialog_contents(item, &enc_key, &mac_key),
+        CipherData::SecureNote => note_dialog_contents(item, &enc_key, &mac_key),
+        CipherData::Card(..) => card_dialog_contents(item, &enc_key, &mac_key),
         _ => LinearLayout::vertical(),
     };
 
@@ -87,6 +93,49 @@ fn login_dialog_contents(
         ))
         .child(TextView::new("Uri"))
         .child(value_textview(&login.uri, enc_key, mac_key))
+        .child(TextView::new("Notes"))
+        .child(value_textview(&item.notes, enc_key, mac_key))
+}
+
+fn note_dialog_contents(
+    item: &CipherItem,
+    enc_key: &EncryptionKey,
+    mac_key: &MacKey
+) -> LinearLayout {
+    LinearLayout::vertical()
+        .child(TextView::new("Name"))
+        .child(value_textview(&item.name, enc_key, mac_key))
+        .child(TextView::new("Notes"))
+        .child(value_textview(&item.notes, enc_key, mac_key))
+}
+
+fn card_dialog_contents(
+    item: &CipherItem,
+    enc_key: &EncryptionKey,
+    mac_key: &MacKey
+) -> LinearLayout {
+    let card = match &item.data {
+        CipherData::Card(c) => c,
+        _ => unreachable!()
+    };
+
+    let exp_month = card.exp_month.decrypt_to_string(enc_key, mac_key);
+    let exp_year = card.exp_year.decrypt_to_string(enc_key, mac_key);
+    let expiry = format!("{} / {}", exp_month, exp_year);
+
+    LinearLayout::vertical()
+        .child(TextView::new("Name"))
+        .child(value_textview(&item.name, enc_key, mac_key))
+        .child(TextView::new("Brand"))
+        .child(value_textview(&card.brand, enc_key, mac_key))
+        .child(TextView::new("Number"))
+        .child(value_textview(&card.number, enc_key, mac_key))
+        .child(TextView::new("Code"))
+        .child(value_textview(&card.code, enc_key, mac_key))
+        .child(TextView::new("Expires"))
+        .child(PaddedView::new(Margins::tb(0, 1), TextView::new(expiry).style(*VALUE_STYLE)))
+        .child(TextView::new("Card holder"))
+        .child(value_textview(&card.card_holder_name, enc_key, mac_key))
         .child(TextView::new("Notes"))
         .child(value_textview(&item.notes, enc_key, mac_key))
 }
