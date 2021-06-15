@@ -1,9 +1,16 @@
-use cursive::{Cursive, traits::{Boxable, Nameable}, views::{Dialog, EditView, LinearLayout, Panel, TextView}};
+use cursive::{
+    traits::{Boxable, Nameable},
+    views::{Dialog, EditView, LinearLayout, Panel, TextView},
+    Cursive,
+};
 use std::{convert::TryInto, error::Error};
 
 use crate::bitwarden;
 
-use super::{data::{ProfileData, UserData}, vault_table::vault_view};
+use super::{
+    data::UserData,
+    vault_table::vault_view,
+};
 
 pub fn login_dialog(saved_email: &Option<String>) -> Dialog {
     let email_field = if let Some(em) = saved_email {
@@ -42,22 +49,25 @@ fn handle_login(c: &mut cursive::Cursive) {
 
     let cb = c.cb_sink().clone();
 
+    let server_url = c.user_data()
+        .map(|ud: &mut UserData| ud.global_settings.server_url.clone())
+        .unwrap();
+
     tokio::spawn(async move {
-        let res = do_login(&email, &password).await;
+        let res = do_login(&server_url, &email, &password).await;
 
         match res {
             Result::Err(e) => {
                 let err_msg = format!("Error: {:?}", e);
                 cb.send(Box::new(move |c: &mut Cursive| {
-                    c.add_layer(
-                        Dialog::text(err_msg)
-                            .title("Login error")
-                            .button("OK", move |siv| {
-                                // Remove this dialog, and show the login dialog again
-                                siv.pop_layer();
-                                siv.add_layer(login_dialog(&Some(email.clone())));
-                            }),
-                    );
+                    c.add_layer(Dialog::text(err_msg).title("Login error").button(
+                        "OK",
+                        move |siv| {
+                            // Remove this dialog, and show the login dialog again
+                            siv.pop_layer();
+                            siv.add_layer(login_dialog(&Some(email.clone())));
+                        },
+                    ));
                 }))
                 .expect("Sending the cursive callback message failed");
             }
@@ -66,8 +76,9 @@ fn handle_login(c: &mut cursive::Cursive) {
                     c.pop_layer();
                     c.with_user_data(|dat: &mut UserData| {
                         // Try to store the email
-                        let store_res = dat.profile_store.store(
-                            &ProfileData { saved_email: Some(email.clone()) });
+                        let store_res = dat
+                            .profile_store
+                            .edit(|d| d.saved_email = Some(email.clone()));
                         if let Err(e) = store_res {
                             log::error!("Failed to store profile data: {}", e);
                         }
@@ -86,6 +97,7 @@ fn handle_login(c: &mut cursive::Cursive) {
 }
 
 async fn do_login(
+    server_url: &str,
     email: &str,
     password: &str,
 ) -> Result<
@@ -96,7 +108,7 @@ async fn do_login(
     ),
     Box<dyn Error>,
 > {
-    let client = bitwarden::api::ApiClient::new();
+    let client = bitwarden::api::ApiClient::new(server_url);
     let iterations = client.prelogin(&email).await?;
     let master_key = bitwarden::cipher::create_master_key(
         &email.to_lowercase(),
@@ -111,7 +123,6 @@ async fn do_login(
     Ok((master_key, master_pw_hash, token))
 }
 
-
 pub fn do_sync(cursive: &mut Cursive) {
     // Remove all layers first
     while cursive.pop_layer().is_some() {}
@@ -125,8 +136,10 @@ pub fn do_sync(cursive: &mut Cursive) {
         .map(|tr| tr.access_token.clone())
         .expect("Token not set");
 
+    let server_url = user_data.global_settings.server_url.clone();
+
     tokio::spawn(async move {
-        let client = bitwarden::api::ApiClient::with_token(&access_token);
+        let client = bitwarden::api::ApiClient::with_token(&server_url, &access_token);
         let sync_res = client.sync().await;
 
         match sync_res {

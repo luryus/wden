@@ -100,7 +100,7 @@ fn login_dialog_contents(
 fn note_dialog_contents(
     item: &CipherItem,
     enc_key: &EncryptionKey,
-    mac_key: &MacKey
+    mac_key: &MacKey,
 ) -> LinearLayout {
     LinearLayout::vertical()
         .child(TextView::new("Name"))
@@ -112,11 +112,11 @@ fn note_dialog_contents(
 fn card_dialog_contents(
     item: &CipherItem,
     enc_key: &EncryptionKey,
-    mac_key: &MacKey
+    mac_key: &MacKey,
 ) -> LinearLayout {
     let card = match &item.data {
         CipherData::Card(c) => c,
-        _ => unreachable!()
+        _ => unreachable!(),
     };
 
     let exp_month = card.exp_month.decrypt_to_string(enc_key, mac_key);
@@ -133,7 +133,10 @@ fn card_dialog_contents(
         .child(TextView::new("Code"))
         .child(value_textview(&card.code, enc_key, mac_key))
         .child(TextView::new("Expires"))
-        .child(PaddedView::new(Margins::tb(0, 1), TextView::new(expiry).style(*VALUE_STYLE)))
+        .child(PaddedView::new(
+            Margins::tb(0, 1),
+            TextView::new(expiry).style(*VALUE_STYLE),
+        ))
         .child(TextView::new("Card holder"))
         .child(value_textview(&card.card_holder_name, enc_key, mac_key))
         .child(TextView::new("Notes"))

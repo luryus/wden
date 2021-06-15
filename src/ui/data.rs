@@ -8,7 +8,13 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
+pub struct GlobalSettings {
+    pub server_url: String,
+    pub profile: String,
+}
+
 pub struct UserData {
+    pub global_settings: GlobalSettings,
     pub profile_store: ProfileStore,
     pub email: Option<String>,
     pub master_key: Option<cipher::MasterKey>,
@@ -18,14 +24,15 @@ pub struct UserData {
 }
 
 impl UserData {
-    pub fn new(profile_store: ProfileStore) -> UserData {
+    pub fn new(global_settings: GlobalSettings, profile_store: ProfileStore) -> UserData {
         UserData {
+            global_settings,
             profile_store,
             email: None,
             master_key: None,
             master_password_hash: None,
             token: None,
-            vault_data: None
+            vault_data: None,
         }
     }
 
@@ -36,9 +43,24 @@ impl UserData {
     }
 }
 
-#[derive(Deserialize, Serialize, Default)]
+#[derive(Deserialize, Serialize)]
 pub struct ProfileData {
     pub saved_email: Option<String>,
+    #[serde(default = "get_default_server_url")]
+    pub server_url: String,
+}
+
+fn get_default_server_url() -> String {
+    crate::bitwarden::api::DEFAULT_SERVER_URL.to_string()
+}
+
+impl Default for ProfileData {
+    fn default() -> Self {
+        ProfileData {
+            saved_email: None,
+            server_url: get_default_server_url(),
+        }
+    }
 }
 
 pub struct ProfileStore {
@@ -71,5 +93,17 @@ impl ProfileStore {
         let serialized = serde_json::to_vec_pretty(data)?;
 
         std::fs::write(&self.profile_config_file, serialized)
+    }
+
+    pub fn edit<F>(&self, editor: F) -> std::io::Result<()>
+    where
+        F: FnOnce(&mut ProfileData) -> (),
+    {
+        // Load existing file for mutation
+        let mut data = self.load()?;
+        // Make changes
+        editor(&mut data);
+        // Store the edited data
+        self.store(&data)
     }
 }

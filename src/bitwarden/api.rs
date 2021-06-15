@@ -1,37 +1,40 @@
+use super::cipher::Cipher;
+use failure::{err_msg, Error};
 use itertools::Itertools;
 use reqwest;
 use reqwest::Url;
-use std::collections::HashMap;
-use failure::{Error, err_msg};
-use serde_json::Value;
 use serde::Deserialize;
-use super::cipher::Cipher;
+use serde_json::Value;
+use std::collections::HashMap;
 
 // Name your user agent after your app?
-static APP_USER_AGENT: &str = concat!(
-    env!("CARGO_PKG_NAME"),
-    "/",
-    env!("CARGO_PKG_VERSION"),
-);
+static APP_USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"),);
+
+pub static DEFAULT_SERVER_URL: &str = "http://localhost:8082/";
 
 pub struct ApiClient {
     http_client: reqwest::Client,
     base_url: Url,
 
-    access_token: Option<String>
+    access_token: Option<String>,
 }
 
 impl ApiClient {
-    pub fn new() -> Self {
+    pub fn new(server_url: &str) -> Self {
         let http_client = reqwest::Client::builder()
             .user_agent(APP_USER_AGENT)
-            .build().unwrap();
-        let base_url = Url::parse("http://localhost:8082/").unwrap();
-        ApiClient { http_client, base_url, access_token: None }
+            .build()
+            .unwrap();
+        let base_url = Url::parse(server_url).unwrap();
+        ApiClient {
+            http_client,
+            base_url,
+            access_token: None,
+        }
     }
 
-    pub fn with_token(token: &str) -> Self {
-        let mut c = Self::new();
+    pub fn with_token(server_url: &str, token: &str) -> Self {
+        let mut c = Self::new(server_url);
         c.access_token = Some(token.to_string());
         return c;
     }
@@ -42,16 +45,21 @@ impl ApiClient {
 
         let url = self.base_url.join("api/accounts/prelogin")?;
 
-        let res = self.http_client.post(url)
+        let res = self
+            .http_client
+            .post(url)
             .json(&body)
-            .send().await?
+            .send()
+            .await?
             .error_for_status()?;
 
         let res: Value = res.json().await?;
 
-        let iterations = res.as_object()
+        let iterations = res
+            .as_object()
             .and_then(|o| o.get("KdfIterations"))
-            .and_then(|v| v.as_u64()).ok_or(err_msg("Parsing response failed"))?;
+            .and_then(|v| v.as_u64())
+            .ok_or(err_msg("Parsing response failed"))?;
 
         Ok(iterations as usize)
     }
@@ -69,24 +77,32 @@ impl ApiClient {
 
         let url = self.base_url.join("identity/connect/token")?;
 
-        let res = self.http_client.post(url)
+        let res = self
+            .http_client
+            .post(url)
             .form(&body)
-            .send().await?
+            .send()
+            .await?
             .error_for_status()?
-            .json::<TokenResponse>().await?;
+            .json::<TokenResponse>()
+            .await?;
 
-        return Ok(res)
+        return Ok(res);
     }
 
     pub async fn sync(&self) -> Result<SyncResponse, Error> {
         assert!(self.access_token.is_some());
         let mut url = self.base_url.join("api/sync")?;
         url.set_query(Some("excludeDomains=true"));
-        let res = self.http_client.get(url)
+        let res = self
+            .http_client
+            .get(url)
             .bearer_auth(self.access_token.as_ref().unwrap())
-            .send().await?
+            .send()
+            .await?
             .error_for_status()?
-            .json::<SyncResponseInternal>().await?
+            .json::<SyncResponseInternal>()
+            .await?
             .into();
 
         return Ok(res);
@@ -102,27 +118,30 @@ pub struct TokenResponse {
     pub access_token: String,
     expires_in: u32,
     refresh_token: String,
-    token_type: String
+    token_type: String,
 }
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "PascalCase")]
 struct SyncResponseInternal {
-    ciphers: Vec<CipherItemInternal>
+    ciphers: Vec<CipherItemInternal>,
 }
 
 pub struct SyncResponse {
-    pub ciphers: Vec<CipherItem>
+    pub ciphers: Vec<CipherItem>,
 }
 
 impl From<SyncResponseInternal> for SyncResponse {
     fn from(sri: SyncResponseInternal) -> Self {
         SyncResponse {
-            ciphers: sri.ciphers.into_iter().map_into::<CipherItem>().collect_vec()
+            ciphers: sri
+                .ciphers
+                .into_iter()
+                .map_into::<CipherItem>()
+                .collect_vec(),
         }
     }
 }
-
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "PascalCase")]
@@ -139,7 +158,7 @@ struct CipherItemInternal {
     identity: Option<IdentityItem>,
     favorite: bool,
     collection_ids: Vec<String>,
-    organization_id: Option<String>
+    organization_id: Option<String>,
 }
 
 #[derive(Debug)]
@@ -165,8 +184,8 @@ impl From<CipherItemInternal> for CipherItem {
                 2 => CipherData::SecureNote,
                 3 => CipherData::Card(cii.card.unwrap()),
                 4 => CipherData::Identity(cii.identity.unwrap()),
-                _ => CipherData::None
-            }
+                _ => CipherData::None,
+            },
         }
     }
 }
@@ -179,7 +198,7 @@ pub struct CipherItem {
     pub data: CipherData,
     pub favorite: bool,
     pub collection_ids: Vec<String>,
-    pub organization_id: Option<String>
+    pub organization_id: Option<String>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -209,7 +228,6 @@ pub struct CardItem {
     #[serde(default)]
     pub number: Cipher,
 }
-
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "PascalCase")]

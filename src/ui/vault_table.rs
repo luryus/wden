@@ -1,8 +1,18 @@
 use std::{collections::HashMap, time::Duration};
 
-use crate::bitwarden::{self, api::{CipherItem, LoginItem}, cipher::{Cipher, EncryptionKey, MacKey}};
+use crate::bitwarden::{
+    self,
+    api::{CipherItem, LoginItem},
+    cipher::{Cipher, EncryptionKey, MacKey},
+};
 use bitwarden::api::CipherData;
-use cursive::{Cursive, View, theme::{BaseColor, Color}, traits::{Nameable, Resizable}, view::Margins, views::{Dialog, EditView, LayerPosition, LinearLayout, OnEventView, PaddedView, TextView}};
+use cursive::{
+    theme::{BaseColor, Color},
+    traits::{Nameable, Resizable},
+    view::Margins,
+    views::{Dialog, EditView, LayerPosition, LinearLayout, OnEventView, PaddedView, TextView},
+    Cursive, View,
+};
 use cursive_table_view::{TableView, TableViewItem};
 use itertools::Itertools;
 use sublime_fuzzy::FuzzySearch;
@@ -13,7 +23,7 @@ use super::{data::UserData, item_details::item_detail_dialog, login::do_sync};
 pub enum VaultTableColumn {
     ItemType,
     Name,
-    Username
+    Username,
 }
 
 #[derive(Clone, Debug)]
@@ -87,28 +97,45 @@ pub fn vault_view(user_data: &mut UserData) -> impl View {
 }
 
 fn copy_current_item_field(siv: &mut Cursive, field: Copyable) {
-    let table = siv.find_name::<TableView<Row, VaultTableColumn>>("vault_table").unwrap();
+    let table = siv
+        .find_name::<TableView<Row, VaultTableColumn>>("vault_table")
+        .unwrap();
     let row = table.borrow_item(table.item().unwrap()).unwrap();
     let ud: &mut UserData = siv.user_data().unwrap();
     let (enc_key, mac_key) = ud.decrypt_keys().unwrap();
 
     let vd = ud.vault_data.as_ref().unwrap();
     match (vd.get(&row.id), field) {
-        (Some(CipherItem { data: CipherData::Login(LoginItem { password, ..}), .. }), Copyable::Password) => {
-            super::clipboard::clip_exipiring_string(password.decrypt_to_string(&enc_key, &mac_key), 30);
+        (
+            Some(CipherItem {
+                data: CipherData::Login(LoginItem { password, .. }),
+                ..
+            }),
+            Copyable::Password,
+        ) => {
+            super::clipboard::clip_exipiring_string(
+                password.decrypt_to_string(&enc_key, &mac_key),
+                30,
+            );
             show_copy_notification(siv, "Password copied");
-        },
-        (Some(CipherItem { data: CipherData::Login(LoginItem { username, ..}), .. }), Copyable::Username) => {
+        }
+        (
+            Some(CipherItem {
+                data: CipherData::Login(LoginItem { username, .. }),
+                ..
+            }),
+            Copyable::Username,
+        ) => {
             super::clipboard::clip_string(username.decrypt_to_string(&enc_key, &mac_key));
             show_copy_notification(siv, "Username copied");
-        },
-        _ => ()
+        }
+        _ => (),
     };
 }
 
 enum Copyable {
     Password,
-    Username
+    Username,
 }
 
 fn filter_edit_view() -> impl View {
@@ -229,7 +256,6 @@ fn key_hint_view() -> impl View {
         .full_width()
 }
 
-
 pub fn show_copy_notification(cursive: &mut Cursive, message: &'static str) {
     // Not using Dialog::info here so that a named view can be added to the dialog
     // The named view is used later to find the dialog
@@ -247,6 +273,7 @@ pub fn show_copy_notification(cursive: &mut Cursive, message: &'static str) {
                     siv.pop_layer();
                 }
             }
-        })).expect("Sending message failed");
+        }))
+        .expect("Sending message failed");
     });
 }
