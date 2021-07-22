@@ -19,7 +19,7 @@ pub struct UserData {
     pub email: Option<String>,
     pub master_key: Option<cipher::MasterKey>,
     pub master_password_hash: Option<cipher::MasterPasswordHash>,
-    pub token: Option<api::TokenResponse>,
+    pub token: Option<api::TokenResponseSuccess>,
     pub vault_data: Option<HashMap<String, api::CipherItem>>,
 }
 
@@ -48,6 +48,7 @@ pub struct ProfileData {
     pub saved_email: Option<String>,
     #[serde(default = "get_default_server_url")]
     pub server_url: String,
+    pub saved_two_factor_token: Option<String>,
 }
 
 fn get_default_server_url() -> String {
@@ -59,10 +60,12 @@ impl Default for ProfileData {
         ProfileData {
             saved_email: None,
             server_url: get_default_server_url(),
+            saved_two_factor_token: None
         }
     }
 }
 
+#[derive(Clone)]
 pub struct ProfileStore {
     config_dir: PathBuf,
     profile_config_file: PathBuf,

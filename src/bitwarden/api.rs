@@ -1,11 +1,11 @@
 use super::cipher::Cipher;
-use failure::{err_msg, Error};
 use itertools::Itertools;
 use reqwest;
 use reqwest::Url;
 use serde::Deserialize;
 use serde_json::Value;
-use std::collections::HashMap;
+use std::{collections::HashMap, convert::TryFrom};
+use anyhow::Error;
 
 // Name your user agent after your app?
 static APP_USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"),);
@@ -59,12 +59,17 @@ impl ApiClient {
             .as_object()
             .and_then(|o| o.get("KdfIterations"))
             .and_then(|v| v.as_u64())
-            .ok_or(err_msg("Parsing response failed"))?;
+            .ok_or(anyhow::anyhow!("Parsing response failed"))?;
 
         Ok(iterations as usize)
     }
 
-    pub async fn get_token(&self, username: &str, password: &str) -> Result<TokenResponse, Error> {
+    pub async fn get_token(
+        &self,
+        username: &str,
+        password: &str,
+        two_factor: Option<(TwoFactorProviderType, &str, bool)>,
+    ) -> Result<TokenResponse, Error> {
         let mut body = HashMap::new();
         body.insert("grant_type", "password");
         body.insert("username", username);
@@ -75,6 +80,18 @@ impl ApiClient {
         body.insert("deviceIdentifier", "asd");
         body.insert("deviceType", "9");
 
+        let two_factor_type_str;
+
+        if let Some((two_factor_type, two_factor_token, two_factor_remember)) = two_factor {
+            body.insert("twoFactorToken", two_factor_token);
+            two_factor_type_str = (two_factor_type as u8).to_string();
+            body.insert("twoFactorProvider", &two_factor_type_str);
+
+            if two_factor_remember && two_factor_type != TwoFactorProviderType::Remember {
+                body.insert("twoFactorRemember", "1");
+            }
+        }
+
         let url = self.base_url.join("identity/connect/token")?;
 
         let res = self
@@ -82,12 +99,27 @@ impl ApiClient {
             .post(url)
             .form(&body)
             .send()
-            .await?
-            .error_for_status()?
-            .json::<TokenResponse>()
             .await?;
 
-        return Ok(res);
+        if res.status() == 400 {
+            // Just assume that the reason for 400 is that two-factor is required
+            let body = res.json::<HashMap<String, serde_json::Value>>().await?;
+            let providers = body.get("TwoFactorProviders")
+                .and_then(|ps| ps.as_array())
+                .map(|ps| ps.into_iter()
+                    .filter_map(|p| p.as_u64().and_then(|x| TwoFactorProviderType::try_from(x as u8).ok()))
+                    .collect_vec())
+                .ok_or(anyhow::anyhow!("Error parsing provider types"))?;
+
+            return Ok(TokenResponse::TwoFactorRequired(providers));
+        }
+
+        let res = res
+            .error_for_status()?
+            .json::<TokenResponseSuccess>()
+            .await?;
+
+        return Ok(TokenResponse::Success(res));
     }
 
     pub async fn sync(&self) -> Result<SyncResponse, Error> {
@@ -109,8 +141,13 @@ impl ApiClient {
     }
 }
 
+pub enum TokenResponse {
+    Success(TokenResponseSuccess),
+    TwoFactorRequired(Vec<TwoFactorProviderType>),
+}
+
 #[derive(Deserialize, Debug)]
-pub struct TokenResponse {
+pub struct TokenResponseSuccess {
     #[serde(alias = "Key")]
     pub key: Cipher,
     #[serde(alias = "PrivateKey")]
@@ -119,6 +156,36 @@ pub struct TokenResponse {
     expires_in: u32,
     refresh_token: String,
     token_type: String,
+    #[serde(alias = "TwoFactorToken")]
+    pub two_factor_token: Option<String>,
+}
+
+#[derive(PartialEq, Copy, Clone, Debug)]
+pub enum TwoFactorProviderType {
+    Authenticator = 0,
+    Email = 1,
+    Duo = 2,
+    YubiKey = 3,
+    U2F = 4,
+    Remember = 5,
+    OrganizationDuo = 6,
+}
+
+impl TryFrom<u8> for TwoFactorProviderType {
+    type Error = ();
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            x if x == TwoFactorProviderType::Authenticator as u8 => Ok(TwoFactorProviderType::Authenticator),
+            x if x == TwoFactorProviderType::Email as u8 => Ok(TwoFactorProviderType::Email),
+            x if x == TwoFactorProviderType::Duo as u8 => Ok(TwoFactorProviderType::Duo),
+            x if x == TwoFactorProviderType::YubiKey as u8 => Ok(TwoFactorProviderType::YubiKey),
+            x if x == TwoFactorProviderType::U2F as u8 => Ok(TwoFactorProviderType::U2F),
+            x if x == TwoFactorProviderType::Remember as u8 => Ok(TwoFactorProviderType::Remember),
+            x if x == TwoFactorProviderType::OrganizationDuo as u8 => Ok(TwoFactorProviderType::OrganizationDuo ),
+            _ => Err(())
+        }
+    }
 }
 
 #[derive(Deserialize, Debug)]
