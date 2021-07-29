@@ -35,7 +35,7 @@ pub fn login_dialog(saved_email: &Option<String>) -> Dialog {
         );
     Dialog::around(layout)
         .title("Log in")
-        .button("Submit", move |c| handle_login(c))
+        .button("Submit", move |c| submit_login(c))
 }
 
 fn two_factor_dialog(
@@ -53,13 +53,13 @@ fn two_factor_dialog(
                 .child(EditView::new().with_name("authenticator_code")),
         )
         .button("Submit", move |siv| {
-            handle_two_factor_submit(siv, email.clone(), master_key, master_pw_hash)
+            submit_two_factor(siv, email.clone(), master_key, master_pw_hash)
         })
         .dismiss_button("Cancel")
     }
 }
 
-fn handle_login(c: &mut cursive::Cursive) {
+fn submit_login(c: &mut cursive::Cursive) {
     let email = c
         .call_on_name("email", |view: &mut EditView| view.get_content())
         .unwrap()
@@ -154,7 +154,7 @@ fn handle_login_response(
     }
 }
 
-fn handle_two_factor_submit(
+fn submit_two_factor(
     c: &mut Cursive,
     email: String,
     master_key: MasterKey,
