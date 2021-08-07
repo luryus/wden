@@ -24,6 +24,7 @@ pub enum VaultTableColumn {
     ItemType,
     Name,
     Username,
+    IsInOrganization,
 }
 
 #[derive(Clone, Debug)]
@@ -33,6 +34,7 @@ pub struct Row {
     username: String,
     url: String,
     item_type: String,
+    is_in_organization: bool,
 }
 
 impl PartialEq for Row {
@@ -47,6 +49,12 @@ impl TableViewItem<VaultTableColumn> for Row {
             VaultTableColumn::ItemType => self.item_type.clone(),
             VaultTableColumn::Name => self.name.clone(),
             VaultTableColumn::Username => self.username.clone(),
+            VaultTableColumn::IsInOrganization => if self.is_in_organization {
+                "👥"
+            } else {
+                "👤"
+            }
+            .to_string(),
         }
     }
 
@@ -58,6 +66,9 @@ impl TableViewItem<VaultTableColumn> for Row {
             VaultTableColumn::ItemType => self.item_type.cmp(&other.item_type),
             VaultTableColumn::Name => self.name.cmp(&other.name),
             VaultTableColumn::Username => self.username.cmp(&other.username),
+            VaultTableColumn::IsInOrganization => {
+                self.is_in_organization.cmp(&other.is_in_organization)
+            }
         }
     }
 }
@@ -174,23 +185,41 @@ fn get_filtered_rows(
         .as_ref()
         .unwrap_or(&HashMap::new())
         .iter()
-        .map(|(id, ci)| Row {
-            id: id.clone(),
-            name: ci.name.decrypt_to_string(enc_key, mac_key),
-            url: String::new(),
-            username: match &ci.data {
-                CipherData::Login(l) => &l.username,
-                _ => &Cipher::Empty,
-            }
-            .decrypt_to_string(enc_key, mac_key),
-            item_type: match ci.data {
-                CipherData::Login(_) => "L",
-                CipherData::Card(_) => "C",
-                CipherData::Identity(_) => "I",
-                CipherData::SecureNote => "N",
-                _ => "",
-            }
-            .to_string(),
+        .filter_map(|(id, ci)| {
+            let org_enc_key: EncryptionKey;
+            let org_mac_key: MacKey;
+            let (ec, mc) = if let Some(oid) = &ci.organization_id {
+                let res = user_data.decrypt_organization_keys(oid);
+                if let Err(e) = res {
+                    log::warn!("Error decrypting org keys: {}", e);
+                    return None
+                }
+                let res = res.ok()?;
+                org_enc_key = res.0;
+                org_mac_key = res.1;
+                (&org_enc_key, &org_mac_key)
+            } else {
+                (enc_key, mac_key)
+            };
+            Some(Row {
+                id: id.clone(),
+                name: ci.name.decrypt_to_string(ec, mc),
+                url: String::new(),
+                username: match &ci.data {
+                    CipherData::Login(l) => &l.username,
+                    _ => &Cipher::Empty,
+                }
+                .decrypt_to_string(ec, mc),
+                item_type: match ci.data {
+                    CipherData::Login(_) => "L",
+                    CipherData::Card(_) => "C",
+                    CipherData::Identity(_) => "I",
+                    CipherData::SecureNote => "N",
+                    _ => "",
+                }
+                .to_string(),
+                is_in_organization: ci.organization_id.is_some(),
+            })
         })
         .filter(|r| {
             filter.is_empty()
@@ -213,6 +242,7 @@ fn vault_table_view(
         .column(VaultTableColumn::ItemType, "T", |c| c.width(1))
         .column(VaultTableColumn::Name, "Name", |c| c)
         .column(VaultTableColumn::Username, "Username", |c| c)
+        .column(VaultTableColumn::IsInOrganization, "O", |c| c.width(1))
         .default_column(VaultTableColumn::Name)
         .items(rows)
         .on_submit(|siv: &mut Cursive, _, index| {
@@ -234,7 +264,9 @@ fn show_item_details(sink: cursive::CbSink, row: &Row) {
     sink.send(Box::new(move |siv: &mut Cursive| {
         let ud: &mut UserData = siv.user_data().unwrap();
         let dialog = item_detail_dialog(ud, &item_id);
-        siv.add_layer(dialog);
+        if let Some(d) = dialog {
+            siv.add_layer(d);
+        }
     }))
     .unwrap();
 }

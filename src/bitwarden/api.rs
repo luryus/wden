@@ -151,7 +151,7 @@ pub struct TokenResponseSuccess {
     #[serde(alias = "Key")]
     pub key: Cipher,
     #[serde(alias = "PrivateKey")]
-    private_key: Cipher,
+    pub private_key: Cipher,
     pub access_token: String,
     expires_in: u32,
     refresh_token: String,
@@ -192,10 +192,31 @@ impl TryFrom<u8> for TwoFactorProviderType {
 #[serde(rename_all = "PascalCase")]
 struct SyncResponseInternal {
     ciphers: Vec<CipherItemInternal>,
+    profile: Profile
 }
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "PascalCase")]
+pub struct Profile {
+    pub email: String,
+    pub id: String,
+    pub name: String,
+    pub organizations: Vec<Organization>,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "PascalCase")]
+pub struct Organization {
+    pub enabled: bool,
+    pub id: String,
+    #[serde(default)]
+    pub key: Cipher,
+    pub name: String,
+} 
 
 pub struct SyncResponse {
     pub ciphers: Vec<CipherItem>,
+    pub profile: Profile
 }
 
 impl From<SyncResponseInternal> for SyncResponse {
@@ -206,6 +227,7 @@ impl From<SyncResponseInternal> for SyncResponse {
                 .into_iter()
                 .map_into::<CipherItem>()
                 .collect_vec(),
+            profile: sri.profile
         }
     }
 }

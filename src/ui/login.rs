@@ -294,6 +294,14 @@ pub fn do_sync(cursive: &mut Cursive) {
                                 .map(|ci| (ci.id.clone(), ci))
                                 .collect(),
                         );
+                        ud.organizations = Some(
+                            sync_res
+                                .profile
+                                .organizations
+                                .into_iter()
+                                .map(|o| (o.id.clone(), o))
+                                .collect(),
+                        );
                     });
                     c.pop_layer();
                     show_item_list(c);

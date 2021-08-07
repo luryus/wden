@@ -90,7 +90,7 @@ pub fn decrypt_symmetric_keys(
     extract_enc_mac_keys(&dec_cipher)
 }
 
-fn extract_enc_mac_keys(full_key: &[u8]) -> Result<(EncryptionKey, MacKey), CipherError> {
+pub fn extract_enc_mac_keys(full_key: &[u8]) -> Result<(EncryptionKey, MacKey), CipherError> {
     let enc_key = full_key.iter().take(32).copied().collect::<Vec<_>>();
     let mac_key = full_key.iter().skip(32).take(32).copied().collect::<Vec<_>>();
 

@@ -11,21 +11,27 @@ use cursive::{
     View,
 };
 use lazy_static::lazy_static;
+use log::warn;
 
 lazy_static! {
     static ref VALUE_STYLE: Style =
         Style::from(Effect::Reverse).combine(Color::Dark(BaseColor::Blue));
 }
 
-pub fn item_detail_dialog(ud: &mut UserData, item_id: &str) -> impl View {
-    let (enc_key, mac_key) = ud.decrypt_keys().unwrap();
-
+pub fn item_detail_dialog(ud: &mut UserData, item_id: &str) -> Option<impl View> {
     // Find the item
     let item = ud
         .vault_data
         .as_ref()
         .and_then(|vd| vd.get(item_id))
         .expect("Item not found in vault data");
+
+    // Find keys that should be used for decrypting details
+    let keys = ud.get_keys_for_item(&item);
+    if keys.is_none() {
+        warn!("Error getting keys for item");
+    }
+    let (enc_key, mac_key) = keys?;
 
     let dialog_contents = match item.data {
         CipherData::Login(..) => login_dialog_contents(item, &enc_key, &mac_key),
@@ -69,7 +75,7 @@ pub fn item_detail_dialog(ud: &mut UserData, item_id: &str) -> impl View {
         });
     }
 
-    ev
+    Some(ev)
 }
 
 fn login_dialog_contents(

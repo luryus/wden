@@ -1,7 +1,5 @@
-use crate::bitwarden::{
-    api,
-    cipher::{self, EncryptionKey, MacKey},
-};
+use crate::bitwarden::{api, cipher::{self, EncryptionKey, MacKey, extract_enc_mac_keys}};
+use anyhow::Context;
 use cipher::decrypt_symmetric_keys;
 use directories_next::ProjectDirs;
 use serde::{Deserialize, Serialize};
@@ -20,6 +18,7 @@ pub struct UserData {
     pub master_key: Option<cipher::MasterKey>,
     pub master_password_hash: Option<cipher::MasterPasswordHash>,
     pub token: Option<api::TokenResponseSuccess>,
+    pub organizations: Option<HashMap<String, api::Organization>>,
     pub vault_data: Option<HashMap<String, api::CipherItem>>,
 }
 
@@ -32,6 +31,7 @@ impl UserData {
             master_key: None,
             master_password_hash: None,
             token: None,
+            organizations: None,
             vault_data: None,
         }
     }
@@ -40,6 +40,36 @@ impl UserData {
         let token_key = &self.token.as_ref()?.key;
         let master_key = self.master_key?;
         decrypt_symmetric_keys(token_key, master_key).ok()
+    }
+
+    pub fn decrypt_organization_keys(&self, organization_id: &str) -> anyhow::Result<(EncryptionKey, MacKey)> {
+        let organization = &self.organizations.as_ref().and_then(|os| os.get(organization_id))
+            .with_context(|| format!("Org not found with id {}", organization_id))?;
+
+        // Organization.key is encrypted with the user private (RSA) key,
+        // get that first
+        let (user_enc_key, user_mac_key) = self.decrypt_keys().context("User key decryption failed")?;
+        let user_private_key = &self.token.as_ref().map(|t| &t.private_key).context("No private key")?;
+        let decrypted_private_key = user_private_key.decrypt(&user_enc_key, &user_mac_key)?;
+
+        // Then use the private key to decrypt the organization key
+        let full_org_key = organization.key.decrypt_with_private_key(&decrypted_private_key)?;
+
+        Ok(extract_enc_mac_keys(&full_org_key)?)
+    }
+
+    pub fn get_keys_for_item(&self, item: &api::CipherItem) -> Option<(EncryptionKey, MacKey)> {
+        if let Some(oid) = &item.organization_id {
+            let res = self.decrypt_organization_keys(oid);
+            if let Err(e) = res {
+                log::warn!("Error decrypting org keys: {}", e);
+                return None
+            }
+            res.ok()
+        } else {
+            // No organization, use user's keys
+            self.decrypt_keys()
+        }
     }
 }
 
