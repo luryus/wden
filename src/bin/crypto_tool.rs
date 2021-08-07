@@ -22,18 +22,21 @@ struct Opts {
     #[clap(long)]
     cipher: String,
 
-    #[clap(long, default_value="100000")]
+    #[clap(long, default_value = "100000")]
     hash_iterations: u32,
 
     #[clap(long)]
-    to_string: bool
+    to_string: bool,
 }
 
 fn main() -> Result<(), anyhow::Error> {
     let opts = Opts::parse();
 
     let master_key = cipher::create_master_key(
-        &opts.username, &opts.password, opts.hash_iterations.try_into()?);
+        &opts.username,
+        &opts.password,
+        opts.hash_iterations.try_into()?,
+    );
     let master_key_str = base64::encode(&master_key);
 
     println!("Master key: {}", master_key_str);
@@ -43,7 +46,9 @@ fn main() -> Result<(), anyhow::Error> {
 
     let cipher = opts.cipher.parse::<Cipher>()?;
     let decrypted_cipher = if let Some(priv_key_cipher) = opts.private_key_cipher {
-        let der_priv_key = priv_key_cipher.parse::<Cipher>()?.decrypt(&enc_key, &mac_key)?;
+        let der_priv_key = priv_key_cipher
+            .parse::<Cipher>()?
+            .decrypt(&enc_key, &mac_key)?;
         cipher.decrypt_with_private_key(&der_priv_key)?
     } else {
         cipher.decrypt(&enc_key, &mac_key)?

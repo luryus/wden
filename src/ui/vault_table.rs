@@ -192,7 +192,7 @@ fn get_filtered_rows(
                 let res = user_data.decrypt_organization_keys(oid);
                 if let Err(e) = res {
                     log::warn!("Error decrypting org keys: {}", e);
-                    return None
+                    return None;
                 }
                 let res = res.ok()?;
                 org_enc_key = res.0;
