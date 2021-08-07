@@ -4,6 +4,8 @@ use block_modes::block_padding::Pkcs7;
 use block_modes::{BlockMode, Cbc};
 use itertools::Itertools;
 use ring::{digest, hkdf, pbkdf2};
+use rsa::{PaddingScheme, RsaPrivateKey};
+use rsa::pkcs8::FromPrivateKey;
 use serde::de;
 use serde::{Deserialize, Deserializer};
 use std::fmt;
@@ -15,10 +17,14 @@ use anyhow::Context;
 
 static PBKDF2_ALG: pbkdf2::Algorithm = pbkdf2::PBKDF2_HMAC_SHA256;
 const CREDENTIAL_LEN: usize = digest::SHA256_OUTPUT_LEN;
+
 pub type MasterKey = [u8; CREDENTIAL_LEN];
 pub type MasterPasswordHash = [u8; CREDENTIAL_LEN];
 pub type EncryptionKey = [u8; CREDENTIAL_LEN];
 pub type MacKey = [u8; CREDENTIAL_LEN];
+
+// Private key is in DER format
+pub type DerPrivateKey = Vec<u8>;
 
 #[derive(Error, Debug)]
 pub enum CipherError {
@@ -32,6 +38,8 @@ pub enum CipherError {
     InvalidCipherStringFormat,
     #[error("Unknown cipher encryption type {0}")]
     UnknownCipherEncryptionType(String),
+    #[error("Invalid key type for cipher")]
+    InvalidKeyTypeForCipher
 }
 
 pub fn create_master_key(
@@ -79,8 +87,12 @@ pub fn decrypt_symmetric_keys(
     let dec_cipher = key_cipher
         .decrypt(&master_enc, &master_mac)?;
 
-    let enc_key = dec_cipher.iter().take(32).copied().collect::<Vec<_>>();
-    let mac_key = dec_cipher.into_iter().skip(32).take(32).collect::<Vec<_>>();
+    extract_enc_mac_keys(&dec_cipher)
+}
+
+fn extract_enc_mac_keys(full_key: &[u8]) -> Result<(EncryptionKey, MacKey), CipherError> {
+    let enc_key = full_key.iter().take(32).copied().collect::<Vec<_>>();
+    let mac_key = full_key.iter().skip(32).take(32).copied().collect::<Vec<_>>();
 
     if enc_key.len() != 32 || mac_key.len() != 32 {
         return Err(CipherError::InvalidKeyLength);
@@ -169,21 +181,35 @@ impl FromStr for Cipher {
             .ok_or(CipherError::InvalidCipherStringFormat)?;
         let enc_type = EncType::from_str(enc_type_str)?;
 
-        let (iv_b64, ct_b64, mac_b64) = rest
-            .split("|")
-            .collect_tuple()
-            .ok_or(CipherError::InvalidCipherStringFormat)?;
-
-        let iv = base64::decode(iv_b64).or(Err(CipherError::InvalidCipherStringFormat))?;
-        let ct = base64::decode(ct_b64).or(Err(CipherError::InvalidCipherStringFormat))?;
-        let mac = base64::decode(mac_b64).or(Err(CipherError::InvalidCipherStringFormat))?;
-
-        Ok(Cipher::Value {
-            enc_type,
-            iv,
-            ct,
-            mac,
-        })
+        match (enc_type.has_iv(), enc_type.has_mac()) {
+            (true, true) => {
+                let (iv_b64, ct_b64, mac_b64) = rest
+                .split("|")
+                .collect_tuple()
+                .ok_or(CipherError::InvalidCipherStringFormat)?;
+    
+                let iv = base64::decode(iv_b64).or(Err(CipherError::InvalidCipherStringFormat))?;
+                let ct = base64::decode(ct_b64).or(Err(CipherError::InvalidCipherStringFormat))?;
+                let mac = base64::decode(mac_b64).or(Err(CipherError::InvalidCipherStringFormat))?;
+    
+                Ok(Cipher::Value {
+                    enc_type,
+                    iv,
+                    ct,
+                    mac,
+                })
+            },
+            (false, false) => {
+                let iv = vec![];
+                let mac = vec![];
+                let ct = base64::decode(rest).or(Err(CipherError::InvalidCipherStringFormat))?;
+                Ok(Cipher::Value {
+                    enc_type, iv, ct, mac
+                })
+            },
+            _ => unimplemented!()
+        }
+    
     }
 }
 
@@ -199,13 +225,13 @@ impl Cipher {
                 EncType::AesCbc256HmacSha256B64 => {
                     self.decrypt_aescbc256_hmac_sha256(enc_key, mac_key)
                 }
-                EncType::Rsa2048OaepSha256B64 => self.decrypt_rsa2048_oaepsha256(enc_key, mac_key),
-                EncType::Rsa2048OaepSha1B64 => self.decrypt_rsa2048_oaepsha1(enc_key, mac_key),
+                EncType::Rsa2048OaepSha256B64 => Err(CipherError::InvalidKeyTypeForCipher),
+                EncType::Rsa2048OaepSha1B64 => Err(CipherError::InvalidKeyTypeForCipher),
                 EncType::Rsa2048OaepSha256HmacSha256B64 => {
-                    self.decrypt_rsa2048_oaepsha256_hmacsha256(enc_key, mac_key)
+                    Err(CipherError::InvalidKeyTypeForCipher)
                 }
                 EncType::Rsa2048OaepSha1HmacSha256B64 => {
-                    self.decrypt_rsa2048_oaepsha1_hmacsha256(enc_key, mac_key)
+                    Err(CipherError::InvalidKeyTypeForCipher)
                 }
             },
         }
@@ -216,6 +242,23 @@ impl Cipher {
             .ok()
             .and_then(|s| String::from_utf8(s).ok())
             .unwrap_or(String::new())
+    }
+
+    pub fn decrypt_with_private_key(&self, private_key: &DerPrivateKey) -> Result<Vec<u8>, CipherError> {
+        match self {
+            Self::Empty => Ok(vec![]),
+            Self::Value { enc_type, .. } => match enc_type {
+                EncType::Rsa2048OaepSha256B64 => self.decrypt_rsa2048_oaepsha256(private_key),
+                EncType::Rsa2048OaepSha1B64 => self.decrypt_rsa2048_oaepsha1(private_key),
+                EncType::Rsa2048OaepSha256HmacSha256B64 => self.decrypt_rsa2048_oaepsha256_hmacsha256(private_key),
+                EncType::Rsa2048OaepSha1HmacSha256B64 => self.decrypt_rsa2048_oaepsha1_hmacsha256(private_key),
+                EncType::AesCbc256B64 => Err(CipherError::InvalidKeyTypeForCipher),
+                EncType::AesCbc128HmacSha256B64 => Err(CipherError::InvalidKeyTypeForCipher),
+                EncType::AesCbc256HmacSha256B64 => {
+                    Err(CipherError::InvalidKeyTypeForCipher)
+                }
+            },
+        }
     }
 
     fn decrypt_aescbc256(
@@ -259,29 +302,36 @@ impl Cipher {
 
     fn decrypt_rsa2048_oaepsha256(
         &self,
-        _enc_key: &EncryptionKey,
-        _mac_key: &MacKey,
+        _private_key: &DerPrivateKey
     ) -> Result<Vec<u8>, CipherError> {
         unimplemented!()
     }
     fn decrypt_rsa2048_oaepsha1(
         &self,
-        _enc_key: &EncryptionKey,
-        _mac_key: &MacKey,
+        private_key: &DerPrivateKey
     ) -> Result<Vec<u8>, CipherError> {
-        unimplemented!()
+        if let Self::Value { ct, .. } = self {
+            let rsa_key = RsaPrivateKey::from_pkcs8_der(&private_key)
+                .context("Reading RSA private key failed")?;
+    
+            let padding = PaddingScheme::new_oaep::<sha1::Sha1>();
+            let res = rsa_key.decrypt(padding, ct.as_slice())
+                .context("RSA decryption failed")?;
+    
+            Ok(res)
+        } else {
+            panic!("Tried to decrypt empty cipher")
+        }
     }
     fn decrypt_rsa2048_oaepsha256_hmacsha256(
         &self,
-        _enc_key: &EncryptionKey,
-        _mac_key: &MacKey,
+        _private_key: &DerPrivateKey
     ) -> Result<Vec<u8>, CipherError> {
         unimplemented!()
     }
     fn decrypt_rsa2048_oaepsha1_hmacsha256(
         &self,
-        _enc_key: &EncryptionKey,
-        _mac_key: &MacKey,
+        _private_key: &DerPrivateKey
     ) -> Result<Vec<u8>, CipherError> {
         unimplemented!()
     }
@@ -296,6 +346,18 @@ pub enum EncType {
     Rsa2048OaepSha1B64,
     Rsa2048OaepSha256HmacSha256B64,
     Rsa2048OaepSha1HmacSha256B64,
+}
+
+impl EncType {
+    fn has_iv(&self) -> bool {
+        self == &EncType::AesCbc256B64 || self == &EncType::AesCbc128HmacSha256B64 || self == &EncType::AesCbc256HmacSha256B64
+    }
+
+    fn has_mac(&self) -> bool {
+        self != &EncType::AesCbc256B64 &&
+        self != &EncType::Rsa2048OaepSha1B64 &&
+        self != &EncType::Rsa2048OaepSha256B64
+    }
 }
 
 impl FromStr for EncType {
