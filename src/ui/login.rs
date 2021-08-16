@@ -269,7 +269,12 @@ pub fn do_sync(cursive: &mut Cursive) {
     while cursive.pop_layer().is_some() {}
     cursive.add_layer(Dialog::text("Syncing..."));
     let ccb = cursive.cb_sink().clone();
-    let user_data: &UserData = cursive.user_data().expect("User data not present");
+    let user_data: &mut UserData = cursive.user_data().expect("User data not present");
+
+    // Clear any data remaining
+    user_data.vault_data = None;
+    user_data.vault_table_rows = None;
+    user_data.organizations = None;
 
     let access_token = user_data
         .token

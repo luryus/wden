@@ -9,6 +9,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
+use super::vault_table;
+
 pub struct GlobalSettings {
     pub server_url: String,
     pub profile: String,
@@ -23,6 +25,7 @@ pub struct UserData {
     pub token: Option<api::TokenResponseSuccess>,
     pub organizations: Option<HashMap<String, api::Organization>>,
     pub vault_data: Option<HashMap<String, api::CipherItem>>,
+    pub vault_table_rows: Option<Vec<vault_table::Row>>
 }
 
 impl UserData {
@@ -36,6 +39,7 @@ impl UserData {
             token: None,
             organizations: None,
             vault_data: None,
+            vault_table_rows: None
         }
     }
 
@@ -119,7 +123,7 @@ pub struct ProfileStore {
 
 impl ProfileStore {
     pub fn new(profile_name: &str) -> ProfileStore {
-        let dirs = ProjectDirs::from("com.koskela", "", "bitwarden-tui").unwrap();
+        let dirs = ProjectDirs::from("com.lkoskela", "", "bitwarden-tui").unwrap();
 
         let config_dir = dirs.config_dir().to_path_buf();
         let profile_config_file = config_dir.join(format!("{}.json", profile_name));

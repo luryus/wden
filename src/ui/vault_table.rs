@@ -155,9 +155,12 @@ fn filter_edit_view() -> impl View {
             // Filter the results, update table
             if let Some(mut tv) = siv.find_name::<TableView<Row, VaultTableColumn>>("vault_table") {
                 let ud: &mut UserData = siv.user_data().unwrap();
-                let (enc_key, mac_key) = ud.decrypt_keys().unwrap();
-                let rows = get_filtered_rows(text, ud, &enc_key, &mac_key);
-                tv.set_items_stable(rows);
+
+                if let Some(all_rows) = ud.vault_table_rows.as_ref() {
+                    let rows = get_filtered_rows(text, all_rows);
+                    tv.set_items_stable(rows);
+                }
+
             }
         })
         .on_submit(|siv, _| {
@@ -176,28 +179,82 @@ fn filter_edit_view() -> impl View {
 
 fn get_filtered_rows(
     filter: &str,
+    rows: &Vec<Row>
+) -> Vec<Row> {
+    rows.iter()
+        .filter(|r| {
+            filter.is_empty()
+                || FuzzySearch::new(filter, &format!("{} {} {}", r.name, r.username, r.url))
+                    .case_insensitive()
+                    .best_match()
+                    .is_some()
+        })
+        .cloned()
+        .collect_vec()
+}
+
+fn vault_table_view(
     user_data: &mut UserData,
     enc_key: &EncryptionKey,
     mac_key: &MacKey,
-) -> Vec<Row> {
+) -> impl View {
+    // Generate row items (with some decrypted data for all cipher items)
+    // These are stored in user_data. Only the filter results are stored
+    // as the table's rows.
+    let rows = create_rows(user_data, enc_key, mac_key);
+    user_data.vault_table_rows = Some(rows);
+
+    let rows = user_data.vault_table_rows.clone().unwrap();
+
+    TableView::new()
+        .column(VaultTableColumn::ItemType, "T", |c| c.width(1))
+        .column(VaultTableColumn::Name, "Name", |c| c)
+        .column(VaultTableColumn::Username, "Username", |c| c)
+        .column(VaultTableColumn::IsInOrganization, "O", |c| c.width(1))
+        .default_column(VaultTableColumn::Name)
+        .items(rows)
+        .on_submit(|siv: &mut Cursive, _, index| {
+            let sink = siv.cb_sink().clone();
+            siv.call_on_name(
+                "vault_table",
+                move |t: &mut TableView<Row, VaultTableColumn>| {
+                    show_item_details(sink, t.borrow_item(index).unwrap());
+                },
+            )
+            .unwrap();
+        })
+        .with_name("vault_table")
+        .full_height()
+}
+
+fn create_rows(user_data: &mut UserData, enc_key: &EncryptionKey, mac_key: &MacKey) -> Vec<Row> {
+    // Find all organization keys we will need
+    let org_keys: HashMap<_, _> = user_data
+        .vault_data
+        .as_ref()
+        .map(|ok| {
+            ok.values()
+                .filter_map(|i| i.organization_id.as_ref())
+                .unique()
+                .filter_map(|oid| {
+                    user_data
+                        .decrypt_organization_keys(oid)
+                        .map(|key| (oid, key))
+                        .ok()
+                })
+                .collect()
+        })
+        .unwrap_or(HashMap::new());
+
     user_data
         .vault_data
         .as_ref()
         .unwrap_or(&HashMap::new())
         .iter()
         .filter_map(|(id, ci)| {
-            let org_enc_key: EncryptionKey;
-            let org_mac_key: MacKey;
             let (ec, mc) = if let Some(oid) = &ci.organization_id {
-                let res = user_data.decrypt_organization_keys(oid);
-                if let Err(e) = res {
-                    log::warn!("Error decrypting org keys: {}", e);
-                    return None;
-                }
-                let res = res.ok()?;
-                org_enc_key = res.0;
-                org_mac_key = res.1;
-                (&org_enc_key, &org_mac_key)
+                let keys = org_keys.get(oid)?;
+                (&keys.0, &keys.1)
             } else {
                 (enc_key, mac_key)
             };
@@ -221,42 +278,7 @@ fn get_filtered_rows(
                 is_in_organization: ci.organization_id.is_some(),
             })
         })
-        .filter(|r| {
-            filter.is_empty()
-                || FuzzySearch::new(filter, &format!("{} {} {}", r.name, r.username, r.url))
-                    .case_insensitive()
-                    .best_match()
-                    .is_some()
-        })
         .collect_vec()
-}
-
-fn vault_table_view(
-    user_data: &mut UserData,
-    enc_key: &EncryptionKey,
-    mac_key: &MacKey,
-) -> impl View {
-    let rows = get_filtered_rows("", user_data, enc_key, mac_key);
-    log::info!("Filter results: {}", rows.len());
-    TableView::new()
-        .column(VaultTableColumn::ItemType, "T", |c| c.width(1))
-        .column(VaultTableColumn::Name, "Name", |c| c)
-        .column(VaultTableColumn::Username, "Username", |c| c)
-        .column(VaultTableColumn::IsInOrganization, "O", |c| c.width(1))
-        .default_column(VaultTableColumn::Name)
-        .items(rows)
-        .on_submit(|siv: &mut Cursive, _, index| {
-            let sink = siv.cb_sink().clone();
-            siv.call_on_name(
-                "vault_table",
-                move |t: &mut TableView<Row, VaultTableColumn>| {
-                    show_item_details(sink, t.borrow_item(index).unwrap());
-                },
-            )
-            .unwrap();
-        })
-        .with_name("vault_table")
-        .full_height()
 }
 
 fn show_item_details(sink: cursive::CbSink, row: &Row) {
