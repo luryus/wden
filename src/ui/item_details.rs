@@ -1,15 +1,9 @@
 use super::{data::UserData, vault_table::show_copy_notification};
-use crate::bitwarden::{
+use crate::{bitwarden::{
     api::{CipherData, CipherItem},
     cipher::{Cipher, EncryptionKey, MacKey},
-};
-use cursive::{
-    theme::{BaseColor, Color, Effect, Style},
-    traits::Boxable,
-    view::Margins,
-    views::{Dialog, LinearLayout, OnEventView, PaddedView, TextView},
-    View,
-};
+}, ui::components::secret_text_view::SecretTextView};
+use cursive::{View, theme::{BaseColor, Color, Effect, Style}, traits::{Boxable, Nameable}, view::Margins, views::{Dialog, LinearLayout, OnEventView, PaddedView, TextView, ViewRef}};
 use lazy_static::lazy_static;
 use log::warn;
 
@@ -47,6 +41,8 @@ pub fn item_detail_dialog(ud: &mut UserData, item_id: &str) -> Option<impl View>
             .add_child(TextView::new("<p> Copy password").style(Color::Light(BaseColor::Black)));
         key_hint_linear_layout
             .add_child(TextView::new("<u> Copy username").style(Color::Light(BaseColor::Black)));
+        key_hint_linear_layout
+            .add_child(TextView::new("<s> Toggle password visibility").style(Color::Light(BaseColor::Black)));
     }
 
     let dialog = Dialog::around(
@@ -73,6 +69,11 @@ pub fn item_detail_dialog(ud: &mut UserData, item_id: &str) -> Option<impl View>
             super::clipboard::clip_string(username.clone());
             show_copy_notification(siv, "Username copied");
         });
+
+        ev.set_on_event('s', move |siv| {
+            let mut pw_textview: ViewRef<PaddedView<SecretTextView>> = siv.find_name("password_textview").unwrap();
+            pw_textview.get_inner_mut().toggle_hidden();
+        });
     }
 
     Some(ev)
@@ -93,10 +94,7 @@ fn login_dialog_contents(
         .child(TextView::new("Username"))
         .child(value_textview(&login.username, enc_key, mac_key))
         .child(TextView::new("Password"))
-        .child(PaddedView::new(
-            Margins::tb(0, 1),
-            TextView::new("********").style(*VALUE_STYLE),
-        ))
+        .child(value_secret_textview(&login.password, enc_key, mac_key).with_name("password_textview"))
         .child(TextView::new("Uri"))
         .child(value_textview(&login.uri, enc_key, mac_key))
         .child(TextView::new("Notes"))
@@ -155,5 +153,14 @@ fn value_textview(
     mac_key: &MacKey,
 ) -> PaddedView<TextView> {
     let tv = TextView::new(cipher.decrypt_to_string(enc_key, mac_key)).style(*VALUE_STYLE);
+    PaddedView::new(Margins::tb(0, 1), tv)
+}
+
+fn value_secret_textview(
+    cipher: &Cipher,
+    enc_key: &EncryptionKey,
+    mac_key: &MacKey,
+) -> PaddedView<SecretTextView> {
+    let tv = SecretTextView::new(cipher.decrypt_to_string(enc_key, mac_key)).style(*VALUE_STYLE);
     PaddedView::new(Margins::tb(0, 1), tv)
 }
