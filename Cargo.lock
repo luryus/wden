@@ -130,6 +130,7 @@ dependencies = [
  "sublime_fuzzy",
  "thiserror",
  "tokio",
+ "zeroize",
 ]
 
 [[package]]
