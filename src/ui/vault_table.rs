@@ -160,7 +160,6 @@ fn filter_edit_view() -> impl View {
                     let rows = get_filtered_rows(text, all_rows);
                     tv.set_items_stable(rows);
                 }
-
             }
         })
         .on_submit(|siv, _| {
@@ -177,10 +176,7 @@ fn filter_edit_view() -> impl View {
     PaddedView::lrtb(0, 0, 0, 1, ll)
 }
 
-fn get_filtered_rows(
-    filter: &str,
-    rows: &Vec<Row>
-) -> Vec<Row> {
+fn get_filtered_rows(filter: &str, rows: &Vec<Row>) -> Vec<Row> {
     rows.iter()
         .filter(|r| {
             filter.is_empty()

@@ -25,7 +25,7 @@ pub struct UserData {
     pub token: Option<api::TokenResponseSuccess>,
     pub organizations: Option<HashMap<String, api::Organization>>,
     pub vault_data: Option<HashMap<String, api::CipherItem>>,
-    pub vault_table_rows: Option<Vec<vault_table::Row>>
+    pub vault_table_rows: Option<Vec<vault_table::Row>>,
 }
 
 impl UserData {
@@ -39,13 +39,13 @@ impl UserData {
             token: None,
             organizations: None,
             vault_data: None,
-            vault_table_rows: None
+            vault_table_rows: None,
         }
     }
 
     pub fn decrypt_keys(&self) -> Option<(EncryptionKey, MacKey)> {
         let token_key = &self.token.as_ref()?.key;
-        let master_key = self.master_key?;
+        let master_key = self.master_key.as_ref()?;
         decrypt_symmetric_keys(token_key, master_key).ok()
     }
 
@@ -68,7 +68,9 @@ impl UserData {
             .as_ref()
             .map(|t| &t.private_key)
             .context("No private key")?;
-        let decrypted_private_key = user_private_key.decrypt(&user_enc_key, &user_mac_key)?;
+        let decrypted_private_key = user_private_key
+            .decrypt(&user_enc_key, &user_mac_key)?
+            .into();
 
         // Then use the private key to decrypt the organization key
         let full_org_key = organization

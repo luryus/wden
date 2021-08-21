@@ -8,13 +8,19 @@ default-run = "app"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-ring = "0.16.11"
 base64 = "0.11.0"
 itertools = "0.8.2"
-aes = "0.3.2"
-block-modes = "0.3.3"
+
+# Crypto crates (RustCrypto)
+aes = "0.7.4"
+block-modes = "0.8.1"
 rsa = "0.5.0"
 sha-1 = "0.9.7"
+sha2 = "0.9.5"
+hmac = "0.11.0"
+pbkdf2 = "0.8.0"
+hkdf = "0.11.0"
+
 serde = { version = "1.0.106", features = ["derive"] }
 serde_json = "1.0.50"
 tokio = { version = "1.2", features = ["full"] }

@@ -38,12 +38,7 @@ pub fn login_dialog(saved_email: &Option<String>) -> Dialog {
         .button("Submit", move |c| submit_login(c))
 }
 
-fn two_factor_dialog(
-    types: Vec<TwoFactorProviderType>,
-    email: String,
-    master_key: MasterKey,
-    master_pw_hash: MasterPasswordHash,
-) -> Dialog {
+fn two_factor_dialog(types: Vec<TwoFactorProviderType>, email: String) -> Dialog {
     if !types.contains(&TwoFactorProviderType::Authenticator) {
         Dialog::info("Account requires two-factor authentication, but active two-factor methods are not supported.")
     } else {
@@ -52,9 +47,7 @@ fn two_factor_dialog(
                 .child(TextView::new("Enter authenticator code:"))
                 .child(EditView::new().with_name("authenticator_code")),
         )
-        .button("Submit", move |siv| {
-            submit_two_factor(siv, email.clone(), master_key, master_pw_hash)
-        })
+        .button("Submit", move |siv| submit_two_factor(siv, email.clone()))
         .dismiss_button("Cancel")
     }
 }
@@ -87,10 +80,16 @@ fn submit_login(c: &mut cursive::Cursive) {
     tokio::spawn(async move {
         let res = async {
             let (master_key, master_pw_hash) = do_prelogin(&server_url, &email, &password).await?;
-            let login_res =
-                do_login(&server_url, &email, &master_pw_hash, None, &profile_store).await?;
 
-            Ok((login_res, master_key, master_pw_hash))
+            let store_pw_hash = master_pw_hash.clone();
+            cb.send(Box::new(move |c: &mut Cursive| {
+                let mut ud: &mut UserData = c.user_data().unwrap();
+                ud.master_key = Some(master_key);
+                ud.master_password_hash = Some(store_pw_hash);
+            }))
+            .expect("Failed to send callback");
+
+            do_login(&server_url, &email, &master_pw_hash, None, &profile_store).await
         }
         .await;
 
@@ -98,11 +97,7 @@ fn submit_login(c: &mut cursive::Cursive) {
     });
 }
 
-fn handle_login_response(
-    res: Result<(TokenResponse, MasterKey, MasterPasswordHash), anyhow::Error>,
-    cb: CbSink,
-    email: String,
-) {
+fn handle_login_response(res: Result<TokenResponse, anyhow::Error>, cb: CbSink, email: String) {
     match res {
         Result::Err(e) => {
             let err_msg = format!("Error: {:?}", e);
@@ -119,7 +114,7 @@ fn handle_login_response(
             }))
             .expect("Sending the cursive callback message failed");
         }
-        Result::Ok((token, master_key, master_pw_hash)) => {
+        Result::Ok(token) => {
             match token {
                 bitwarden::api::TokenResponse::Success(t) => {
                     cb.send(Box::new(move |c: &mut Cursive| {
@@ -134,8 +129,6 @@ fn handle_login_response(
                             }
 
                             dat.email = Some(email);
-                            dat.master_key = Some(master_key);
-                            dat.master_password_hash = Some(master_pw_hash);
                             dat.token = Some(t);
                         });
                         do_sync(c);
@@ -145,7 +138,7 @@ fn handle_login_response(
                 bitwarden::api::TokenResponse::TwoFactorRequired(types) => {
                     cb.send(Box::new(move |c: &mut Cursive| {
                         c.pop_layer();
-                        c.add_layer(two_factor_dialog(types, email, master_key, master_pw_hash));
+                        c.add_layer(two_factor_dialog(types, email));
                     }))
                     .expect("sending cursive message failed");
                 }
@@ -154,12 +147,7 @@ fn handle_login_response(
     }
 }
 
-fn submit_two_factor(
-    c: &mut Cursive,
-    email: String,
-    master_key: MasterKey,
-    master_pw_hash: MasterPasswordHash,
-) {
+fn submit_two_factor(c: &mut Cursive, email: String) {
     let code = c
         .call_on_name("authenticator_code", |view: &mut EditView| {
             view.get_content()
@@ -182,6 +170,14 @@ fn submit_two_factor(
         })
         .unwrap();
 
+    // Have to clone the hash here, because it's not
+    // really possible to access user_data inside the async
+    // block in any good form
+    let master_pw_hash = c
+        .with_user_data(|ud: &mut UserData| ud.master_password_hash.clone())
+        .flatten()
+        .unwrap();
+
     tokio::spawn(async move {
         let res = do_login(
             &server_url,
@@ -190,8 +186,7 @@ fn submit_two_factor(
             Some((TwoFactorProviderType::Authenticator, &code)),
             &profile_store,
         )
-        .await
-        .map(|tr| (tr, master_key, master_pw_hash));
+        .await;
         handle_login_response(res, cb, email);
     });
 }
@@ -208,7 +203,7 @@ async fn do_prelogin(
         &password,
         (iterations as u32).try_into().unwrap(),
     );
-    let master_pw_hash = bitwarden::cipher::create_master_password_hash(master_key, &password);
+    let master_pw_hash = bitwarden::cipher::create_master_password_hash(&master_key, &password);
 
     Ok((master_key, master_pw_hash))
 }
@@ -227,7 +222,7 @@ async fn do_login(
                 client
                     .get_token(
                         &email,
-                        &base64::encode(&master_pw_hash),
+                        &master_pw_hash.base64_encoded(),
                         Some((two_factor_type, two_factor_token, true)),
                     )
                     .await?,
@@ -247,7 +242,7 @@ async fn do_login(
 
             (
                 client
-                    .get_token(&email, &base64::encode(&master_pw_hash), two_factor_param)
+                    .get_token(&email, &master_pw_hash.base64_encoded(), two_factor_param)
                     .await?,
                 false,
             )

@@ -37,18 +37,16 @@ fn main() -> Result<(), anyhow::Error> {
         &opts.password,
         opts.hash_iterations.try_into()?,
     );
-    let master_key_str = base64::encode(&master_key);
-
-    println!("Master key: {}", master_key_str);
 
     let symmetric_key_cipher = opts.symmetric_key_cipher.parse()?;
-    let (enc_key, mac_key) = cipher::decrypt_symmetric_keys(&symmetric_key_cipher, master_key)?;
+    let (enc_key, mac_key) = cipher::decrypt_symmetric_keys(&symmetric_key_cipher, &master_key)?;
 
     let cipher = opts.cipher.parse::<Cipher>()?;
     let decrypted_cipher = if let Some(priv_key_cipher) = opts.private_key_cipher {
         let der_priv_key = priv_key_cipher
             .parse::<Cipher>()?
-            .decrypt(&enc_key, &mac_key)?;
+            .decrypt(&enc_key, &mac_key)?
+            .into();
         cipher.decrypt_with_private_key(&der_priv_key)?
     } else {
         cipher.decrypt(&enc_key, &mac_key)?
