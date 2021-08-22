@@ -3,6 +3,7 @@ use anyhow::Context;
 use base64;
 use block_modes::block_padding::Pkcs7;
 use block_modes::Cbc;
+use block_modes::BlockMode;
 use hkdf::Hkdf;
 use hmac::crypto_mac::MacError;
 use hmac::{Hmac, Mac, NewMac};
@@ -325,8 +326,8 @@ impl Cipher {
             hmac.verify(&mac)
                 .map_err(CipherError::MacVerificationFailed)?;
 
-            let aes =
-                Aes256Cbc::new_var(&enc_key.0, iv.as_slice()).context("Initializing AES failed")?;
+            let aes = Aes256Cbc::new_from_slices(&enc_key.0, iv.as_slice())
+                .context("Initializing AES failed")?;
 
             let decrypted = aes
                 .decrypt_vec(ct.as_slice())
