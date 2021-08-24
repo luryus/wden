@@ -15,7 +15,7 @@ use cursive::{
 };
 use cursive_table_view::{TableView, TableViewItem};
 use itertools::Itertools;
-use sublime_fuzzy::FuzzySearch;
+
 
 use super::{data::UserData, item_details::item_detail_dialog, login::do_sync};
 
@@ -40,6 +40,17 @@ pub struct Row {
 impl PartialEq for Row {
     fn eq(&self, other: &Self) -> bool {
         self.id.eq(&other.id)
+    }
+}
+impl Eq for Row {}
+impl PartialOrd for Row {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(std::cmp::Ord::cmp(&self, &other))
+    }
+}
+impl Ord for Row {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.name.cmp(&other.name)
     }
 }
 
@@ -77,13 +88,11 @@ pub fn vault_view(user_data: &mut UserData) -> impl View {
     let (enc_key, mac_key) = user_data.decrypt_keys().unwrap();
     let table = vault_table_view(user_data, &enc_key, &mac_key);
 
-    let mut ll = LinearLayout::vertical()
+    let ll = LinearLayout::vertical()
         .child(filter_edit_view())
         .child(table)
         .weight(100)
         .child(key_hint_view());
-
-    ll.set_focus_index(1).expect("Focusing table failed");
 
     OnEventView::new(ll)
         .on_event('/', |siv| {
@@ -158,7 +167,7 @@ fn filter_edit_view() -> impl View {
 
                 if let Some(all_rows) = ud.vault_table_rows.as_ref() {
                     let rows = get_filtered_rows(text, all_rows);
-                    tv.set_items_stable(rows);
+                    tv.set_items(rows);
                 }
             }
         })
@@ -177,14 +186,22 @@ fn filter_edit_view() -> impl View {
 }
 
 fn get_filtered_rows(filter: &str, rows: &Vec<Row>) -> Vec<Row> {
+    if filter.is_empty() {
+        return rows.clone();
+    }
+
     rows.iter()
-        .filter(|r| {
-            filter.is_empty()
-                || FuzzySearch::new(filter, &format!("{} {} {}", r.name, r.username, r.url))
-                    .case_insensitive()
-                    .best_match()
-                    .is_some()
+        .filter_map(|r| {
+            let score = fuzzywuzzy::fuzz::partial_token_sort_ratio(
+                filter, &format!("{} {} {}", r.name, r.username, r.url), true, true);
+            if score > 50 {
+                Some((r, score))
+            } else {
+                None
+            }
         })
+        .sorted_by_key(|(_, score)| 100 - (*score))
+        .map(|(r, _)| r)
         .cloned()
         .collect_vec()
 }
@@ -202,12 +219,12 @@ fn vault_table_view(
 
     let rows = user_data.vault_table_rows.clone().unwrap();
 
-    TableView::new()
+    let mut tv = TableView::new()
+        .sorting_disabled()
         .column(VaultTableColumn::ItemType, "T", |c| c.width(1))
         .column(VaultTableColumn::Name, "Name", |c| c)
         .column(VaultTableColumn::Username, "Username", |c| c)
         .column(VaultTableColumn::IsInOrganization, "O", |c| c.width(1))
-        .default_column(VaultTableColumn::Name)
         .items(rows)
         .on_submit(|siv: &mut Cursive, _, index| {
             let sink = siv.cb_sink().clone();
@@ -218,8 +235,14 @@ fn vault_table_view(
                 },
             )
             .unwrap();
-        })
-        .with_name("vault_table")
+        });
+
+    // Explicitly set the first row as selected. This is needed, because
+    // for some reason the table view scrolls past and hides the first item
+    // without this 
+    tv.set_selected_row(0);
+
+    tv.with_name("vault_table")
         .full_height()
 }
 
@@ -274,6 +297,7 @@ fn create_rows(user_data: &mut UserData, enc_key: &EncryptionKey, mac_key: &MacK
                 is_in_organization: ci.organization_id.is_some(),
             })
         })
+        .sorted()
         .collect_vec()
 }
 

@@ -98,6 +98,7 @@ dependencies = [
  "cursive",
  "cursive_table_view",
  "directories-next",
+ "fuzzywuzzy",
  "hkdf",
  "hmac",
  "itertools",
@@ -110,7 +111,6 @@ dependencies = [
  "serde_json",
  "sha-1",
  "sha2",
- "sublime_fuzzy",
  "thiserror",
  "tokio",
  "zeroize",
@@ -394,9 +394,8 @@ dependencies = [
 
 [[package]]
 name = "cursive_table_view"
-version = "0.13.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "74d378a3626928480ca02040934e145991f6256318891c1eb7c48a502321f0cc"
+version = "0.14.0"
+source = "git+https://github.com/luryus/cursive_table_view#e995f16c7b71dcb849e02230935cc47dafa5d311"
 dependencies = [
  "cursive_core",
 ]
@@ -582,6 +581,12 @@ dependencies = [
  "pin-project-lite",
  "pin-utils",
 ]
+
+[[package]]
+name = "fuzzywuzzy"
+version = "0.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c075dcf102b63d18ebeb6ee0e8680ca8ab06da01e73e45ff187f15ef18d50350"
 
 [[package]]
 name = "generic-array"
@@ -1575,12 +1580,6 @@ name = "strsim"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "73473c0e59e6d5812c5dfe2a064a6444949f089e20eec9a2e5506596494e4623"
-
-[[package]]
-name = "sublime_fuzzy"
-version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fa7986063f7c0ab374407e586d7048a3d5aac94f103f751088bf398e07cd5400"
 
 [[package]]
 name = "subtle"

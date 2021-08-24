@@ -27,11 +27,11 @@ tokio = { version = "1.2", features = ["full"] }
 reqwest = { version = "0.11.1", features = ["json"] }
 crossterm = "0.19"
 cursive = { version = "0.16", default_features = false, features = ["crossterm-backend"] }
-cursive_table_view = "0.13"
+cursive_table_view = { git = "https://github.com/luryus/cursive_table_view", version = "0.14" }
 log = "0.4"
 lazy_static = "1.4"
 clipboard = "0.5"
-sublime_fuzzy = "0.7"
+fuzzywuzzy = "0.0.2"
 clap = "3.0.0-beta.2"
 directories-next = "2.0.0"
 thiserror = "1.0"
