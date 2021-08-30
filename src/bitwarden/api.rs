@@ -5,6 +5,7 @@ use reqwest;
 use reqwest::Url;
 use serde::Deserialize;
 use serde_json::Value;
+use std::time::{Duration, Instant};
 use std::{collections::HashMap, convert::TryFrom};
 
 // Name your user agent after your app?
@@ -39,7 +40,7 @@ impl ApiClient {
         return c;
     }
 
-    pub async fn prelogin(&self, user_email: &str) -> Result<usize, Error> {
+    pub async fn prelogin(&self, user_email: &str) -> Result<u32, Error> {
         let mut body = HashMap::new();
         body.insert("email", user_email);
 
@@ -61,7 +62,7 @@ impl ApiClient {
             .and_then(|v| v.as_u64())
             .ok_or(anyhow::anyhow!("Parsing response failed"))?;
 
-        Ok(iterations as usize)
+        Ok(iterations as u32)
     }
 
     pub async fn get_token(
@@ -123,6 +124,23 @@ impl ApiClient {
         return Ok(TokenResponse::Success(res));
     }
 
+    pub async fn refresh_token(&self, refresh_token: &str) -> Result<TokenResponse, Error> {
+        let mut body = HashMap::new();
+        body.insert("grant_type", "refresh_token");
+        body.insert("refresh_token", refresh_token);
+
+        let url = self.base_url.join("identity/connect/token")?;
+
+        let res = self.http_client.post(url).form(&body).send().await?;
+
+        let res = res
+            .error_for_status()?
+            .json::<TokenResponseSuccess>()
+            .await?;
+
+        Ok(TokenResponse::Success(res))
+    }
+
     pub async fn sync(&self) -> Result<SyncResponse, Error> {
         assert!(self.access_token.is_some());
         let mut url = self.base_url.join("api/sync")?;
@@ -155,10 +173,31 @@ pub struct TokenResponseSuccess {
     pub private_key: Cipher,
     pub access_token: String,
     expires_in: u32,
-    refresh_token: String,
+    pub refresh_token: String,
     token_type: String,
     #[serde(alias = "TwoFactorToken")]
     pub two_factor_token: Option<String>,
+    #[serde(skip, default = "token_response_timestamp")]
+    token_timestamp: Instant,
+}
+
+impl TokenResponseSuccess {
+    pub fn time_to_expiry(&self) -> Option<Duration> {
+        let expires_at = self.token_timestamp + Duration::from_secs(self.expires_in as u64);
+        expires_at.checked_duration_since(Instant::now())
+    }
+
+    pub fn should_refresh(&self) -> bool {
+        match self.time_to_expiry() {
+            None => true,
+            Some(d) if d < Duration::from_secs(60 * 118) => true,
+            _ => false,
+        }
+    }
+}
+
+fn token_response_timestamp() -> Instant {
+    Instant::now()
 }
 
 #[derive(PartialEq, Copy, Clone, Debug)]

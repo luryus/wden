@@ -1,14 +1,15 @@
 use cursive::{
     traits::{Boxable, Nameable},
-    views::{Dialog, EditView, LinearLayout, Panel, TextView},
+    view::Margins,
+    views::{Dialog, EditView, LinearLayout, PaddedView, Panel, TextView},
     CbSink, Cursive,
 };
 use std::convert::TryInto;
 
 use crate::bitwarden::{
     self,
-    api::{TokenResponse, TwoFactorProviderType},
-    cipher::{MasterKey, MasterPasswordHash},
+    api::{ApiClient, TokenResponse, TwoFactorProviderType},
+    cipher::{self, MasterKey, MasterPasswordHash},
 };
 
 use super::{
@@ -17,25 +18,32 @@ use super::{
 };
 
 pub fn login_dialog(saved_email: &Option<String>) -> Dialog {
+    let password_field = EditView::new()
+        .secret()
+        .on_submit(|siv, _| submit_login(siv))
+        .with_name("password")
+        .fixed_width(40);
+
     let email_field = if let Some(em) = saved_email {
         EditView::new().content(em)
     } else {
         EditView::new()
     };
+    let email_field = email_field
+        .on_submit(|siv, _| {
+            siv.focus_name("password").unwrap();
+        })
+        .with_name("email")
+        .fixed_width(40);
 
     let layout = LinearLayout::vertical()
         .child(TextView::new("Email address"))
-        .child(email_field.with_name("email").fixed_width(40))
+        .child(email_field)
         .child(TextView::new("Password"))
-        .child(
-            EditView::new()
-                .secret()
-                .with_name("password")
-                .fixed_width(40),
-        );
+        .child(password_field);
     Dialog::around(layout)
         .title("Log in")
-        .button("Submit", move |c| submit_login(c))
+        .button("Submit", |c| submit_login(c))
 }
 
 fn two_factor_dialog(types: Vec<TwoFactorProviderType>, email: String) -> Dialog {
@@ -52,7 +60,89 @@ fn two_factor_dialog(types: Vec<TwoFactorProviderType>, email: String) -> Dialog
     }
 }
 
-fn submit_login(c: &mut cursive::Cursive) {
+pub fn lock_vault(c: &mut Cursive) {
+    // Remove all layers first
+    while c.pop_layer().is_some() {}
+
+    // Clear all keys from memory, and get stored email
+    let email = c
+        .with_user_data(|ud: &mut UserData| {
+            ud.clear_data_for_locking();
+            ud.email.clone()
+        })
+        .flatten();
+    let email = match email.as_ref() {
+        Some(e) => e,
+        None => {
+            log::warn!("Email was missing while locking");
+            "???"
+        }
+    };
+
+    // Vault data is left in place, but its all encrypted
+
+    // Show unlock dialog
+    c.add_layer(unlock_dialog(email));
+}
+
+fn unlock_dialog(email: &str) -> Dialog {
+    let pw_editview = EditView::new()
+        .secret()
+        .on_submit(|siv, _| submit_unlock(siv))
+        .with_name("password");
+
+    Dialog::around(
+        LinearLayout::vertical()
+            .child(TextView::new(format!(
+                "Vault is locked (account {}). Unlock with master password:",
+                email
+            )))
+            .child(PaddedView::new(Margins::tb(1, 1), pw_editview)),
+    )
+    .button("Unlock", |siv| submit_unlock(siv))
+}
+
+fn submit_unlock(c: &mut Cursive) {
+    let password = c
+        .call_on_name("password", |view: &mut EditView| view.get_content())
+        .unwrap();
+
+    c.pop_layer();
+    c.add_layer(Dialog::text("Unlocking..."));
+
+    // Get stuff from user data
+    let user_data: &mut UserData = c.user_data().unwrap();
+    let iters = user_data.password_hash_iterations.unwrap();
+    let email = user_data.email.clone().unwrap();
+    let token_key = user_data.token.as_ref().map(|t| &t.key).unwrap();
+
+    let (master_key, master_pw_hash) = get_master_key_pw_hash(&email, &password, iters);
+
+    // Verify that the password was correct by checking if token key can be decrypted
+    match cipher::decrypt_symmetric_keys(token_key, &master_key) {
+        Err(e) => {
+            log::error!("Unlocking failed: {}", e);
+            c.pop_layer();
+            c.add_layer(
+                Dialog::text(format!("Unlocking failed: {}", e)).button("OK", move |siv| {
+                    siv.pop_layer();
+                    siv.add_layer(unlock_dialog(&email));
+                }),
+            )
+        }
+        Ok(_) => {
+            // Success, store keys and continue
+            user_data.master_key = Some(master_key);
+            user_data.master_password_hash = Some(master_pw_hash);
+            user_data.password_hash_iterations = Some(iters);
+
+            c.pop_layer();
+            show_item_list(c);
+        }
+    }
+}
+
+fn submit_login(c: &mut Cursive) {
     let email = c
         .call_on_name("email", |view: &mut EditView| view.get_content())
         .unwrap()
@@ -79,13 +169,15 @@ fn submit_login(c: &mut cursive::Cursive) {
 
     tokio::spawn(async move {
         let res = async {
-            let (master_key, master_pw_hash) = do_prelogin(&server_url, &email, &password).await?;
+            let (master_key, master_pw_hash, iterations) =
+                do_prelogin(&server_url, &email, &password).await?;
 
             let store_pw_hash = master_pw_hash.clone();
             cb.send(Box::new(move |c: &mut Cursive| {
                 let mut ud: &mut UserData = c.user_data().unwrap();
                 ud.master_key = Some(master_key);
                 ud.master_password_hash = Some(store_pw_hash);
+                ud.password_hash_iterations = Some(iterations);
             }))
             .expect("Failed to send callback");
 
@@ -102,6 +194,9 @@ fn handle_login_response(res: Result<TokenResponse, anyhow::Error>, cb: CbSink, 
         Result::Err(e) => {
             let err_msg = format!("Error: {:?}", e);
             cb.send(Box::new(move |c: &mut Cursive| {
+                c.with_user_data(|ud: &mut UserData| {
+                    ud.clear_login_data();
+                });
                 c.add_layer(
                     Dialog::text(err_msg)
                         .title("Login error")
@@ -191,21 +286,30 @@ fn submit_two_factor(c: &mut Cursive, email: String) {
     });
 }
 
+fn get_master_key_pw_hash(
+    email: &str,
+    password: &str,
+    iterations: u32,
+) -> (MasterKey, MasterPasswordHash) {
+    let master_key = bitwarden::cipher::create_master_key(
+        &email.to_lowercase(),
+        &password,
+        iterations.try_into().unwrap(),
+    );
+    let master_pw_hash = bitwarden::cipher::create_master_password_hash(&master_key, &password);
+
+    (master_key, master_pw_hash)
+}
+
 async fn do_prelogin(
     server_url: &str,
     email: &str,
     password: &str,
-) -> Result<(MasterKey, MasterPasswordHash), anyhow::Error> {
+) -> Result<(MasterKey, MasterPasswordHash, u32), anyhow::Error> {
     let client = bitwarden::api::ApiClient::new(server_url);
     let iterations = client.prelogin(&email).await?;
-    let master_key = bitwarden::cipher::create_master_key(
-        &email.to_lowercase(),
-        &password,
-        (iterations as u32).try_into().unwrap(),
-    );
-    let master_pw_hash = bitwarden::cipher::create_master_password_hash(&master_key, &password);
-
-    Ok((master_key, master_pw_hash))
+    let (master_key, master_pw_hash) = get_master_key_pw_hash(email, password, iterations);
+    Ok((master_key, master_pw_hash, iterations))
 }
 
 async fn do_login(
@@ -271,16 +375,33 @@ pub fn do_sync(cursive: &mut Cursive) {
     user_data.vault_table_rows = None;
     user_data.organizations = None;
 
-    let access_token = user_data
+    let email = user_data.email.clone().unwrap();
+
+    let (access_token, should_refresh, refresh_token) = user_data
         .token
         .as_ref()
-        .map(|tr| tr.access_token.clone())
+        .map(|tr| {
+            (
+                tr.access_token.clone(),
+                tr.should_refresh(),
+                tr.refresh_token.clone(),
+            )
+        })
         .expect("Token not set");
 
     let server_url = user_data.global_settings.server_url.clone();
 
     tokio::spawn(async move {
-        let client = bitwarden::api::ApiClient::with_token(&server_url, &access_token);
+        if should_refresh {
+            log::debug!("Refreshing token");
+            let client = ApiClient::new(&server_url);
+            let refresh_res = client.refresh_token(&refresh_token).await;
+
+            handle_login_response(refresh_res, ccb, email);
+            return;
+        }
+
+        let client = ApiClient::with_token(&server_url, &access_token);
         let sync_res = client.sync().await;
 
         match sync_res {

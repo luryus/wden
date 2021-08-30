@@ -22,6 +22,7 @@ pub struct UserData {
     pub email: Option<String>,
     pub master_key: Option<cipher::MasterKey>,
     pub master_password_hash: Option<cipher::MasterPasswordHash>,
+    pub password_hash_iterations: Option<u32>,
     pub token: Option<api::TokenResponseSuccess>,
     pub organizations: Option<HashMap<String, api::Organization>>,
     pub vault_data: Option<HashMap<String, api::CipherItem>>,
@@ -36,11 +37,32 @@ impl UserData {
             email: None,
             master_key: None,
             master_password_hash: None,
+            password_hash_iterations: None,
             token: None,
             organizations: None,
             vault_data: None,
             vault_table_rows: None,
         }
+    }
+
+    pub fn clear_login_data(&mut self) {
+        self.email = None;
+        self.master_key = None;
+        self.master_password_hash = None;
+        self.password_hash_iterations = None;
+        self.token = None;
+        self.organizations = None;
+        self.vault_data = None;
+        self.vault_table_rows = None;
+    }
+
+    pub fn clear_data_for_locking(&mut self) {
+        // Clear keys
+        self.master_key = None;
+        self.master_password_hash = None;
+
+        // Clear any plaintext data
+        self.vault_table_rows = None;
     }
 
     pub fn decrypt_keys(&self) -> Option<(EncryptionKey, MacKey)> {

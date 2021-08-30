@@ -7,6 +7,7 @@ use crate::bitwarden::{
 };
 use bitwarden::api::CipherData;
 use cursive::{
+    event::Event,
     theme::{BaseColor, Color},
     traits::{Nameable, Resizable},
     view::Margins,
@@ -15,9 +16,13 @@ use cursive::{
 };
 use cursive_table_view::{TableView, TableViewItem};
 use itertools::Itertools;
+use zeroize::Zeroize;
 
-
-use super::{data::UserData, item_details::item_detail_dialog, login::do_sync};
+use super::{
+    data::UserData,
+    item_details::item_detail_dialog,
+    login::{do_sync, lock_vault},
+};
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub enum VaultTableColumn {
@@ -27,7 +32,8 @@ pub enum VaultTableColumn {
     IsInOrganization,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Zeroize)]
+#[zeroize(drop)]
 pub struct Row {
     id: String,
     name: String,
@@ -105,8 +111,11 @@ pub fn vault_view(user_data: &mut UserData) -> impl View {
                 .button("Quit", |siv| siv.quit());
             siv.add_layer(dialog);
         })
-        .on_event(cursive::event::Event::CtrlChar('s'), |siv| {
+        .on_event(Event::CtrlChar('s'), |siv| {
             do_sync(siv);
+        })
+        .on_event(Event::CtrlChar('l'), |siv| {
+            lock_vault(siv);
         })
         .on_event('p', |siv| {
             copy_current_item_field(siv, Copyable::Password);
@@ -193,7 +202,11 @@ fn get_filtered_rows(filter: &str, rows: &Vec<Row>) -> Vec<Row> {
     rows.iter()
         .filter_map(|r| {
             let score = fuzzywuzzy::fuzz::partial_token_sort_ratio(
-                filter, &format!("{} {} {}", r.name, r.username, r.url), true, true);
+                filter,
+                &format!("{} {} {}", r.name, r.username, r.url),
+                true,
+                true,
+            );
             if score > 50 {
                 Some((r, score))
             } else {
@@ -239,11 +252,10 @@ fn vault_table_view(
 
     // Explicitly set the first row as selected. This is needed, because
     // for some reason the table view scrolls past and hides the first item
-    // without this 
+    // without this
     tv.set_selected_row(0);
 
-    tv.with_name("vault_table")
-        .full_height()
+    tv.with_name("vault_table").full_height()
 }
 
 fn create_rows(user_data: &mut UserData, enc_key: &EncryptionKey, mac_key: &MacKey) -> Vec<Row> {
@@ -327,6 +339,7 @@ fn key_hint_view() -> impl View {
         .child(hint_text("<u> Copy username"))
         .child(hint_text("<q> Quit"))
         .child(hint_text("<^s> Sync"))
+        .child(hint_text("<^l> Lock"))
         .full_width()
 }
 
