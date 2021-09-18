@@ -6,19 +6,24 @@ use anyhow::Context;
 use cipher::decrypt_symmetric_keys;
 use directories_next::ProjectDirs;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::path::PathBuf;
+use std::{collections::HashMap, time::Duration};
+use std::{
+    path::PathBuf,
+    sync::{Arc, Mutex},
+};
 
-use super::vault_table;
+use super::{autolock::Autolocker, vault_table};
 
 pub struct GlobalSettings {
     pub server_url: String,
     pub profile: String,
+    pub autolock_duration: Duration,
 }
 
 pub struct UserData {
     pub global_settings: GlobalSettings,
     pub profile_store: ProfileStore,
+    pub autolocker: Arc<Mutex<Autolocker>>,
     pub email: Option<String>,
     pub master_key: Option<cipher::MasterKey>,
     pub master_password_hash: Option<cipher::MasterPasswordHash>,
@@ -30,10 +35,15 @@ pub struct UserData {
 }
 
 impl UserData {
-    pub fn new(global_settings: GlobalSettings, profile_store: ProfileStore) -> UserData {
+    pub fn new(
+        global_settings: GlobalSettings,
+        profile_store: ProfileStore,
+        autolocker: Arc<Mutex<Autolocker>>,
+    ) -> UserData {
         UserData {
             global_settings,
             profile_store,
+            autolocker,
             email: None,
             master_key: None,
             master_password_hash: None,
@@ -54,6 +64,7 @@ impl UserData {
         self.organizations = None;
         self.vault_data = None;
         self.vault_table_rows = None;
+        self.autolocker.lock().unwrap().clear_autolock_time();
     }
 
     pub fn clear_data_for_locking(&mut self) {
@@ -63,6 +74,9 @@ impl UserData {
 
         // Clear any plaintext data
         self.vault_table_rows = None;
+
+        // Clear autolock
+        self.autolocker.lock().unwrap().clear_autolock_time();
     }
 
     pub fn decrypt_keys(&self) -> Option<(EncryptionKey, MacKey)> {
@@ -123,6 +137,7 @@ pub struct ProfileData {
     #[serde(default = "get_default_server_url")]
     pub server_url: String,
     pub saved_two_factor_token: Option<String>,
+    pub autolock_duration: Duration,
 }
 
 fn get_default_server_url() -> String {
@@ -135,6 +150,7 @@ impl Default for ProfileData {
             saved_email: None,
             server_url: get_default_server_url(),
             saved_two_factor_token: None,
+            autolock_duration: Duration::from_secs(5 * 60), // 5 minutes
         }
     }
 }

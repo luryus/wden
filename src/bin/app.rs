@@ -1,9 +1,10 @@
 use bitwarden_tui::ui::{
+    autolock,
     data::{GlobalSettings, ProfileData, ProfileStore, UserData},
     login::login_dialog,
 };
 use clap::{AppSettings, Clap};
-use cursive::Cursive;
+use cursive::{Cursive, CursiveRunnable};
 
 #[derive(Clap)]
 #[clap(setting = AppSettings::ColorAuto)]
@@ -20,14 +21,36 @@ async fn main() {
     let (global_settings, profile_data, profile_store) = load_profile();
 
     let mut siv = cursive::default();
-    siv.set_user_data(UserData::new(global_settings, profile_store));
+    let autolocker =
+        autolock::start_autolocker(siv.cb_sink().clone(), global_settings.autolock_duration);
+    siv.set_user_data(UserData::new(global_settings, profile_store, autolocker));
 
     siv.add_global_callback('§', Cursive::toggle_debug_console);
     cursive::logger::init();
     log::set_max_level(log::LevelFilter::Info);
 
     siv.add_layer(login_dialog(&profile_data.saved_email));
-    siv.run();
+
+    run(siv);
+}
+
+fn run(mut cursive: CursiveRunnable) {
+    let mut cursive = cursive.runner();
+
+    cursive.refresh();
+
+    while cursive.is_running() {
+        let got_event = cursive.step();
+
+        if got_event {
+            cursive.with_user_data(|ud: &mut UserData| {
+                ud.autolocker
+                    .lock()
+                    .unwrap()
+                    .update_next_autolock_time(false)
+            });
+        }
+    }
 }
 
 fn load_profile() -> (GlobalSettings, ProfileData, ProfileStore) {
@@ -39,6 +62,7 @@ fn load_profile() -> (GlobalSettings, ProfileData, ProfileStore) {
     let global_settings = GlobalSettings {
         profile: opts.profile,
         server_url: opts.server_url.unwrap_or(profile_data.server_url),
+        autolock_duration: profile_data.autolock_duration,
     };
 
     // Write new settings

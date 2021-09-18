@@ -1,3 +1,4 @@
+pub mod autolock;
 pub mod clipboard;
 pub mod components;
 pub mod data;

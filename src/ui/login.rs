@@ -374,6 +374,7 @@ pub fn do_sync(cursive: &mut Cursive) {
     user_data.vault_data = None;
     user_data.vault_table_rows = None;
     user_data.organizations = None;
+    user_data.autolocker.lock().unwrap().clear_autolock_time();
 
     let email = user_data.email.clone().unwrap();
 
@@ -442,8 +443,12 @@ pub fn do_sync(cursive: &mut Cursive) {
 
 fn show_item_list(c: &mut Cursive) {
     let ud: &mut UserData = c.user_data().unwrap();
+    ud.autolocker
+        .lock()
+        .unwrap()
+        .update_next_autolock_time(true);
 
     let table = vault_view(ud);
     let panel = Panel::new(table).title("Vault").full_screen();
-    c.add_layer(panel);
+    c.add_fullscreen_layer(panel);
 }
