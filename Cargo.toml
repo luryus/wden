@@ -4,6 +4,8 @@ version = "0.1.0"
 authors = ["Lauri Koskela <lk@lkoskela.com>"]
 edition = "2018"
 default-run = "app"
+readme = "README.md"
+license = "MIT"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
