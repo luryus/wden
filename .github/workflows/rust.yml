@@ -32,13 +32,13 @@ jobs:
     - uses: Swatinem/rust-cache@v1.3.0
     
     - name: Build
-      run: cargo build --verbose
+      run: cargo build --verbose --release
     - name: Run tests
-      run: cargo test --verbose
+      run: cargo test --verbose --release
 
     - uses: actions/upload-artifact@v2
       with:
         name: bitwarden tui binary ${{ matrix.os }}
         path: |
-          target/release/app
-          target/release/app.exe
+          target/release/bitwarden-tui
+          target/release/bitwarden-tui.exe
