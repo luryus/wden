@@ -157,11 +157,12 @@ fn submit_login(c: &mut Cursive) {
 
     let cb = c.cb_sink().clone();
 
-    let (server_url, profile_store) = c
+    let (server_url, device_id, profile_store) = c
         .user_data()
         .map(|ud: &mut UserData| {
             (
                 ud.global_settings.server_url.clone(),
+                ud.global_settings.device_id.clone(),
                 ud.profile_store.clone(),
             )
         })
@@ -170,7 +171,7 @@ fn submit_login(c: &mut Cursive) {
     tokio::spawn(async move {
         let res = async {
             let (master_key, master_pw_hash, iterations) =
-                do_prelogin(&server_url, &email, &password).await?;
+                do_prelogin(&server_url, device_id.clone(), &email, &password).await?;
 
             let store_pw_hash = master_pw_hash.clone();
             cb.send(Box::new(move |c: &mut Cursive| {
@@ -181,7 +182,7 @@ fn submit_login(c: &mut Cursive) {
             }))
             .expect("Failed to send callback");
 
-            do_login(&server_url, &email, &master_pw_hash, None, &profile_store).await
+            do_login(&server_url, device_id, &email, &master_pw_hash, None, &profile_store).await
         }
         .await;
 
@@ -255,11 +256,12 @@ fn submit_two_factor(c: &mut Cursive, email: String) {
 
     let cb = c.cb_sink().clone();
 
-    let (server_url, profile_store) = c
+    let (server_url, device_id, profile_store) = c
         .user_data()
         .map(|ud: &mut UserData| {
             (
                 ud.global_settings.server_url.clone(),
+                ud.global_settings.device_id.clone(),
                 ud.profile_store.clone(),
             )
         })
@@ -276,6 +278,7 @@ fn submit_two_factor(c: &mut Cursive, email: String) {
     tokio::spawn(async move {
         let res = do_login(
             &server_url,
+            device_id,
             &email,
             &master_pw_hash,
             Some((TwoFactorProviderType::Authenticator, &code)),
@@ -303,10 +306,11 @@ fn get_master_key_pw_hash(
 
 async fn do_prelogin(
     server_url: &str,
+    device_identifier: String,
     email: &str,
     password: &str,
 ) -> Result<(MasterKey, MasterPasswordHash, u32), anyhow::Error> {
-    let client = bitwarden::api::ApiClient::new(server_url);
+    let client = bitwarden::api::ApiClient::new(server_url, device_identifier);
     let iterations = client.prelogin(&email).await?;
     let (master_key, master_pw_hash) = get_master_key_pw_hash(email, password, iterations);
     Ok((master_key, master_pw_hash, iterations))
@@ -314,12 +318,13 @@ async fn do_prelogin(
 
 async fn do_login(
     server_url: &str,
+    device_identifier: String,
     email: &str,
     master_pw_hash: &MasterPasswordHash,
     second_factor: Option<(TwoFactorProviderType, &str)>,
     profile_store: &ProfileStore,
 ) -> Result<TokenResponse, anyhow::Error> {
-    let client = bitwarden::api::ApiClient::new(server_url);
+    let client = bitwarden::api::ApiClient::new(server_url, device_identifier);
     let (token_res, save_2nd_factor) =
         if let Some((two_factor_type, two_factor_token)) = second_factor {
             (
@@ -391,18 +396,19 @@ pub fn do_sync(cursive: &mut Cursive) {
         .expect("Token not set");
 
     let server_url = user_data.global_settings.server_url.clone();
+    let device_id = user_data.global_settings.device_id.clone();
 
     tokio::spawn(async move {
         if should_refresh {
             log::debug!("Refreshing token");
-            let client = ApiClient::new(&server_url);
+            let client = ApiClient::new(&server_url, device_id.clone());
             let refresh_res = client.refresh_token(&refresh_token).await;
 
             handle_login_response(refresh_res, ccb, email);
             return;
         }
 
-        let client = ApiClient::with_token(&server_url, &access_token);
+        let client = ApiClient::with_token(&server_url, device_id, &access_token);
         let sync_res = client.sync().await;
 
         match sync_res {

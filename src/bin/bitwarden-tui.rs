@@ -63,6 +63,7 @@ fn load_profile() -> (GlobalSettings, ProfileData, ProfileStore) {
         profile: opts.profile,
         server_url: opts.server_url.unwrap_or(profile_data.server_url),
         autolock_duration: profile_data.autolock_duration,
+        device_id: profile_data.device_id.clone()
     };
 
     // Write new settings

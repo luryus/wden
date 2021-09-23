@@ -11,6 +11,7 @@ use std::{
     path::PathBuf,
     sync::{Arc, Mutex},
 };
+use uuid::Uuid;
 
 use super::{autolock::Autolocker, vault_table};
 
@@ -18,6 +19,7 @@ pub struct GlobalSettings {
     pub server_url: String,
     pub profile: String,
     pub autolock_duration: Duration,
+    pub device_id: String,
 }
 
 pub struct UserData {
@@ -138,6 +140,7 @@ pub struct ProfileData {
     pub server_url: String,
     pub saved_two_factor_token: Option<String>,
     pub autolock_duration: Duration,
+    pub device_id: String,
 }
 
 fn get_default_server_url() -> String {
@@ -151,6 +154,7 @@ impl Default for ProfileData {
             server_url: get_default_server_url(),
             saved_two_factor_token: None,
             autolock_duration: Duration::from_secs(5 * 60), // 5 minutes
+            device_id: format!("{}", Uuid::new_v4())
         }
     }
 }

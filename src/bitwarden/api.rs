@@ -13,15 +13,31 @@ static APP_USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_P
 
 pub static DEFAULT_SERVER_URL: &str = "http://localhost:8082/";
 
+enum DeviceType {
+    WindowsDesktop = 6,
+    MacOsDesktop = 7,
+    LinuxDesktop = 8,
+}
+
+const fn get_device_type() -> DeviceType {
+    if cfg!(windows) {
+        DeviceType::WindowsDesktop
+    } else if cfg!(macos) {
+        DeviceType::MacOsDesktop
+    } else {
+        DeviceType::LinuxDesktop
+    }
+}
+
 pub struct ApiClient {
     http_client: reqwest::Client,
     base_url: Url,
-
+    device_identifier: String,
     access_token: Option<String>,
 }
 
 impl ApiClient {
-    pub fn new(server_url: &str) -> Self {
+    pub fn new(server_url: &str, device_identifier: String) -> Self {
         let http_client = reqwest::Client::builder()
             .user_agent(APP_USER_AGENT)
             .build()
@@ -30,12 +46,13 @@ impl ApiClient {
         ApiClient {
             http_client,
             base_url,
+            device_identifier: device_identifier.to_string(),
             access_token: None,
         }
     }
 
-    pub fn with_token(server_url: &str, token: &str) -> Self {
-        let mut c = Self::new(server_url);
+    pub fn with_token(server_url: &str, device_identifier: String, token: &str) -> Self {
+        let mut c = Self::new(server_url, device_identifier);
         c.access_token = Some(token.to_string());
         return c;
     }
@@ -71,15 +88,16 @@ impl ApiClient {
         password: &str,
         two_factor: Option<(TwoFactorProviderType, &str, bool)>,
     ) -> Result<TokenResponse, Error> {
+        let device_type = (get_device_type() as i8).to_string();
         let mut body = HashMap::new();
         body.insert("grant_type", "password");
         body.insert("username", username);
         body.insert("password", password);
         body.insert("scope", "api offline_access");
-        body.insert("client_id", "web");
+        body.insert("client_id", "cli");
         body.insert("deviceName", "bitwarden-tui");
         body.insert("deviceIdentifier", "asd");
-        body.insert("deviceType", "9");
+        body.insert("deviceType", &device_type);
 
         let two_factor_type_str;
 
