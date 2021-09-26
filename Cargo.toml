@@ -29,7 +29,6 @@ serde = { version = "1.0.106", features = ["derive"] }
 serde_json = "1.0.50"
 tokio = { version = "1.2", features = ["full"] }
 reqwest = { version = "0.11.1", features = ["json"] }
-crossterm = "0.19"
 cursive = { version = "0.16", default_features = false, features = ["crossterm-backend"] }
 cursive_table_view = { git = "https://github.com/luryus/cursive_table_view", version = "0.14" }
 log = "0.4"
@@ -41,3 +40,7 @@ directories-next = "2.0.0"
 thiserror = "1.0"
 anyhow = "1.0"
 zeroize = "1.4.1"
+
+[patch.crates-io]
+cursive = { git = 'https://github.com/luryus/cursive', branch = 'temp-fix-crossterm-altgr' }
+cursive_core = { git = 'https://github.com/luryus/cursive', branch = 'temp-fix-crossterm-altgr' }
