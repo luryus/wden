@@ -96,7 +96,7 @@ impl ApiClient {
         body.insert("scope", "api offline_access");
         body.insert("client_id", "cli");
         body.insert("deviceName", "bitwarden-tui");
-        body.insert("deviceIdentifier", "asd");
+        body.insert("deviceIdentifier", &self.device_identifier);
         body.insert("deviceType", &device_type);
 
         let two_factor_type_str;
