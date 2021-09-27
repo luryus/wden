@@ -208,7 +208,7 @@ impl TokenResponseSuccess {
     pub fn should_refresh(&self) -> bool {
         match self.time_to_expiry() {
             None => true,
-            Some(d) if d < Duration::from_secs(60 * 118) => true,
+            Some(d) if d < Duration::from_secs(60 * 4) => true,
             _ => false,
         }
     }
