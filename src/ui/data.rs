@@ -5,8 +5,9 @@ use crate::bitwarden::{
 use anyhow::Context;
 use cipher::decrypt_symmetric_keys;
 use directories_next::ProjectDirs;
+use itertools::Itertools;
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, time::Duration};
+use std::{collections::HashMap, ffi::OsString, str::FromStr, time::Duration};
 use std::{
     path::PathBuf,
     sync::{Arc, Mutex},
@@ -154,7 +155,7 @@ impl Default for ProfileData {
             server_url: get_default_server_url(),
             saved_two_factor_token: None,
             autolock_duration: Duration::from_secs(5 * 60), // 5 minutes
-            device_id: format!("{}", Uuid::new_v4())
+            device_id: format!("{}", Uuid::new_v4()),
         }
     }
 }
@@ -167,9 +168,7 @@ pub struct ProfileStore {
 
 impl ProfileStore {
     pub fn new(profile_name: &str) -> ProfileStore {
-        let dirs = ProjectDirs::from("com.lkoskela", "", "bitwarden-tui").unwrap();
-
-        let config_dir = dirs.config_dir().to_path_buf();
+        let config_dir = get_config_dir();
         let profile_config_file = config_dir.join(format!("{}.json", profile_name));
 
         ProfileStore {
@@ -178,8 +177,31 @@ impl ProfileStore {
         }
     }
 
+    pub fn get_all_profiles() -> std::io::Result<Vec<(String, ProfileData)>> {
+        let config_dir = get_config_dir();
+        let files = std::fs::read_dir(config_dir)?;
+
+        let json_ext = OsString::from_str("json").unwrap();
+
+        let profiles = files
+            .filter_map(Result::ok)
+            .filter(|f| f.file_type().map(|t| t.is_file()).unwrap_or(false))
+            .filter(|f| f.path().extension() == Some(json_ext.as_os_str()))
+            .filter_map(|f| {
+                let d = Self::load_file(&f.path()).ok()?;
+                Some((f.file_name().into_string().unwrap(), d))
+            })
+            .collect_vec();
+
+        Ok(profiles)
+    }
+
     pub fn load(&self) -> std::io::Result<ProfileData> {
-        let contents = std::fs::read(&self.profile_config_file)?;
+        Self::load_file(&self.profile_config_file)
+    }
+
+    fn load_file(path: &PathBuf) -> std::io::Result<ProfileData> {
+        let contents = std::fs::read(path)?;
         let parsed = serde_json::from_slice(&contents)?;
 
         Ok(parsed)
@@ -203,4 +225,9 @@ impl ProfileStore {
         // Store the edited data
         self.store(&data)
     }
+}
+
+fn get_config_dir() -> PathBuf {
+    let dirs = ProjectDirs::from("com.lkoskela", "", "bitwarden-tui").unwrap();
+    dirs.config_dir().to_path_buf()
 }

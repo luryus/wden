@@ -9,16 +9,33 @@ use cursive::{Cursive, CursiveRunnable};
 #[derive(Clap)]
 #[clap(setting = AppSettings::ColorAuto)]
 struct Opts {
+    /// Sets the profile that will be used
     #[clap(short, long, default_value = "default")]
     profile: String,
 
+    /// Sets the Bitwarden server url.
+    /// If not set, the url stored in the profile
+    /// will be used. If a new profile is created without
+    /// a server url set, http://localhost:8082 will be used.
     #[clap(short, long)]
     server_url: Option<String>,
+
+    /// Instead of starting the application,
+    /// list all stored profiles
+    #[clap(long)]
+    list_profiles: bool,
 }
 
 #[tokio::main]
 async fn main() {
-    let (global_settings, profile_data, profile_store) = load_profile();
+    let opts: Opts = Opts::parse();
+
+    if opts.list_profiles {
+        list_profiles().unwrap();
+        return;
+    }
+
+    let (global_settings, profile_data, profile_store) = load_profile(opts);
 
     let mut siv = cursive::default();
     let autolocker =
@@ -53,9 +70,7 @@ fn run(mut cursive: CursiveRunnable) {
     }
 }
 
-fn load_profile() -> (GlobalSettings, ProfileData, ProfileStore) {
-    let opts: Opts = Opts::parse();
-
+fn load_profile(opts: Opts) -> (GlobalSettings, ProfileData, ProfileStore) {
     let profile_store = ProfileStore::new(&opts.profile);
     let mut profile_data = profile_store.load().unwrap_or(ProfileData::default());
 
@@ -73,4 +88,19 @@ fn load_profile() -> (GlobalSettings, ProfileData, ProfileStore) {
         .expect("Failed to write profile settings");
 
     (global_settings, profile_data, profile_store)
+}
+
+fn list_profiles() -> std::io::Result<()> {
+    let profiles = ProfileStore::get_all_profiles()?;
+
+    if profiles.is_empty() {
+        println!("No profiles found.")
+    } else {
+        for (name, profile) in profiles {
+            println!("- {}: Server \"{}\", saved email \"{}\"",
+                name, profile.server_url, profile.saved_email.unwrap_or("None".to_string()));
+        }
+    }
+
+    Ok(())
 }
