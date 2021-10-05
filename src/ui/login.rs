@@ -4,7 +4,6 @@ use cursive::{
     views::{Dialog, EditView, LinearLayout, PaddedView, Panel, TextView},
     CbSink, Cursive,
 };
-use std::convert::TryInto;
 
 use crate::bitwarden::{
     self,
@@ -296,10 +295,10 @@ fn get_master_key_pw_hash(
 ) -> (MasterKey, MasterPasswordHash) {
     let master_key = bitwarden::cipher::create_master_key(
         &email.to_lowercase(),
-        &password,
-        iterations.try_into().unwrap(),
+        password,
+        iterations,
     );
-    let master_pw_hash = bitwarden::cipher::create_master_password_hash(&master_key, &password);
+    let master_pw_hash = bitwarden::cipher::create_master_password_hash(&master_key, password);
 
     (master_key, master_pw_hash)
 }
@@ -311,7 +310,7 @@ async fn do_prelogin(
     password: &str,
 ) -> Result<(MasterKey, MasterPasswordHash, u32), anyhow::Error> {
     let client = bitwarden::api::ApiClient::new(server_url, device_identifier);
-    let iterations = client.prelogin(&email).await?;
+    let iterations = client.prelogin(email).await?;
     let (master_key, master_pw_hash) = get_master_key_pw_hash(email, password, iterations);
     Ok((master_key, master_pw_hash, iterations))
 }
@@ -330,7 +329,7 @@ async fn do_login(
             (
                 client
                     .get_token(
-                        &email,
+                        email,
                         &master_pw_hash.base64_encoded(),
                         Some((two_factor_type, two_factor_token, true)),
                     )
@@ -351,7 +350,7 @@ async fn do_login(
 
             (
                 client
-                    .get_token(&email, &master_pw_hash.base64_encoded(), two_factor_param)
+                    .get_token(email, &master_pw_hash.base64_encoded(), two_factor_param)
                     .await?,
                 false,
             )

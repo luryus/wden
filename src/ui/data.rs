@@ -7,7 +7,7 @@ use cipher::decrypt_symmetric_keys;
 use directories_next::ProjectDirs;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, ffi::OsString, str::FromStr, time::Duration};
+use std::{collections::HashMap, ffi::OsString, path::Path, str::FromStr, time::Duration};
 use std::{
     path::PathBuf,
     sync::{Arc, Mutex},
@@ -200,7 +200,7 @@ impl ProfileStore {
         Self::load_file(&self.profile_config_file)
     }
 
-    fn load_file(path: &PathBuf) -> std::io::Result<ProfileData> {
+    fn load_file(path: &Path) -> std::io::Result<ProfileData> {
         let contents = std::fs::read(path)?;
         let parsed = serde_json::from_slice(&contents)?;
 
@@ -216,7 +216,7 @@ impl ProfileStore {
 
     pub fn edit<F>(&self, editor: F) -> std::io::Result<()>
     where
-        F: FnOnce(&mut ProfileData) -> (),
+        F: FnOnce(&mut ProfileData),
     {
         // Load existing file for mutation
         let mut data = self.load()?;

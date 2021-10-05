@@ -136,10 +136,10 @@ fn expand_master_key(master_key: &MasterKey) -> (EncryptionKey, MacKey) {
     let mac_info = "mac".as_bytes();
 
     let mut enc_out = [0u8; 32];
-    prk.expand(&enc_info, &mut enc_out).unwrap();
+    prk.expand(enc_info, &mut enc_out).unwrap();
 
     let mut mac_out = [0u8; 32];
-    prk.expand(&mac_info, &mut mac_out).unwrap();
+    prk.expand(mac_info, &mut mac_out).unwrap();
 
     (EncryptionKey(enc_out), MacKey(mac_out))
 }
@@ -201,7 +201,7 @@ impl FromStr for Cipher {
         }
 
         let (enc_type_str, rest) = s
-            .split(".")
+            .split('.')
             .collect_tuple()
             .ok_or(CipherError::InvalidCipherStringFormat)?;
         let enc_type = EncType::from_str(enc_type_str)?;
@@ -209,7 +209,7 @@ impl FromStr for Cipher {
         match (enc_type.has_iv(), enc_type.has_mac()) {
             (true, true) => {
                 let (iv_b64, ct_b64, mac_b64) = rest
-                    .split("|")
+                    .split('|')
                     .collect_tuple()
                     .ok_or(CipherError::InvalidCipherStringFormat)?;
 
@@ -271,7 +271,7 @@ impl Cipher {
         self.decrypt(enc_key, mac_key)
             .ok()
             .and_then(|s| String::from_utf8(s).ok())
-            .unwrap_or(String::new())
+            .unwrap_or_default()
     }
 
     pub fn decrypt_with_private_key(
@@ -323,7 +323,7 @@ impl Cipher {
             let data = [&iv[..], &ct[..]].concat();
 
             hmac.update(&data);
-            hmac.verify(&mac)
+            hmac.verify(mac)
                 .map_err(CipherError::MacVerificationFailed)?;
 
             let aes = Aes256Cbc::new_from_slices(&enc_key.0, iv.as_slice())

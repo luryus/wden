@@ -30,7 +30,7 @@ pub fn item_detail_dialog(ud: &mut UserData, item_id: &str) -> Option<impl View>
         .expect("Item not found in vault data");
 
     // Find keys that should be used for decrypting details
-    let keys = ud.get_keys_for_item(&item);
+    let keys = ud.get_keys_for_item(item);
     if keys.is_none() {
         warn!("Error getting keys for item");
     }

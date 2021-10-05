@@ -23,9 +23,8 @@ pub fn clip_exipiring_string(s: String, expiry_seconds: u64) {
             }
         });
 
-        match res {
-            Err(e) => log::warn!("Clearing clipboard failed: {}", e),
-            _ => {}
-        };
+        if let Err(e) = res {
+            log::warn!("Clearing clipboard failed: {}", e);
+        }
     });
 }

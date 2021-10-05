@@ -13,6 +13,7 @@ static APP_USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_P
 
 pub static DEFAULT_SERVER_URL: &str = "http://localhost:8082/";
 
+#[allow(clippy::enum_variant_names)]
 enum DeviceType {
     WindowsDesktop = 6,
     MacOsDesktop = 7,
@@ -46,7 +47,7 @@ impl ApiClient {
         ApiClient {
             http_client,
             base_url,
-            device_identifier: device_identifier.to_string(),
+            device_identifier,
             access_token: None,
         }
     }
@@ -54,7 +55,7 @@ impl ApiClient {
     pub fn with_token(server_url: &str, device_identifier: String, token: &str) -> Self {
         let mut c = Self::new(server_url, device_identifier);
         c.access_token = Some(token.to_string());
-        return c;
+        c
     }
 
     pub async fn prelogin(&self, user_email: &str) -> Result<u32, Error> {
@@ -77,7 +78,7 @@ impl ApiClient {
             .as_object()
             .and_then(|o| o.get("KdfIterations"))
             .and_then(|v| v.as_u64())
-            .ok_or(anyhow::anyhow!("Parsing response failed"))?;
+            .ok_or_else(|| anyhow::anyhow!("Parsing response failed"))?;
 
         Ok(iterations as u32)
     }
@@ -122,14 +123,14 @@ impl ApiClient {
                 .get("TwoFactorProviders")
                 .and_then(|ps| ps.as_array())
                 .map(|ps| {
-                    ps.into_iter()
+                    ps.iter()
                         .filter_map(|p| {
                             p.as_u64()
                                 .and_then(|x| TwoFactorProviderType::try_from(x as u8).ok())
                         })
                         .collect_vec()
                 })
-                .ok_or(anyhow::anyhow!("Error parsing provider types"))?;
+                .ok_or_else(|| anyhow::anyhow!("Error parsing provider types"))?;
 
             return Ok(TokenResponse::TwoFactorRequired(providers));
         }
@@ -139,7 +140,7 @@ impl ApiClient {
             .json::<TokenResponseSuccess>()
             .await?;
 
-        return Ok(TokenResponse::Success(res));
+        Ok(TokenResponse::Success(res))
     }
 
     pub async fn refresh_token(&self, refresh_token: &str) -> Result<TokenResponse, Error> {
@@ -174,7 +175,7 @@ impl ApiClient {
             .await?
             .into();
 
-        return Ok(res);
+        Ok(res)
     }
 }
 
@@ -315,9 +316,9 @@ struct CipherItemInternal {
 #[derive(Debug)]
 pub enum CipherData {
     None,
-    Login(LoginItem),
-    Card(CardItem),
-    Identity(IdentityItem),
+    Login(Box<LoginItem>),
+    Card(Box<CardItem>),
+    Identity(Box<IdentityItem>),
     SecureNote,
 }
 
@@ -331,10 +332,10 @@ impl From<CipherItemInternal> for CipherItem {
             collection_ids: cii.collection_ids,
             organization_id: cii.organization_id,
             data: match cii.cipher_type {
-                1 => CipherData::Login(cii.login.unwrap()),
+                1 => CipherData::Login(Box::new(cii.login.unwrap())),
                 2 => CipherData::SecureNote,
-                3 => CipherData::Card(cii.card.unwrap()),
-                4 => CipherData::Identity(cii.identity.unwrap()),
+                3 => CipherData::Card(Box::new(cii.card.unwrap())),
+                4 => CipherData::Identity(Box::new(cii.identity.unwrap())),
                 _ => CipherData::None,
             },
         }

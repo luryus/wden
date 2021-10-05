@@ -1,5 +1,3 @@
-use std::convert::TryInto;
-
 use bitwarden_tui::bitwarden::cipher;
 use bitwarden_tui::bitwarden::cipher::Cipher;
 use clap::{AppSettings, Clap};
@@ -35,7 +33,7 @@ fn main() -> Result<(), anyhow::Error> {
     let master_key = cipher::create_master_key(
         &opts.username,
         &opts.password,
-        opts.hash_iterations.try_into()?,
+        opts.hash_iterations,
     );
 
     let symmetric_key_cipher = opts.symmetric_key_cipher.parse()?;
@@ -55,7 +53,7 @@ fn main() -> Result<(), anyhow::Error> {
     println!("Decrypted cipher:\n{}", base64::encode(&decrypted_cipher));
 
     if opts.to_string {
-        let cipher_str = String::from_utf8(decrypted_cipher).unwrap_or(String::new());
+        let cipher_str = String::from_utf8(decrypted_cipher).unwrap_or_default();
         println!("As string:\n{}", cipher_str);
     }
 

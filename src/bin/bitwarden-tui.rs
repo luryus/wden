@@ -72,13 +72,13 @@ fn run(mut cursive: CursiveRunnable) {
 
 fn load_profile(opts: Opts) -> (GlobalSettings, ProfileData, ProfileStore) {
     let profile_store = ProfileStore::new(&opts.profile);
-    let mut profile_data = profile_store.load().unwrap_or(ProfileData::default());
+    let mut profile_data = profile_store.load().unwrap_or_default();
 
     let global_settings = GlobalSettings {
         profile: opts.profile,
         server_url: opts.server_url.unwrap_or(profile_data.server_url),
         autolock_duration: profile_data.autolock_duration,
-        device_id: profile_data.device_id.clone()
+        device_id: profile_data.device_id.clone(),
     };
 
     // Write new settings
@@ -97,8 +97,12 @@ fn list_profiles() -> std::io::Result<()> {
         println!("No profiles found.")
     } else {
         for (name, profile) in profiles {
-            println!("- {}: Server \"{}\", saved email \"{}\"",
-                name, profile.server_url, profile.saved_email.unwrap_or("None".to_string()));
+            println!(
+                "- {}: Server \"{}\", saved email \"{}\"",
+                name,
+                profile.server_url,
+                profile.saved_email.unwrap_or_else(|| "None".to_string())
+            );
         }
     }
 

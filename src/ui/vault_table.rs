@@ -2,7 +2,7 @@ use std::{collections::HashMap, time::Duration};
 
 use crate::bitwarden::{
     self,
-    api::{CipherItem, LoginItem},
+    api::CipherItem,
     cipher::{Cipher, EncryptionKey, MacKey},
 };
 use bitwarden::api::CipherData;
@@ -137,25 +137,25 @@ fn copy_current_item_field(siv: &mut Cursive, field: Copyable) {
     match (vd.get(&row.id), field) {
         (
             Some(CipherItem {
-                data: CipherData::Login(LoginItem { password, .. }),
+                data: CipherData::Login(li),
                 ..
             }),
             Copyable::Password,
         ) => {
             super::clipboard::clip_exipiring_string(
-                password.decrypt_to_string(&enc_key, &mac_key),
+                li.password.decrypt_to_string(&enc_key, &mac_key),
                 30,
             );
             show_copy_notification(siv, "Password copied");
         }
         (
             Some(CipherItem {
-                data: CipherData::Login(LoginItem { username, .. }),
+                data: CipherData::Login(li),
                 ..
             }),
             Copyable::Username,
         ) => {
-            super::clipboard::clip_string(username.decrypt_to_string(&enc_key, &mac_key));
+            super::clipboard::clip_string(li.username.decrypt_to_string(&enc_key, &mac_key));
             show_copy_notification(siv, "Username copied");
         }
         _ => (),
@@ -194,9 +194,9 @@ fn filter_edit_view() -> impl View {
     PaddedView::lrtb(0, 0, 0, 1, ll)
 }
 
-fn get_filtered_rows(filter: &str, rows: &Vec<Row>) -> Vec<Row> {
+fn get_filtered_rows(filter: &str, rows: &[Row]) -> Vec<Row> {
     if filter.is_empty() {
-        return rows.clone();
+        return rows.to_owned();
     }
 
     rows.iter()
@@ -275,7 +275,7 @@ fn create_rows(user_data: &mut UserData, enc_key: &EncryptionKey, mac_key: &MacK
                 })
                 .collect()
         })
-        .unwrap_or(HashMap::new());
+        .unwrap_or_default();
 
     user_data
         .vault_data
