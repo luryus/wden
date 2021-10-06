@@ -5,6 +5,7 @@ use reqwest;
 use reqwest::Url;
 use serde::Deserialize;
 use serde_json::Value;
+use std::convert::TryInto;
 use std::time::{Duration, Instant};
 use std::{collections::HashMap, convert::TryFrom};
 
@@ -126,7 +127,8 @@ impl ApiClient {
                     ps.iter()
                         .filter_map(|p| {
                             p.as_u64()
-                                .and_then(|x| TwoFactorProviderType::try_from(x as u8).ok())
+                                .and_then(|x| (x as u8).try_into().ok())
+                                .or_else(|| p.as_str().and_then(|x| x.try_into().ok()))
                         })
                         .collect_vec()
                 })
@@ -247,6 +249,17 @@ impl TryFrom<u8> for TwoFactorProviderType {
                 Ok(TwoFactorProviderType::OrganizationDuo)
             }
             _ => Err(()),
+        }
+    }
+}
+
+impl TryFrom<&str> for TwoFactorProviderType {
+    type Error = ();
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        match value.parse::<u8>() {
+            Ok(n) => n.try_into(),
+            _ => Err(())
         }
     }
 }
