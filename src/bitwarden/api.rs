@@ -259,7 +259,7 @@ impl TryFrom<&str> for TwoFactorProviderType {
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         match value.parse::<u8>() {
             Ok(n) => n.try_into(),
-            _ => Err(())
+            _ => Err(()),
         }
     }
 }

@@ -35,11 +35,18 @@ pub fn login_dialog(saved_email: &Option<String>) -> Dialog {
         .with_name("email")
         .fixed_width(40);
 
-    let layout = LinearLayout::vertical()
+    let mut layout = LinearLayout::vertical()
         .child(TextView::new("Email address"))
         .child(email_field)
         .child(TextView::new("Password"))
         .child(password_field);
+
+    if saved_email.is_some() {
+        layout
+            .set_focus_index(3)
+            .unwrap_or_else(|_| log::warn!("Focusing password field failed"));
+    }
+
     Dialog::around(layout)
         .title("Log in")
         .button("Submit", |c| submit_login(c))
@@ -49,10 +56,16 @@ fn two_factor_dialog(types: Vec<TwoFactorProviderType>, email: String) -> Dialog
     if !types.contains(&TwoFactorProviderType::Authenticator) {
         Dialog::info("Account requires two-factor authentication, but active two-factor methods are not supported.")
     } else {
+        // Clone email because it's needed in two closures
+        let email2 = email.clone();
         Dialog::around(
             LinearLayout::vertical()
                 .child(TextView::new("Enter authenticator code:"))
-                .child(EditView::new().with_name("authenticator_code")),
+                .child(
+                    EditView::new()
+                        .on_submit(move |siv, _| submit_two_factor(siv, email2.clone()))
+                        .with_name("authenticator_code"),
+                ),
         )
         .button("Submit", move |siv| submit_two_factor(siv, email.clone()))
         .dismiss_button("Cancel")
@@ -181,7 +194,15 @@ fn submit_login(c: &mut Cursive) {
             }))
             .expect("Failed to send callback");
 
-            do_login(&server_url, device_id, &email, &master_pw_hash, None, &profile_store).await
+            do_login(
+                &server_url,
+                device_id,
+                &email,
+                &master_pw_hash,
+                None,
+                &profile_store,
+            )
+            .await
         }
         .await;
 
@@ -293,11 +314,8 @@ fn get_master_key_pw_hash(
     password: &str,
     iterations: u32,
 ) -> (MasterKey, MasterPasswordHash) {
-    let master_key = bitwarden::cipher::create_master_key(
-        &email.to_lowercase(),
-        password,
-        iterations,
-    );
+    let master_key =
+        bitwarden::cipher::create_master_key(&email.to_lowercase(), password, iterations);
     let master_pw_hash = bitwarden::cipher::create_master_password_hash(&master_key, password);
 
     (master_key, master_pw_hash)

@@ -30,11 +30,8 @@ struct Opts {
 fn main() -> Result<(), anyhow::Error> {
     let opts = Opts::parse();
 
-    let master_key = cipher::create_master_key(
-        &opts.username,
-        &opts.password,
-        opts.hash_iterations,
-    );
+    let master_key =
+        cipher::create_master_key(&opts.username, &opts.password, opts.hash_iterations);
 
     let symmetric_key_cipher = opts.symmetric_key_cipher.parse()?;
     let (enc_key, mac_key) = cipher::decrypt_symmetric_keys(&symmetric_key_cipher, &master_key)?;
