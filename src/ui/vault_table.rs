@@ -6,23 +6,13 @@ use crate::bitwarden::{
     cipher::{Cipher, EncryptionKey, MacKey},
 };
 use bitwarden::api::CipherData;
-use cursive::{
-    event::Event,
-    theme::{BaseColor, Color},
-    traits::{Nameable, Resizable},
-    view::Margins,
-    views::{Dialog, EditView, LayerPosition, LinearLayout, OnEventView, PaddedView, TextView},
-    Cursive, View,
-};
+use cursive::{Cursive, View, event::Event, theme::{BaseColor, Color}, traits::{Nameable, Resizable}, view::Margins, views::{Dialog, EditView, LayerPosition, LinearLayout, OnEventView, PaddedView, Panel, TextView}};
 use cursive_table_view::{TableView, TableViewItem};
 use itertools::Itertools;
 use zeroize::Zeroize;
 
-use super::{
-    data::UserData,
-    item_details::item_detail_dialog,
-    login::{do_sync, lock_vault},
-};
+use super::{data::UserData, item_details::item_detail_dialog, lock::lock_vault, sync::do_sync, util::cursive_ext::CursiveCallbackExt};
+use super::util::cursive_ext::CursiveExt;
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub enum VaultTableColumn {
@@ -130,7 +120,7 @@ fn copy_current_item_field(siv: &mut Cursive, field: Copyable) {
         .find_name::<TableView<Row, VaultTableColumn>>("vault_table")
         .unwrap();
     let row = table.borrow_item(table.item().unwrap()).unwrap();
-    let ud: &mut UserData = siv.user_data().unwrap();
+    let ud = siv.get_user_data();
     let (enc_key, mac_key) = ud.decrypt_keys().unwrap();
 
     let vd = ud.vault_data.as_ref().unwrap();
@@ -172,7 +162,7 @@ fn filter_edit_view() -> impl View {
         .on_edit(|siv, text, _| {
             // Filter the results, update table
             if let Some(mut tv) = siv.find_name::<TableView<Row, VaultTableColumn>>("vault_table") {
-                let ud: &mut UserData = siv.user_data().unwrap();
+                let ud = siv.get_user_data();
 
                 if let Some(all_rows) = ud.vault_table_rows.as_ref() {
                     let rows = get_filtered_rows(text, all_rows);
@@ -313,16 +303,15 @@ fn create_rows(user_data: &mut UserData, enc_key: &EncryptionKey, mac_key: &MacK
         .collect_vec()
 }
 
-fn show_item_details(sink: cursive::CbSink, row: &Row) {
+fn show_item_details(cb: cursive::CbSink, row: &Row) {
     let item_id = row.id.clone();
-    sink.send(Box::new(move |siv: &mut Cursive| {
-        let ud: &mut UserData = siv.user_data().unwrap();
+    cb.send_msg(Box::new(move |siv: &mut Cursive| {
+        let ud = siv.get_user_data();
         let dialog = item_detail_dialog(ud, &item_id);
         if let Some(d) = dialog {
             siv.add_layer(d);
         }
-    }))
-    .unwrap();
+    }));
 }
 
 fn key_hint_view() -> impl View {
@@ -352,7 +341,7 @@ pub fn show_copy_notification(cursive: &mut Cursive, message: &'static str) {
 
     tokio::spawn(async move {
         tokio::time::sleep(Duration::from_millis(500)).await;
-        cb.send(Box::new(|siv| {
+        cb.send_msg(Box::new(|siv| {
             let sc = siv.screen_mut();
             if let Some(LayerPosition::FromBack(l)) = sc.find_layer_from_name("copy_notification") {
                 if l == sc.len() - 1 {
@@ -360,7 +349,22 @@ pub fn show_copy_notification(cursive: &mut Cursive, message: &'static str) {
                     siv.pop_layer();
                 }
             }
-        }))
-        .expect("Sending message failed");
+        }));
     });
+}
+
+
+pub fn show_vault(c: &mut Cursive) {
+    let ud = c.get_user_data();
+    ud.autolocker
+        .lock()
+        .unwrap()
+        .update_next_autolock_time(true);
+
+    let table = vault_view(ud);
+    let panel = Panel::new(table).title("Vault").full_screen();
+
+    // Clear all, and add the vault
+    c.clear_layers();
+    c.add_fullscreen_layer(panel);
 }

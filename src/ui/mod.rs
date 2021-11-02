@@ -5,3 +5,7 @@ pub mod data;
 pub mod item_details;
 pub mod login;
 pub mod vault_table;
+pub mod two_factor;
+pub mod sync;
+pub mod util;
+pub mod lock;

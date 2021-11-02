@@ -82,7 +82,8 @@ pub fn create_master_key(user_email: &str, user_password: &str, hash_iterations:
     let mut res = MasterKey::new();
     pbkdf2::pbkdf2::<Hmac<Sha256>>(
         user_password.as_bytes(),
-        user_email.as_bytes(),
+        // Email is always lowercased
+        user_email.to_lowercase().as_bytes(),
         hash_iterations,
         &mut res.0,
     );

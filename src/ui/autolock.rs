@@ -1,8 +1,10 @@
-use super::login::lock_vault;
 use cursive::CbSink;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tokio::time::interval;
+
+use super::lock::lock_vault;
+use super::util::cursive_ext::CursiveCallbackExt;
 
 pub struct Autolocker {
     next_lock_time: Option<Instant>,
@@ -40,7 +42,7 @@ async fn autolock_loop(cb_sink: CbSink, next_autolock_time: Arc<Mutex<Autolocker
 
         if let Some(t) = next_autolock_time.lock().unwrap().next_lock_time {
             if Instant::now() > t {
-                cb_sink.send(Box::new(lock_vault)).unwrap();
+                cb_sink.send_msg(Box::new(lock_vault));
             }
         }
     }
