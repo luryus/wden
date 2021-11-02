@@ -115,26 +115,34 @@ impl ApiClient {
 
         let url = self.base_url.join("identity/connect/token")?;
 
-        let res = self.http_client.post(url).form(&body).send().await?;
+        let res = self.http_client.post(url)
+            .form(&body)
+            // As of October 2021, Bitwarden (prod) wants the email as base64-encoded in a header
+            // for some security reason
+            .header("auth-email", base64::encode_config(username, base64::URL_SAFE))
+            .send().await?;
 
         if res.status() == 400 {
-            // Just assume that the reason for 400 is that two-factor is required
             let body = res.json::<HashMap<String, serde_json::Value>>().await?;
-            let providers = body
-                .get("TwoFactorProviders")
-                .and_then(|ps| ps.as_array())
-                .map(|ps| {
-                    ps.iter()
-                        .filter_map(|p| {
-                            p.as_u64()
-                                .and_then(|x| (x as u8).try_into().ok())
-                                .or_else(|| p.as_str().and_then(|x| x.try_into().ok()))
-                        })
-                        .collect_vec()
-                })
-                .ok_or_else(|| anyhow::anyhow!("Error parsing provider types"))?;
-
-            return Ok(TokenResponse::TwoFactorRequired(providers));
+            if body.contains_key("TwoFactorProviders") {
+                let providers = body
+                    .get("TwoFactorProviders")
+                    .and_then(|ps| ps.as_array())
+                    .map(|ps| {
+                        ps.iter()
+                            .filter_map(|p| {
+                                p.as_u64()
+                                    .and_then(|x| (x as u8).try_into().ok())
+                                    .or_else(|| p.as_str().and_then(|x| x.try_into().ok()))
+                            })
+                            .collect_vec()
+                    })
+                    .ok_or_else(|| anyhow::anyhow!("Error parsing provider types"))?;
+    
+                return Ok(TokenResponse::TwoFactorRequired(providers));
+            } else {
+                return Err(anyhow::anyhow!("Error logging in: {:?}", body));
+            }
         }
 
         let res = res
