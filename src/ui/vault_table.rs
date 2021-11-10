@@ -121,17 +121,17 @@ fn copy_current_item_field(siv: &mut Cursive, field: Copyable) {
         .unwrap();
     let row = table.borrow_item(table.item().unwrap()).unwrap();
     let ud = siv.get_user_data();
-    let (enc_key, mac_key) = ud.decrypt_keys().unwrap();
 
     let vd = ud.vault_data.as_ref().unwrap();
     match (vd.get(&row.id), field) {
         (
-            Some(CipherItem {
+            Some(ci @ CipherItem {
                 data: CipherData::Login(li),
                 ..
             }),
             Copyable::Password,
         ) => {
+            let (enc_key, mac_key) = ud.get_keys_for_item(ci).unwrap();
             super::clipboard::clip_exipiring_string(
                 li.password.decrypt_to_string(&enc_key, &mac_key),
                 30,
@@ -139,12 +139,13 @@ fn copy_current_item_field(siv: &mut Cursive, field: Copyable) {
             show_copy_notification(siv, "Password copied");
         }
         (
-            Some(CipherItem {
+            Some(ci @ CipherItem {
                 data: CipherData::Login(li),
                 ..
             }),
             Copyable::Username,
         ) => {
+            let (enc_key, mac_key) = ud.get_keys_for_item(ci).unwrap();
             super::clipboard::clip_string(li.username.decrypt_to_string(&enc_key, &mac_key));
             show_copy_notification(siv, "Username copied");
         }
