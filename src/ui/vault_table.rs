@@ -6,13 +6,25 @@ use crate::bitwarden::{
     cipher::{Cipher, EncryptionKey, MacKey},
 };
 use bitwarden::api::CipherData;
-use cursive::{Cursive, View, event::Event, theme::{BaseColor, Color}, traits::{Nameable, Resizable}, view::Margins, views::{Dialog, EditView, LayerPosition, LinearLayout, OnEventView, PaddedView, Panel, TextView}};
+use cursive::{
+    event::Event,
+    theme::{BaseColor, Color},
+    traits::{Nameable, Resizable},
+    view::Margins,
+    views::{
+        Dialog, EditView, LayerPosition, LinearLayout, OnEventView, PaddedView, Panel, TextView,
+    },
+    Cursive, View,
+};
 use cursive_table_view::{TableView, TableViewItem};
 use itertools::Itertools;
 use zeroize::Zeroize;
 
-use super::{data::UserData, item_details::item_detail_dialog, lock::lock_vault, sync::do_sync, util::cursive_ext::CursiveCallbackExt};
 use super::util::cursive_ext::CursiveExt;
+use super::{
+    data::UserData, item_details::item_detail_dialog, lock::lock_vault, sync::do_sync,
+    util::cursive_ext::CursiveCallbackExt,
+};
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub enum VaultTableColumn {
@@ -125,10 +137,14 @@ fn copy_current_item_field(siv: &mut Cursive, field: Copyable) {
     let vd = ud.vault_data.as_ref().unwrap();
     match (vd.get(&row.id), field) {
         (
-            Some(ci @ CipherItem {
-                data: CipherData::Login(li),
-                ..
-            }),
+            Some(
+                ci
+                @
+                CipherItem {
+                    data: CipherData::Login(li),
+                    ..
+                },
+            ),
             Copyable::Password,
         ) => {
             let (enc_key, mac_key) = ud.get_keys_for_item(ci).unwrap();
@@ -139,10 +155,14 @@ fn copy_current_item_field(siv: &mut Cursive, field: Copyable) {
             show_copy_notification(siv, "Password copied");
         }
         (
-            Some(ci @ CipherItem {
-                data: CipherData::Login(li),
-                ..
-            }),
+            Some(
+                ci
+                @
+                CipherItem {
+                    data: CipherData::Login(li),
+                    ..
+                },
+            ),
             Copyable::Username,
         ) => {
             let (enc_key, mac_key) = ud.get_keys_for_item(ci).unwrap();
@@ -354,7 +374,6 @@ pub fn show_copy_notification(cursive: &mut Cursive, message: &'static str) {
     });
 }
 
-
 pub fn show_vault(c: &mut Cursive) {
     let ud = c.get_user_data();
     ud.autolocker
@@ -363,7 +382,9 @@ pub fn show_vault(c: &mut Cursive) {
         .update_next_autolock_time(true);
 
     let table = vault_view(ud);
-    let panel = Panel::new(table).title("Vault").full_screen();
+    let panel = Panel::new(table)
+        .title(format!("Vault ({})", &ud.global_settings.profile))
+        .full_screen();
 
     // Clear all, and add the vault
     c.clear_layers();

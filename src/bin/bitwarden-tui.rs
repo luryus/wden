@@ -36,6 +36,7 @@ async fn main() {
     }
 
     let (global_settings, profile_data, profile_store) = load_profile(opts);
+    let profile_name = global_settings.profile.clone();
 
     let mut siv = cursive::default();
     let autolocker =
@@ -46,7 +47,7 @@ async fn main() {
     cursive::logger::init();
     log::set_max_level(log::LevelFilter::Info);
 
-    siv.add_layer(login_dialog(&profile_data.saved_email));
+    siv.add_layer(login_dialog(&profile_name, &profile_data.saved_email));
 
     run(siv);
 }

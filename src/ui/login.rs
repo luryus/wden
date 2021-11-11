@@ -11,7 +11,7 @@ use super::{data::{ProfileStore}, sync::do_sync, two_factor::two_factor_dialog, 
 const VIEW_NAME_PASSWORD: &str = "password";
 const VIEW_NAME_EMAIL: &str = "email";
 
-pub fn login_dialog(saved_email: &Option<String>) -> Dialog {
+pub fn login_dialog(profile_name: &str, saved_email: &Option<String>) -> Dialog {
     let password_field = EditView::new()
         .secret()
         .on_submit(|siv, _| submit_login(siv))
@@ -42,7 +42,7 @@ pub fn login_dialog(saved_email: &Option<String>) -> Dialog {
     }
 
     Dialog::around(layout)
-        .title("Log in")
+        .title(format!("Log in ({})", profile_name))
         .button("Submit", |c| submit_login(c))
 }
 
@@ -105,9 +105,10 @@ pub fn handle_login_response(res: Result<TokenResponse, anyhow::Error>, cb: CbSi
                     Dialog::text(err_msg)
                         .title("Login error")
                         .button("OK", move |siv| {
+                            let profile_name = siv.get_user_data().global_settings.profile.clone();
                             // Remove this dialog, and show the login dialog again
                             siv.pop_layer();
-                            siv.add_layer(login_dialog(&Some(email.clone())));
+                            siv.add_layer(login_dialog(&profile_name, &Some(email.clone())));
                         }),
                 );
             }));

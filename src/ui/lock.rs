@@ -1,9 +1,4 @@
-use cursive::{
-    traits::Nameable,
-    view::Margins,
-    views::{Dialog, EditView, LinearLayout, PaddedView, TextView},
-    Cursive,
-};
+use cursive::{Cursive, theme::{BaseColor, Color}, traits::Nameable, view::Margins, views::{Dialog, EditView, LinearLayout, PaddedView, TextView}};
 
 use crate::bitwarden::cipher::{self, CipherError};
 
@@ -25,14 +20,15 @@ pub fn lock_vault(c: &mut Cursive) {
             "???".to_owned()
         }
     };
+    let profile = ud.global_settings.profile.clone();
 
     // Vault data is left in place, but its all encrypted
 
     // Show unlock dialog
-    c.add_layer(unlock_dialog(&email));
+    c.add_layer(unlock_dialog(&profile, &email));
 }
 
-fn unlock_dialog(email: &str) -> Dialog {
+fn unlock_dialog(profile_name: &str, email: &str) -> Dialog {
     let pw_editview = EditView::new()
         .secret()
         .on_submit(|siv, _| submit_unlock(siv))
@@ -40,12 +36,12 @@ fn unlock_dialog(email: &str) -> Dialog {
 
     Dialog::around(
         LinearLayout::vertical()
-            .child(TextView::new(format!(
-                "Vault is locked (account {}). Unlock with master password:",
-                email
-            )))
-            .child(PaddedView::new(Margins::tb(1, 1), pw_editview)),
+            .child(TextView::new("Vault is locked. Unlock with master password:"))
+            .child(PaddedView::new(Margins::tb(1, 1), pw_editview))
+            .child(TextView::new(format!("Signed in user: {}", email))
+                .style(Color::Light(BaseColor::Black)))
     )
+    .title(format!("Vault locked ({})", profile_name))
     .button("Unlock", submit_unlock)
 }
 
@@ -62,6 +58,7 @@ fn submit_unlock(c: &mut Cursive) {
     let iters = user_data.password_hash_iterations.unwrap();
     let email = user_data.email.clone().unwrap();
     let token_key = user_data.token.as_ref().map(|t| &t.key).unwrap();
+    let profile = user_data.global_settings.profile.clone();
 
     let master_key = cipher::create_master_key(&email, &password, iters);
     let master_pw_hash = cipher::create_master_password_hash(&master_key, &password);
@@ -80,7 +77,7 @@ fn submit_unlock(c: &mut Cursive) {
 
             let dialog = Dialog::text(err_msg).button("OK", move |siv| {
                 siv.pop_layer();
-                siv.add_layer(unlock_dialog(&email));
+                siv.add_layer(unlock_dialog(&profile, &email));
             });
 
             c.pop_layer();
