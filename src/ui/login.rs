@@ -136,7 +136,8 @@ pub fn handle_login_response(res: Result<TokenResponse, anyhow::Error>, cb: CbSi
                 bitwarden::api::TokenResponse::TwoFactorRequired(types) => {
                     cb.send_msg(Box::new(move |c: &mut Cursive| {
                         c.pop_layer();
-                        c.add_layer(two_factor_dialog(types, email));
+                        let p = c.get_user_data().global_settings.profile.clone();
+                        c.add_layer(two_factor_dialog(types, email, &p));
                     }));
                 }
             }
