@@ -4,9 +4,18 @@ use cursive::{
     CbSink, Cursive,
 };
 
-use crate::bitwarden::{self, api::{TokenResponse, TwoFactorProviderType}, cipher::{self, MasterKey, MasterPasswordHash}};
+use crate::bitwarden::{
+    self,
+    api::{TokenResponse, TwoFactorProviderType},
+    cipher::{self, MasterKey, MasterPasswordHash},
+};
 
-use super::{data::{ProfileStore}, sync::do_sync, two_factor::two_factor_dialog, util::cursive_ext::{CursiveCallbackExt, CursiveExt}};
+use super::{
+    data::ProfileStore,
+    sync::do_sync,
+    two_factor::two_factor_dialog,
+    util::cursive_ext::{CursiveCallbackExt, CursiveExt},
+};
 
 const VIEW_NAME_PASSWORD: &str = "password";
 const VIEW_NAME_EMAIL: &str = "email";
@@ -167,42 +176,35 @@ pub async fn do_login(
     profile_store: &ProfileStore,
 ) -> Result<TokenResponse, anyhow::Error> {
     let client = bitwarden::api::ApiClient::new(server_url, device_identifier);
-    let (token_res, save_2nd_factor) =
-        if let Some((two_factor_type, two_factor_token)) = second_factor {
-            (
-                client
-                    .get_token(
-                        email,
-                        &master_pw_hash.base64_encoded(),
-                        Some((two_factor_type, two_factor_token, true)),
-                    )
-                    .await?,
-                true,
+    let mut token_res = if let Some((two_factor_type, two_factor_token)) = second_factor {
+        client
+            .get_token(
+                email,
+                &master_pw_hash.base64_encoded(),
+                Some((two_factor_type, two_factor_token, true)),
             )
-        } else {
-            // Try to read stored 2nd factor token
-            let two_factor_param = profile_store
-                .load()
-                .ok()
-                .and_then(|d| d.saved_two_factor_token);
+            .await?
+    } else {
+        // Try to read stored 2nd factor token
+        let two_factor_param = profile_store
+            .load()
+            .ok()
+            .and_then(|d| d.saved_two_factor_token);
 
-            let two_factor_param = two_factor_param
-                .as_ref()
-                .map(|t| Some((TwoFactorProviderType::Remember, t.as_str(), false)))
-                .unwrap_or(None);
+        let two_factor_param = two_factor_param
+            .as_ref()
+            .map(|t| Some((TwoFactorProviderType::Remember, t.as_str(), false)))
+            .unwrap_or(None);
 
-            (
-                client
-                    .get_token(email, &master_pw_hash.base64_encoded(), two_factor_param)
-                    .await?,
-                false,
-            )
-        };
+        client
+            .get_token(email, &master_pw_hash.base64_encoded(), two_factor_param)
+            .await?
+    };
 
-    if let bitwarden::api::TokenResponse::Success(t) = &token_res {
-        if save_2nd_factor {
+    if let bitwarden::api::TokenResponse::Success(t) = &mut token_res {
+        if let Some(tft) = t.two_factor_token.take() {
             profile_store
-                .edit(|d| d.saved_two_factor_token = t.two_factor_token.clone())
+                .edit(|d| d.saved_two_factor_token = Some(tft))
                 .expect("Storing 2nd factor token failed");
         }
     }
