@@ -38,7 +38,7 @@ jobs:
 
     - uses: actions/upload-artifact@v2
       with:
-        name: bitwarden tui binary ${{ matrix.os }}
+        name: ${{ matrix.os }} wden binary
         path: |
-          target/release/bitwarden-tui
-          target/release/bitwarden-tui.exe
+          target/release/wden
+          target/release/wden.exe
