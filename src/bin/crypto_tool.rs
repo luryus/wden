@@ -1,9 +1,8 @@
-use bitwarden_tui::bitwarden::cipher;
-use bitwarden_tui::bitwarden::cipher::Cipher;
-use clap::{AppSettings, Clap};
+use wden::bitwarden::cipher;
+use wden::bitwarden::cipher::Cipher;
+use clap::Parser;
 
-#[derive(Clap)]
-#[clap(setting = AppSettings::ColorAuto)]
+#[derive(Parser)]
 struct Opts {
     #[clap(long)]
     username: String,

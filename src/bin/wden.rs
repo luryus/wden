@@ -1,13 +1,12 @@
-use bitwarden_tui::ui::{
+use wden::ui::{
     autolock,
     data::{GlobalSettings, ProfileData, ProfileStore, UserData},
     login::login_dialog,
 };
-use clap::{AppSettings, Clap};
+use clap::Parser;
 use cursive::{Cursive, CursiveRunnable};
 
-#[derive(Clap)]
-#[clap(setting = AppSettings::ColorAuto)]
+#[derive(Parser)]
 struct Opts {
     /// Sets the profile that will be used
     #[clap(short, long, default_value = "default")]

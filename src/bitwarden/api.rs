@@ -97,7 +97,7 @@ impl ApiClient {
         body.insert("password", password);
         body.insert("scope", "api offline_access");
         body.insert("client_id", "cli");
-        body.insert("deviceName", "bitwarden-tui");
+        body.insert("deviceName", "wden");
         body.insert("deviceIdentifier", &self.device_identifier);
         body.insert("deviceType", &device_type);
 
@@ -138,7 +138,7 @@ impl ApiClient {
                             .collect_vec()
                     })
                     .ok_or_else(|| anyhow::anyhow!("Error parsing provider types"))?;
-    
+
                 return Ok(TokenResponse::TwoFactorRequired(providers));
             } else {
                 return Err(anyhow::anyhow!("Error logging in: {:?}", body));

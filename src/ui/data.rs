@@ -228,6 +228,6 @@ impl ProfileStore {
 }
 
 fn get_config_dir() -> PathBuf {
-    let dirs = ProjectDirs::from("com.lkoskela", "", "bitwarden-tui").unwrap();
+    let dirs = ProjectDirs::from("com.lkoskela", "", "wden").unwrap();
     dirs.config_dir().to_path_buf()
 }

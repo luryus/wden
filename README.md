@@ -1,4 +1,4 @@
-# bitwarden-tui
+# wden
 
 A read-only TUI for accessing Bitwarden vault contents from the terminal.
 
