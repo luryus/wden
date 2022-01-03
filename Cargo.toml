@@ -33,9 +33,11 @@ cursive = { version = "0.16", default_features = false, features = ["crossterm-b
 cursive_table_view = { git = "https://github.com/luryus/cursive_table_view", version = "0.14" }
 log = "0.4"
 lazy_static = "1.4"
-clipboard = "0.5"
+clipboard-win = { version = "4.3.0", features = ["std"] }
+#x11-clipboard = "=0.5.2"
+x11-clipboard = { path = '../x11-clipboard' }
 fuzzywuzzy = "0.0.2"
-clap = { version="3.0.0-rc.9", features = ["derive"] }
+clap = { version="3.0.0", features = ["derive"] }
 directories-next = "2.0.0"
 thiserror = "1.0"
 anyhow = "1.0"

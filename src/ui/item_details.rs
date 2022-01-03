@@ -70,7 +70,7 @@ pub fn item_detail_dialog(ud: &mut UserData, item_id: &str) -> Option<impl View>
     if let CipherData::Login(li) = &item.data {
         let password = li.password.decrypt_to_string(&enc_key, &mac_key);
         ev.set_on_event('p', move |siv| {
-            super::clipboard::clip_exipiring_string(password.clone(), 30);
+            super::clipboard::clip_expiring_string(password.clone(), 30);
             show_copy_notification(siv, "Password copied");
         });
 

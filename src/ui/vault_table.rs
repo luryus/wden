@@ -148,7 +148,7 @@ fn copy_current_item_field(siv: &mut Cursive, field: Copyable) {
             Copyable::Password,
         ) => {
             let (enc_key, mac_key) = ud.get_keys_for_item(ci).unwrap();
-            super::clipboard::clip_exipiring_string(
+            super::clipboard::clip_expiring_string(
                 li.password.decrypt_to_string(&enc_key, &mac_key),
                 30,
             );
