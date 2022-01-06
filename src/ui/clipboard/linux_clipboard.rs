@@ -1,4 +1,4 @@
-use std::{time::Duration, sync::MutexGuard};
+use std::{time::Duration, sync::MutexGuard, collections::HashMap};
 
 use anyhow::Context;
 use x11_clipboard::Clipboard;
@@ -26,14 +26,13 @@ pub fn clip_string_internal(s: String) -> Result<(), anyhow::Error> {
         x11_clipboard::xcb::intern_atom(&cb.setter.connection, false, "x-kde-passwordManagerHint")
             .get_reply()?
             .atom();
-    cb.store(cb.setter.atoms.clipboard, kde_password_hint_atom, "secret")?;
-    cb.store(
-        cb.setter.atoms.clipboard,
-        cb.setter.atoms.utf8_string,
-        s.as_str(),
-    )?;
-
-    log::info!("Stored \"{}\" to clipboard", s);
+ 
+    let data = HashMap::from([
+        (kde_password_hint_atom, "secret".into()), 
+        (cb.setter.atoms.utf8_string, s.as_str().into())
+    ]);
+ 
+    cb.store_many(cb.setter.atoms.clipboard, data)?;
 
     Ok(())
 }

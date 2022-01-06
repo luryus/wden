@@ -34,8 +34,7 @@ cursive_table_view = { git = "https://github.com/luryus/cursive_table_view", ver
 log = "0.4"
 lazy_static = "1.4"
 clipboard-win = { version = "4.3.0", features = ["std"] }
-#x11-clipboard = "=0.5.2"
-x11-clipboard = { path = '../x11-clipboard' }
+x11-clipboard = { git = "https://github.com/luryus/x11-clipboard", branch = "multi-target-alpha", version = "0.6.0-alpha.1" }
 fuzzywuzzy = "0.0.2"
 clap = { version="3.0.0", features = ["derive"] }
 directories-next = "2.0.0"
