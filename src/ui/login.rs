@@ -1,5 +1,5 @@
 use cursive::{
-    traits::{Boxable, Nameable},
+    traits::{Resizable, Nameable},
     views::{Dialog, EditView, LinearLayout, TextView},
     CbSink, Cursive,
 };
@@ -32,8 +32,9 @@ pub fn login_dialog(profile_name: &str, saved_email: &Option<String>) -> Dialog 
         _ => EditView::new(),
     }
     .on_submit(|siv, _| {
-        siv.focus_name(VIEW_NAME_PASSWORD)
-            .unwrap_or_else(|_| log::warn!("Focusing password field failed"));
+        if siv.focus_name(VIEW_NAME_PASSWORD).is_err() {
+            log::warn!("Focusing password field failed");
+        }
     })
     .with_name(VIEW_NAME_EMAIL)
     .fixed_width(40);
@@ -45,9 +46,9 @@ pub fn login_dialog(profile_name: &str, saved_email: &Option<String>) -> Dialog 
         .child(password_field);
 
     if saved_email.is_some() {
-        layout
-            .set_focus_index(3)
-            .unwrap_or_else(|_| log::warn!("Focusing password field failed"));
+        if layout.set_focus_index(3).is_err() {
+            log::warn!("Focusing password field failed");
+        }
     }
 
     Dialog::around(layout)

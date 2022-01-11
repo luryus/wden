@@ -8,7 +8,7 @@ use crate::{
 };
 use cursive::{
     theme::{BaseColor, Color, Effect, Style},
-    traits::{Boxable, Nameable},
+    traits::{Nameable, Resizable},
     view::Margins,
     views::{Dialog, LinearLayout, OnEventView, PaddedView, TextView, ViewRef},
     View,
