@@ -203,7 +203,6 @@ pub struct TokenResponseSuccess {
     pub access_token: String,
     expires_in: u32,
     pub refresh_token: String,
-    token_type: String,
     #[serde(alias = "TwoFactorToken")]
     pub two_factor_token: Option<String>,
     #[serde(skip, default = "token_response_timestamp")]

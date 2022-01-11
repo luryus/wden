@@ -33,9 +33,8 @@ cursive = { version = "0.16", default_features = false, features = ["crossterm-b
 cursive_table_view = { git = "https://github.com/luryus/cursive_table_view", version = "0.14" }
 log = "0.4"
 lazy_static = "1.4"
-clipboard = "0.5"
 fuzzywuzzy = "0.0.2"
-clap = { version="3.0.0-rc.9", features = ["derive"] }
+clap = { version="3.0.0", features = ["derive"] }
 directories-next = "2.0.0"
 thiserror = "1.0"
 anyhow = "1.0"
@@ -44,3 +43,9 @@ zeroize = "1.4.1"
 [patch.crates-io]
 cursive = { git = 'https://github.com/luryus/cursive', branch = 'temp-fix-crossterm-altgr' }
 cursive_core = { git = 'https://github.com/luryus/cursive', branch = 'temp-fix-crossterm-altgr' }
+
+[target.'cfg(windows)'.dependencies]
+clipboard-win = { version = "4.3.0", features = ["std"] }
+
+[target.'cfg(target_os="linux")'.dependencies]
+x11-clipboard = { git = "https://github.com/luryus/x11-clipboard", branch = "multi-target-alpha", version = "0.6.0-alpha.1" }

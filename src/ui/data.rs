@@ -179,7 +179,11 @@ impl ProfileStore {
 
     pub fn get_all_profiles() -> std::io::Result<Vec<(String, ProfileData)>> {
         let config_dir = get_config_dir();
-        let files = std::fs::read_dir(config_dir)?;
+        let files= match std::fs::read_dir(config_dir) {
+            Ok(f) => f,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(vec![]),
+            Err(e) => return Err(e)
+        };
 
         let json_ext = OsString::from_str("json").unwrap();
 
