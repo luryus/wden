@@ -145,6 +145,7 @@ fn expand_master_key(master_key: &MasterKey) -> (EncryptionKey, MacKey) {
     (EncryptionKey(enc_out), MacKey(mac_out))
 }
 
+#[derive(Clone)]
 pub enum Cipher {
     Empty,
     Value {
@@ -378,7 +379,7 @@ impl Cipher {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum EncType {
     AesCbc256B64,
     AesCbc128HmacSha256B64,

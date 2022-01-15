@@ -5,10 +5,11 @@ use crate::{bitwarden::api::ApiClient, ui::login::handle_login_response};
 use super::{util::cursive_ext::{CursiveCallbackExt, CursiveExt}, vault_table::show_vault};
 
 
-pub fn do_sync(cursive: &mut Cursive) {
+pub fn do_sync(cursive: &mut Cursive, just_refreshed_token: bool) {
     // Remove all layers first
     cursive.clear_layers();
     cursive.add_layer(Dialog::text("Syncing..."));
+    log::info!("Running sync.");
     let ccb = cursive.cb_sink().clone();
     let user_data = cursive.get_user_data();
 
@@ -21,32 +22,37 @@ pub fn do_sync(cursive: &mut Cursive) {
     let email = user_data.email.clone()
         .expect("Email address was not set in UserData while syncing");
 
-    let (access_token, should_refresh, refresh_token) = user_data
+    let token = user_data
         .token
-        .as_ref()
-        .map(|tr| {
-            (
-                tr.access_token.clone(),
-                tr.should_refresh(),
-                tr.refresh_token.clone(),
-            )
-        })
+        .clone()
         .expect("Token not set");
+
+    let should_refresh = token.should_refresh();
+    if should_refresh && just_refreshed_token {
+        // Error: we're in a refresh loop, abort
+        let alert = Dialog::text("Error: token refresh loop detected. The program will now exit.")
+            .title("Access token refresh error")
+            .button("OK", |siv| siv.quit());
+        cursive.clear_layers();
+        cursive.add_layer(alert);
+        return;
+    }
 
     let server_url = user_data.global_settings.server_url.clone();
     let device_id = user_data.global_settings.device_id.clone();
 
     tokio::spawn(async move {
         if should_refresh {
-            log::debug!("Refreshing token");
+            log::debug!("Refreshing access token");
             let client = ApiClient::new(&server_url, device_id.clone());
-            let refresh_res = client.refresh_token(&refresh_token).await;
+
+            let refresh_res = client.refresh_token(token).await;
 
             handle_login_response(refresh_res, ccb, email);
             return;
         }
 
-        let client = ApiClient::with_token(&server_url, device_id, &access_token);
+        let client = ApiClient::with_token(&server_url, device_id, &token.access_token);
         let sync_res = client.sync().await;
 
         match sync_res {

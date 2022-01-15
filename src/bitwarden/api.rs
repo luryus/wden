@@ -115,12 +115,18 @@ impl ApiClient {
 
         let url = self.base_url.join("identity/connect/token")?;
 
-        let res = self.http_client.post(url)
+        let res = self
+            .http_client
+            .post(url)
             .form(&body)
             // As of October 2021, Bitwarden (prod) wants the email as base64-encoded in a header
             // for some security reason
-            .header("auth-email", base64::encode_config(username, base64::URL_SAFE))
-            .send().await?;
+            .header(
+                "auth-email",
+                base64::encode_config(username, base64::URL_SAFE),
+            )
+            .send()
+            .await?;
 
         if res.status() == 400 {
             let body = res.json::<HashMap<String, serde_json::Value>>().await?;
@@ -153,19 +159,28 @@ impl ApiClient {
         Ok(TokenResponse::Success(res))
     }
 
-    pub async fn refresh_token(&self, refresh_token: &str) -> Result<TokenResponse, Error> {
+    pub async fn refresh_token(&self, token: TokenResponseSuccess) -> Result<TokenResponse, Error> {
         let mut body = HashMap::new();
         body.insert("grant_type", "refresh_token");
-        body.insert("refresh_token", refresh_token);
+        body.insert("refresh_token", &token.refresh_token);
+        body.insert("client_id", "cli");
 
         let url = self.base_url.join("identity/connect/token")?;
 
         let res = self.http_client.post(url).form(&body).send().await?;
 
-        let res = res
+        let refresh_res = res
             .error_for_status()?
             .json::<TokenResponseSuccess>()
             .await?;
+
+        // The token refresh response does not include all the
+        // fields. Take the old token and replace the new fields.
+        let mut res = token;
+        res.access_token = refresh_res.access_token;
+        res.refresh_token = refresh_res.refresh_token;
+        res.token_timestamp = refresh_res.token_timestamp;
+        res.expires_in = refresh_res.expires_in;
 
         Ok(TokenResponse::Success(res))
     }
@@ -194,7 +209,7 @@ pub enum TokenResponse {
     TwoFactorRequired(Vec<TwoFactorProviderType>),
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct TokenResponseSuccess {
     #[serde(alias = "Key")]
     pub key: Cipher,

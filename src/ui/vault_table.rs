@@ -114,7 +114,7 @@ pub fn vault_view(user_data: &mut UserData) -> impl View {
             siv.add_layer(dialog);
         })
         .on_event(Event::CtrlChar('s'), |siv| {
-            do_sync(siv);
+            do_sync(siv, false);
         })
         .on_event(Event::CtrlChar('l'), |siv| {
             lock_vault(siv);

@@ -140,7 +140,7 @@ pub fn handle_login_response(res: Result<TokenResponse, anyhow::Error>, cb: CbSi
                         ud.email = Some(email);
                         ud.token = Some(t);
 
-                        do_sync(c);
+                        do_sync(c, true);
                     }))
                 }
                 bitwarden::api::TokenResponse::TwoFactorRequired(types) => {
