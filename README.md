@@ -10,6 +10,7 @@ A read-only TUI for accessing Bitwarden vault contents from the terminal.
 
 - Listing Login, Identity, Card, and Note items
 - Copy usernames and passwords
+    - Bypasses clipboard history in Windows and KDE Plasma
 - View organization items
 - Fuzzy search
 - 2FA login (only authenticator code apps supported)
@@ -24,4 +25,4 @@ A read-only TUI for accessing Bitwarden vault contents from the terminal.
 - Identity details support
 - Additional 2FA methods
 - Local vault caching / offline support?
-- Better clipboard history clearing support
+- Attachment support
