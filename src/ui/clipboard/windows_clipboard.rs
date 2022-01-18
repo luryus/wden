@@ -1,5 +1,6 @@
 use clipboard_win::{
-    formats::Unicode, get_clipboard_string, raw::set_without_clear, register_format, Clipboard, Setter,
+    formats::Unicode, get_clipboard_string, raw::set_without_clear, register_format, Clipboard,
+    Setter,
 };
 
 pub fn clip_string_internal(s: String) -> Result<(), anyhow::Error> {

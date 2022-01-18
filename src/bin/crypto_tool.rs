@@ -1,6 +1,6 @@
+use clap::Parser;
 use wden::bitwarden::cipher;
 use wden::bitwarden::cipher::Cipher;
-use clap::Parser;
 
 #[derive(Parser)]
 struct Opts {

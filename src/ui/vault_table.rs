@@ -138,9 +138,7 @@ fn copy_current_item_field(siv: &mut Cursive, field: Copyable) {
     match (vd.get(&row.id), field) {
         (
             Some(
-                ci
-                @
-                CipherItem {
+                ci @ CipherItem {
                     data: CipherData::Login(li),
                     ..
                 },
@@ -156,9 +154,7 @@ fn copy_current_item_field(siv: &mut Cursive, field: Copyable) {
         }
         (
             Some(
-                ci
-                @
-                CipherItem {
+                ci @ CipherItem {
                     data: CipherData::Login(li),
                     ..
                 },

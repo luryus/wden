@@ -1,5 +1,5 @@
 use cursive::{
-    traits::{Resizable, Nameable},
+    traits::{Nameable, Resizable},
     views::{Dialog, EditView, LinearLayout, TextView},
     CbSink, Cursive,
 };

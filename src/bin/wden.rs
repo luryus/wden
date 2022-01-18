@@ -1,10 +1,10 @@
+use clap::Parser;
+use cursive::{Cursive, CursiveRunnable};
 use wden::ui::{
     autolock,
     data::{GlobalSettings, ProfileData, ProfileStore, UserData},
     login::login_dialog,
 };
-use clap::Parser;
-use cursive::{Cursive, CursiveRunnable};
 
 #[derive(Parser)]
 struct Opts {

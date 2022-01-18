@@ -1,15 +1,25 @@
 use std::rc::Rc;
 
-use cursive::{Cursive, traits::Nameable, views::{Dialog, EditView, LinearLayout, TextView}};
+use cursive::{
+    traits::Nameable,
+    views::{Dialog, EditView, LinearLayout, TextView},
+    Cursive,
+};
 
 use crate::bitwarden::api::TwoFactorProviderType;
 
-use super::{login::{do_login, handle_login_response, login_dialog}, util::cursive_ext::CursiveExt};
-
+use super::{
+    login::{do_login, handle_login_response, login_dialog},
+    util::cursive_ext::CursiveExt,
+};
 
 const VIEW_NAME_AUTHENTICATOR_CODE: &str = "authenticator_code";
 
-pub fn two_factor_dialog(types: Vec<TwoFactorProviderType>, email: String, profile_name: &str) -> Dialog {
+pub fn two_factor_dialog(
+    types: Vec<TwoFactorProviderType>,
+    email: String,
+    profile_name: &str,
+) -> Dialog {
     if !types.contains(&TwoFactorProviderType::Authenticator) {
         Dialog::info("Account requires two-factor authentication, but active two-factor methods are not supported.")
     } else {
@@ -37,10 +47,11 @@ pub fn two_factor_dialog(types: Vec<TwoFactorProviderType>, email: String, profi
     }
 }
 
-
 fn submit_two_factor(c: &mut Cursive, email: Rc<String>) {
     let code = c
-        .call_on_name(VIEW_NAME_AUTHENTICATOR_CODE, |view: &mut EditView| view.get_content())
+        .call_on_name(VIEW_NAME_AUTHENTICATOR_CODE, |view: &mut EditView| {
+            view.get_content()
+        })
         .expect("Reading authenticator code from field failed")
         .to_string();
 
@@ -58,7 +69,9 @@ fn submit_two_factor(c: &mut Cursive, email: Rc<String>) {
     // Have to clone the hash here, because it's not
     // really possible to access user_data inside the async
     // block in any good form
-    let master_pw_hash = ud.master_password_hash.clone()
+    let master_pw_hash = ud
+        .master_password_hash
+        .clone()
         .expect("Password hash was not set while submitting 2FA");
 
     let email = (*email).clone();

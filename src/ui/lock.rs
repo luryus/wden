@@ -1,4 +1,10 @@
-use cursive::{Cursive, theme::{BaseColor, Color}, traits::Nameable, view::Margins, views::{Dialog, EditView, LinearLayout, PaddedView, TextView}};
+use cursive::{
+    theme::{BaseColor, Color},
+    traits::Nameable,
+    view::Margins,
+    views::{Dialog, EditView, LinearLayout, PaddedView, TextView},
+    Cursive,
+};
 
 use crate::bitwarden::cipher::{self, CipherError};
 
@@ -36,10 +42,14 @@ fn unlock_dialog(profile_name: &str, email: &str) -> Dialog {
 
     Dialog::around(
         LinearLayout::vertical()
-            .child(TextView::new("Vault is locked. Unlock with master password:"))
+            .child(TextView::new(
+                "Vault is locked. Unlock with master password:",
+            ))
             .child(PaddedView::new(Margins::tb(1, 1), pw_editview))
-            .child(TextView::new(format!("Signed in user: {}", email))
-                .style(Color::Light(BaseColor::Black)))
+            .child(
+                TextView::new(format!("Signed in user: {}", email))
+                    .style(Color::Light(BaseColor::Black)),
+            ),
     )
     .title(format!("Vault locked ({})", profile_name))
     .button("Unlock", submit_unlock)

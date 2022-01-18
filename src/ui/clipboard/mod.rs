@@ -5,9 +5,9 @@ mod windows_clipboard;
 #[cfg(windows)]
 use windows_clipboard::*;
 
-#[cfg(target_os="linux")]
+#[cfg(target_os = "linux")]
 mod linux_clipboard;
-#[cfg(target_os="linux")]
+#[cfg(target_os = "linux")]
 use linux_clipboard::*;
 
 pub fn clip_string(s: String) {

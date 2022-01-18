@@ -1,9 +1,11 @@
-use cursive::{Cursive, views::Dialog};
+use cursive::{views::Dialog, Cursive};
 
 use crate::{bitwarden::api::ApiClient, ui::login::handle_login_response};
 
-use super::{util::cursive_ext::{CursiveCallbackExt, CursiveExt}, vault_table::show_vault};
-
+use super::{
+    util::cursive_ext::{CursiveCallbackExt, CursiveExt},
+    vault_table::show_vault,
+};
 
 pub fn do_sync(cursive: &mut Cursive, just_refreshed_token: bool) {
     // Remove all layers first
@@ -19,13 +21,12 @@ pub fn do_sync(cursive: &mut Cursive, just_refreshed_token: bool) {
     user_data.organizations = None;
     user_data.autolocker.lock().unwrap().clear_autolock_time();
 
-    let email = user_data.email.clone()
+    let email = user_data
+        .email
+        .clone()
         .expect("Email address was not set in UserData while syncing");
 
-    let token = user_data
-        .token
-        .clone()
-        .expect("Token not set");
+    let token = user_data.token.clone().expect("Token not set");
 
     let should_refresh = token.should_refresh();
     if should_refresh && just_refreshed_token {
