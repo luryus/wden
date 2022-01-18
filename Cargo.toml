@@ -39,6 +39,7 @@ directories-next = "2.0.0"
 thiserror = "1.0"
 anyhow = "1.0"
 zeroize = "1.4.1"
+simsearch = "0.2"
 
 [target.'cfg(windows)'.dependencies]
 clipboard-win = { version = "4.3.0", features = ["std"] }
