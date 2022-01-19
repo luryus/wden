@@ -18,6 +18,7 @@ use cursive::{
 };
 use cursive_table_view::{TableView, TableViewItem};
 use itertools::Itertools;
+use simsearch::SimSearch;
 use zeroize::Zeroize;
 
 use super::util::cursive_ext::CursiveExt;
@@ -40,7 +41,6 @@ pub struct Row {
     id: String,
     name: String,
     username: String,
-    url: String,
     item_type: String,
     is_in_organization: bool,
 }
@@ -182,8 +182,10 @@ fn filter_edit_view() -> impl View {
                 let ud = siv.get_user_data();
 
                 if let Some(all_rows) = ud.vault_table_rows.as_ref() {
-                    let rows = get_filtered_rows(text, all_rows);
-                    tv.set_items(rows);
+                    if let Some(ss) = ud.simsearch.as_ref() {
+                        let rows = get_filtered_rows(text, all_rows, ss);
+                        tv.set_items(rows);
+                    }
                 }
             }
         })
@@ -201,29 +203,16 @@ fn filter_edit_view() -> impl View {
     PaddedView::lrtb(0, 0, 0, 1, ll)
 }
 
-fn get_filtered_rows(filter: &str, rows: &[Row]) -> Vec<Row> {
+fn get_filtered_rows(filter: &str, rows: &[Row], simsearch: &SimSearch<String>) -> Vec<Row> {
     if filter.is_empty() {
         return rows.to_owned();
     }
 
-    rows.iter()
-        .filter_map(|r| {
-            let score = fuzzywuzzy::fuzz::partial_token_sort_ratio(
-                filter,
-                &format!("{} {} {}", r.name, r.username, r.url),
-                true,
-                true,
-            );
-            if score > 50 {
-                Some((r, score))
-            } else {
-                None
-            }
-        })
-        .sorted_by_key(|(_, score)| 100 - (*score))
-        .map(|(r, _)| r)
+    simsearch.search(filter)
+        .into_iter()
+        .filter_map(|sr| rows.iter().find(|r| r.id == sr))
         .cloned()
-        .collect_vec()
+        .collect()
 }
 
 fn vault_table_view(
@@ -267,22 +256,7 @@ fn vault_table_view(
 
 fn create_rows(user_data: &mut UserData, enc_key: &EncryptionKey, mac_key: &MacKey) -> Vec<Row> {
     // Find all organization keys we will need
-    let org_keys: HashMap<_, _> = user_data
-        .vault_data
-        .as_ref()
-        .map(|ok| {
-            ok.values()
-                .filter_map(|i| i.organization_id.as_ref())
-                .unique()
-                .filter_map(|oid| {
-                    user_data
-                        .decrypt_organization_keys(oid)
-                        .map(|key| (oid, key))
-                        .ok()
-                })
-                .collect()
-        })
-        .unwrap_or_default();
+    let org_keys = user_data.get_org_keys_for_vault().unwrap_or_default();
 
     user_data
         .vault_data
@@ -299,7 +273,6 @@ fn create_rows(user_data: &mut UserData, enc_key: &EncryptionKey, mac_key: &MacK
             Some(Row {
                 id: id.clone(),
                 name: ci.name.decrypt_to_string(ec, mc),
-                url: String::new(),
                 username: match &ci.data {
                     CipherData::Login(l) => &l.username,
                     _ => &Cipher::Empty,
