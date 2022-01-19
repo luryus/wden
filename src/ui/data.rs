@@ -7,6 +7,7 @@ use cipher::decrypt_symmetric_keys;
 use directories_next::ProjectDirs;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
+use simsearch::SimSearch;
 use std::{collections::HashMap, ffi::OsString, path::Path, str::FromStr, time::Duration};
 use std::{
     path::PathBuf,
@@ -35,6 +36,7 @@ pub struct UserData {
     pub organizations: Option<HashMap<String, api::Organization>>,
     pub vault_data: Option<HashMap<String, api::CipherItem>>,
     pub vault_table_rows: Option<Vec<vault_table::Row>>,
+    pub simsearch: Option<SimSearch<String>>,
 }
 
 impl UserData {
@@ -55,6 +57,7 @@ impl UserData {
             organizations: None,
             vault_data: None,
             vault_table_rows: None,
+            simsearch: None,
         }
     }
 
@@ -67,6 +70,7 @@ impl UserData {
         self.organizations = None;
         self.vault_data = None;
         self.vault_table_rows = None;
+        self.simsearch = None;
         self.autolocker.lock().unwrap().clear_autolock_time();
     }
 
@@ -77,6 +81,7 @@ impl UserData {
 
         // Clear any plaintext data
         self.vault_table_rows = None;
+        self.simsearch = None;
 
         // Clear autolock
         self.autolocker.lock().unwrap().clear_autolock_time();
@@ -131,6 +136,24 @@ impl UserData {
             // No organization, use user's keys
             self.decrypt_keys()
         }
+    }
+
+    pub fn get_org_keys_for_vault(&self) -> Option<HashMap<&String, (EncryptionKey, MacKey)>> {
+        self
+            .vault_data
+            .as_ref()
+            .map(|vd| {
+                vd.values()
+                    .filter_map(|i| i.organization_id.as_ref())
+                    .unique()
+                    .filter_map(|oid| {
+                        self
+                            .decrypt_organization_keys(oid)
+                            .map(|key| (oid, key))
+                            .ok()
+                    })
+                    .collect()
+            })
     }
 }
 

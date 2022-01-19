@@ -1,10 +1,11 @@
 use cursive::{views::Dialog, Cursive};
+use simsearch::SimSearch;
 
-use crate::{bitwarden::api::ApiClient, ui::login::handle_login_response};
+use crate::{bitwarden::api::{ApiClient, CipherData}, ui::login::handle_login_response};
 
 use super::{
     util::cursive_ext::{CursiveCallbackExt, CursiveExt},
-    vault_table::show_vault,
+    vault_table::show_vault, data::UserData,
 };
 
 pub fn do_sync(cursive: &mut Cursive, just_refreshed_token: bool) {
@@ -75,6 +76,9 @@ pub fn do_sync(cursive: &mut Cursive, just_refreshed_token: bool) {
                             .map(|o| (o.id.clone(), o))
                             .collect(),
                     );
+
+                    ud.simsearch = Some(create_search_index(&ud));
+
                     c.pop_layer();
                     show_vault(c);
                 }));
@@ -87,4 +91,44 @@ pub fn do_sync(cursive: &mut Cursive, just_refreshed_token: bool) {
             }
         }
     });
+}
+
+fn create_search_index(ud: &UserData) -> SimSearch<String> {
+    let mut ss = SimSearch::new();
+    if let Some(vd) = &ud.vault_data {
+        if let Some(org_keys) = ud.get_org_keys_for_vault() {
+            if let Some((enc_key, mac_key)) = ud.decrypt_keys() {
+                for (k, v) in vd {
+                    // Get appropriate keys for this item
+                    let (ec, mc) = if let Some(oid) = &v.organization_id {
+                        if let Some(keys) = org_keys.get(oid) {
+                            (&keys.0, &keys.1)
+                        } else {
+                            continue;
+                        }
+                    } else {
+                        (&enc_key, &mac_key)
+                    };
+
+                    // All items: name
+                    let mut tokens = vec![
+                        v.name.decrypt_to_string(ec, mc)
+                    ];
+                    // Login items: url and username
+                    if let CipherData::Login(l) = &v.data {
+                        tokens.push(l.username.decrypt_to_string(ec, mc));
+                        tokens.push(l.uri.decrypt_to_string(ec, mc));      
+                    };
+
+                    // SimSearch will still tokenize (split) each of the token
+                    // that are passed here. Passing them this way just avoids
+                    // concatenating them into a string.
+                    let tokens: Vec<_> = tokens.iter().map(|s| s.as_str()).collect();
+                    ss.insert_tokens(k.clone(), &tokens);
+                }
+            }
+        }
+    }
+
+    ss
 }
