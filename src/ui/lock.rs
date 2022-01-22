@@ -8,7 +8,7 @@ use cursive::{
 
 use crate::bitwarden::cipher::{self, CipherError};
 
-use super::{util::cursive_ext::CursiveExt, vault_table::show_vault};
+use super::{util::cursive_ext::CursiveExt, vault_table, search};
 
 const VIEW_NAME_PASSWORD: &str = "password";
 
@@ -94,12 +94,15 @@ fn submit_unlock(c: &mut Cursive) {
             c.add_layer(dialog);
         }
         Ok(_) => {
-            // Success, store keys and continue
+            // Success, store keys, restore other data and continue
             user_data.master_key = Some(master_key);
             user_data.master_password_hash = Some(master_pw_hash);
             user_data.password_hash_iterations = Some(iters);
 
-            show_vault(c);
+            // Search index gets cleared when locking, restore it
+            search::update_search_index(user_data);
+
+            vault_table::show_vault(c);
         }
     }
 }

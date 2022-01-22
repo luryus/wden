@@ -18,10 +18,9 @@ use cursive::{
 };
 use cursive_table_view::{TableView, TableViewItem};
 use itertools::Itertools;
-use simsearch::SimSearch;
 use zeroize::Zeroize;
 
-use super::util::cursive_ext::CursiveExt;
+use super::{util::cursive_ext::CursiveExt, search::search_items};
 use super::{
     data::UserData, item_details::item_detail_dialog, lock::lock_vault, sync::do_sync,
     util::cursive_ext::CursiveCallbackExt,
@@ -181,11 +180,8 @@ fn filter_edit_view() -> impl View {
             if let Some(mut tv) = siv.find_name::<TableView<Row, VaultTableColumn>>("vault_table") {
                 let ud = siv.get_user_data();
 
-                if let Some(all_rows) = ud.vault_table_rows.as_ref() {
-                    if let Some(ss) = ud.simsearch.as_ref() {
-                        let rows = get_filtered_rows(text, all_rows, ss);
-                        tv.set_items(rows);
-                    }
+                if let Some(search_res_rows) = search_rows(text, ud) {
+                    tv.set_items(search_res_rows);
                 }
             }
         })
@@ -203,16 +199,16 @@ fn filter_edit_view() -> impl View {
     PaddedView::lrtb(0, 0, 0, 1, ll)
 }
 
-fn get_filtered_rows(filter: &str, rows: &[Row], simsearch: &SimSearch<String>) -> Vec<Row> {
-    if filter.is_empty() {
-        return rows.to_owned();
-    }
-
-    simsearch.search(filter)
-        .into_iter()
-        .filter_map(|sr| rows.iter().find(|r| r.id == sr))
-        .cloned()
-        .collect()
+fn search_rows(term: &str, ud: &UserData) -> Option<Vec<Row>> {
+    let all_rows = ud.vault_table_rows.as_ref()?;
+    let filtered = match search_items(term, ud) {
+        Some(matching_items) => matching_items.into_iter()
+            .filter_map(|id| all_rows.iter().find(|r| r.id == id))
+            .cloned()
+            .collect(),
+        _ => all_rows.clone()
+    };
+    Some(filtered)
 }
 
 fn vault_table_view(
@@ -224,9 +220,7 @@ fn vault_table_view(
     // These are stored in user_data. Only the filter results are stored
     // as the table's rows.
     let rows = create_rows(user_data, enc_key, mac_key);
-    user_data.vault_table_rows = Some(rows);
-
-    let rows = user_data.vault_table_rows.clone().unwrap();
+    user_data.vault_table_rows = Some(rows.clone());
 
     let mut tv = TableView::new()
         .sorting_disabled()
@@ -323,8 +317,6 @@ fn key_hint_view() -> impl View {
 }
 
 pub fn show_copy_notification(cursive: &mut Cursive, message: &'static str) {
-    // Not using Dialog::info here so that a named view can be added to the dialog
-    // The named view is used later to find the dialog
     cursive.add_layer(Dialog::info(message).with_name("copy_notification"));
 
     let cb = cursive.cb_sink().clone();

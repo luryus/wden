@@ -9,3 +9,4 @@ pub mod sync;
 pub mod two_factor;
 pub mod util;
 pub mod vault_table;
+pub mod search;
