@@ -11,7 +11,7 @@ mod linux_clipboard;
 type PlatformCbImpl = linux_clipboard::LinuxClipboard;
 
 pub fn clip_string(s: String) {
-    log::warn!("Clipping!");
+    log::info!("Clipping...");
     if let Err(e) = PlatformCbImpl::clip_string(s) {
         log::warn!("Clipping string failed: {}", e)
     };
@@ -23,6 +23,7 @@ pub fn clip_expiring_string(s: String, expiry_seconds: u64) {
         tokio::time::sleep(Duration::from_secs(expiry_seconds)).await;
         let res = PlatformCbImpl::get_string_contents().and_then(|curr_contents| {
             if curr_contents == s {
+                log::info!("Clearing clipboard...");
                 PlatformCbImpl::clear()
             } else {
                 Ok(())
