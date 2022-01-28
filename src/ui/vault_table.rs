@@ -20,11 +20,11 @@ use cursive_table_view::{TableView, TableViewItem};
 use itertools::Itertools;
 use zeroize::Zeroize;
 
-use super::{util::cursive_ext::CursiveExt, search::search_items};
 use super::{
     data::UserData, item_details::item_detail_dialog, lock::lock_vault, sync::do_sync,
     util::cursive_ext::CursiveCallbackExt,
 };
+use super::{search::search_items, util::cursive_ext::CursiveExt};
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub enum VaultTableColumn {
@@ -202,11 +202,12 @@ fn filter_edit_view() -> impl View {
 fn search_rows(term: &str, ud: &UserData) -> Option<Vec<Row>> {
     let all_rows = ud.vault_table_rows.as_ref()?;
     let filtered = match search_items(term, ud) {
-        Some(matching_items) => matching_items.into_iter()
+        Some(matching_items) => matching_items
+            .into_iter()
             .filter_map(|id| all_rows.iter().find(|r| r.id == id))
             .cloned()
             .collect(),
-        _ => all_rows.clone()
+        _ => all_rows.clone(),
     };
     Some(filtered)
 }

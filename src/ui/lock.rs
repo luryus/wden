@@ -8,7 +8,7 @@ use cursive::{
 
 use crate::bitwarden::cipher::{self, CipherError};
 
-use super::{util::cursive_ext::CursiveExt, vault_table, search};
+use super::{search, util::cursive_ext::CursiveExt, vault_table};
 
 const VIEW_NAME_PASSWORD: &str = "password";
 
