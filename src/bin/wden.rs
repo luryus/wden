@@ -15,7 +15,7 @@ struct Opts {
     /// Sets the Bitwarden server url.
     /// If not set, the url stored in the profile
     /// will be used. If a new profile is created without
-    /// a server url set, http://localhost:8082 will be used.
+    /// a server url set, https://vault.bitwarden.com will be used.
     #[clap(short, long)]
     server_url: Option<String>,
 

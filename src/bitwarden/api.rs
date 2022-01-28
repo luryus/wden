@@ -12,7 +12,7 @@ use std::{collections::HashMap, convert::TryFrom};
 // Name your user agent after your app?
 static APP_USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"),);
 
-pub static DEFAULT_SERVER_URL: &str = "http://localhost:8082/";
+pub static DEFAULT_SERVER_URL: &str = "https://vault.bitwarden.com/";
 
 #[allow(clippy::enum_variant_names)]
 enum DeviceType {
