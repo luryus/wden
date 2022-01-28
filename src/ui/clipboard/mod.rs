@@ -3,16 +3,16 @@ use std::time::Duration;
 #[cfg(windows)]
 mod windows_clipboard;
 #[cfg(windows)]
-use windows_clipboard::*;
+type PlatformCbImpl = windows_clipboard::WindowsClipboard;
 
 #[cfg(target_os = "linux")]
 mod linux_clipboard;
 #[cfg(target_os = "linux")]
-use linux_clipboard::*;
+type PlatformCbImpl = linux_clipboard::LinuxClipboard;
 
 pub fn clip_string(s: String) {
     log::warn!("Clipping!");
-    if let Err(e) = clip_string_internal(s) {
+    if let Err(e) = PlatformCbImpl::clip_string(s) {
         log::warn!("Clipping string failed: {}", e)
     };
 }
@@ -21,9 +21,9 @@ pub fn clip_expiring_string(s: String, expiry_seconds: u64) {
     tokio::spawn(async move {
         clip_string(s.clone());
         tokio::time::sleep(Duration::from_secs(expiry_seconds)).await;
-        let res = get_string_contents_internal().and_then(|curr_contents| {
+        let res = PlatformCbImpl::get_string_contents().and_then(|curr_contents| {
             if curr_contents == s {
-                clip_string_internal(String::new())
+                PlatformCbImpl::clear()
             } else {
                 Ok(())
             }
@@ -33,4 +33,14 @@ pub fn clip_expiring_string(s: String, expiry_seconds: u64) {
             log::warn!("Clearing clipboard failed: {}", e);
         }
     });
+}
+
+type PlatformClipboardResult<T> = Result<T, anyhow::Error>;
+
+trait PlatformClipboard {
+    fn clip_string(s: String) -> PlatformClipboardResult<()>;
+
+    fn get_string_contents() -> PlatformClipboardResult<String>;
+
+    fn clear() -> PlatformClipboardResult<()>;
 }
