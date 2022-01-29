@@ -139,21 +139,17 @@ impl UserData {
     }
 
     pub fn get_org_keys_for_vault(&self) -> Option<HashMap<&String, (EncryptionKey, MacKey)>> {
-        self
-            .vault_data
-            .as_ref()
-            .map(|vd| {
-                vd.values()
-                    .filter_map(|i| i.organization_id.as_ref())
-                    .unique()
-                    .filter_map(|oid| {
-                        self
-                            .decrypt_organization_keys(oid)
-                            .map(|key| (oid, key))
-                            .ok()
-                    })
-                    .collect()
-            })
+        self.vault_data.as_ref().map(|vd| {
+            vd.values()
+                .filter_map(|i| i.organization_id.as_ref())
+                .unique()
+                .filter_map(|oid| {
+                    self.decrypt_organization_keys(oid)
+                        .map(|key| (oid, key))
+                        .ok()
+                })
+                .collect()
+        })
     }
 }
 

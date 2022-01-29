@@ -20,7 +20,7 @@ pub fn search_items<'a>(term: &str, ud: &'a UserData) -> Option<Vec<String>> {
 
 fn get_search_index(ud: &UserData) -> SimSearch<String> {
     let mut ss = SimSearch::new();
-    
+
     if let Some(tokenized_rows) = get_tokenized_rows(ud) {
         for (k, tokens) in tokenized_rows {
             // SimSearch will still tokenize (split) each of the tokens

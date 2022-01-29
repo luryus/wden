@@ -1,23 +1,36 @@
+use super::{PlatformClipboard, PlatformClipboardResult};
 use clipboard_win::{
-    formats::Unicode, get_clipboard_string, raw::set_without_clear, register_format, Clipboard,
-    Setter,
+    formats::Unicode,
+    get_clipboard_string,
+    raw::{empty, set_without_clear},
+    register_format, Clipboard, Setter,
 };
 
-pub fn clip_string_internal(s: String) -> Result<(), anyhow::Error> {
-    let _cb = Clipboard::new_attempts(10)?;
+pub struct WindowsClipboard;
 
-    Unicode.write_clipboard(&s)?;
+impl PlatformClipboard for WindowsClipboard {
+    fn clip_string(s: String) -> PlatformClipboardResult<()> {
+        let _cb = Clipboard::new_attempts(10)?;
 
-    // Add something with this custom format, to make Windows
-    // bypass clipboard history
-    let history_exc_format = register_format("ExcludeClipboardContentFromMonitorProcessing");
-    if let Some(hef) = history_exc_format {
-        set_without_clear(hef.get(), &[0])?;
+        Unicode.write_clipboard(&s)?;
+
+        // Add something with this custom format, to make Windows
+        // bypass clipboard history
+        let history_exc_format = register_format("ExcludeClipboardContentFromMonitorProcessing");
+        if let Some(hef) = history_exc_format {
+            set_without_clear(hef.get(), &[0])?;
+        }
+
+        Ok(())
     }
 
-    Ok(())
-}
+    fn get_string_contents() -> PlatformClipboardResult<String> {
+        Ok(get_clipboard_string()?)
+    }
 
-pub fn get_string_contents_internal() -> Result<String, anyhow::Error> {
-    Ok(get_clipboard_string()?)
+    fn clear() -> PlatformClipboardResult<()> {
+        let _cb = Clipboard::new_attempts(10)?;
+        empty()?;
+        Ok(())
+    }
 }
