@@ -1896,6 +1896,7 @@ dependencies = [
  "lazy_static",
  "log",
  "pbkdf2",
+ "rand",
  "reqwest",
  "rsa",
  "serde",

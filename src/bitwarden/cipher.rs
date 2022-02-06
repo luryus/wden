@@ -4,7 +4,9 @@ use base64;
 use block_modes::block_padding::Pkcs7;
 use block_modes::BlockMode;
 use block_modes::Cbc;
+use block_modes::InvalidKeyIvLength;
 use hkdf::Hkdf;
+use hmac::crypto_mac::InvalidKeyLength;
 use hmac::crypto_mac::MacError;
 use hmac::{Hmac, Mac, NewMac};
 use itertools::Itertools;
@@ -76,6 +78,10 @@ pub enum CipherError {
     UnknownCipherEncryptionType(String),
     #[error("Invalid key type for cipher")]
     InvalidKeyTypeForCipher,
+    #[error("Invalid mac key length for encrypting")]
+    InvalidEncryptingMacKeyLength(InvalidKeyLength),
+    #[error("Invalid key or IV length for encrypting")]
+    InvalidEncyptingKeyOrIvLength(InvalidKeyIvLength),
 }
 
 pub fn create_master_key(user_email: &str, user_password: &str, hash_iterations: u32) -> MasterKey {
@@ -267,6 +273,36 @@ impl Cipher {
                 EncType::Rsa2048OaepSha1HmacSha256B64 => Err(CipherError::InvalidKeyTypeForCipher),
             },
         }
+    }
+
+    pub fn encrypt(
+        content: &str,
+        enc_key: &EncryptionKey,
+        mac_key: &MacKey,
+    ) -> Result<Self, CipherError> {
+        // Only support AesCbc256HmacSHa256B64 because why not
+        type Aes256Cbc = Cbc<Aes256, Pkcs7>;
+        type HmacSha256 = Hmac<Sha256>;
+        // Generate iv of 128 bits (AES block size)
+        let iv: [u8; 128 / 8] = rand::random();
+        let iv = Vec::from(iv);
+        let aes = Aes256Cbc::new_from_slices(&enc_key.0, &iv)
+            .map_err(CipherError::InvalidEncyptingKeyOrIvLength)?;
+
+        let ct = aes.encrypt_vec(content.as_bytes());
+
+        let mut hmac = HmacSha256::new_from_slice(&mac_key.0)
+            .map_err(CipherError::InvalidEncryptingMacKeyLength)?;
+        hmac.update(&iv);
+        hmac.update(&ct);
+        let mac = hmac.finalize().into_bytes().as_slice().to_owned();
+
+        Ok(Self::Value {
+            enc_type: EncType::AesCbc256HmacSha256B64,
+            ct,
+            iv,
+            mac,
+        })
     }
 
     pub fn decrypt_to_string(&self, enc_key: &EncryptionKey, mac_key: &MacKey) -> String {
