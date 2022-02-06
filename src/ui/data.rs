@@ -37,6 +37,7 @@ pub struct UserData {
     pub vault_data: Option<HashMap<String, api::CipherItem>>,
     pub vault_table_rows: Option<Vec<vault_table::Row>>,
     pub simsearch: Option<SimSearch<String>>,
+    encrypted_search_term: Option<cipher::Cipher>,
 }
 
 impl UserData {
@@ -58,6 +59,7 @@ impl UserData {
             vault_data: None,
             vault_table_rows: None,
             simsearch: None,
+            encrypted_search_term: None,
         }
     }
 
@@ -72,9 +74,16 @@ impl UserData {
         self.vault_table_rows = None;
         self.simsearch = None;
         self.autolocker.lock().unwrap().clear_autolock_time();
+        self.encrypted_search_term = None;
     }
 
-    pub fn clear_data_for_locking(&mut self) {
+    pub fn clear_data_for_locking(&mut self, search_term: Option<&str>) {
+        // Encrypt the vault view state with the current user keys
+        if let Some((enc_key, mac_key)) = self.decrypt_keys() {
+            self.encrypted_search_term = search_term.and_then(
+                |st| cipher::Cipher::encrypt(&st, &enc_key, &mac_key).ok());
+        }
+
         // Clear keys
         self.master_key = None;
         self.master_password_hash = None;
@@ -85,6 +94,12 @@ impl UserData {
 
         // Clear autolock
         self.autolocker.lock().unwrap().clear_autolock_time();
+    }
+
+    pub fn decrypt_search_term(&mut self) -> Option<String> {
+        self.encrypted_search_term.take()
+            .and_then(|term| self.decrypt_keys().map(|(ec, mc)| (term, ec, mc)))
+            .map(|(term, ec, mc)| term.decrypt_to_string(&ec, &mc))
     }
 
     pub fn decrypt_keys(&self) -> Option<(EncryptionKey, MacKey)> {

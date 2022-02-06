@@ -1,4 +1,4 @@
-use std::{collections::HashMap, time::Duration};
+use std::{collections::HashMap, time::Duration, rc::Rc};
 
 use crate::bitwarden::{
     self,
@@ -126,6 +126,18 @@ pub fn vault_view(user_data: &mut UserData) -> impl View {
         })
 }
 
+pub fn get_current_search_term(cursive: &mut Cursive) -> Option<Rc<String>> {
+    let edit = cursive.find_name::<EditView>("search_edit")?;
+    Some(edit.get_content())
+}
+
+pub fn set_search_term(cursive: &mut Cursive, search_term: String) {
+    if let Some(mut edit) = cursive.find_name::<EditView>("search_edit") {
+        update_search_results(cursive, &search_term);
+        edit.set_content(search_term);
+    }
+}
+
 fn copy_current_item_field(siv: &mut Cursive, field: Copyable) {
     let table = siv
         .find_name::<TableView<Row, VaultTableColumn>>("vault_table")
@@ -175,16 +187,7 @@ enum Copyable {
 
 fn filter_edit_view() -> impl View {
     let filter_edit = EditView::new()
-        .on_edit(|siv, text, _| {
-            // Filter the results, update table
-            if let Some(mut tv) = siv.find_name::<TableView<Row, VaultTableColumn>>("vault_table") {
-                let ud = siv.get_user_data();
-
-                if let Some(search_res_rows) = search_rows(text, ud) {
-                    tv.set_items(search_res_rows);
-                }
-            }
-        })
+        .on_edit(|siv, text, _| update_search_results(siv, text))
         .on_submit(|siv, _| {
             siv.focus_name("vault_table")
                 .expect("Focusing table failed");
@@ -197,6 +200,17 @@ fn filter_edit_view() -> impl View {
         .child(filter_edit);
 
     PaddedView::lrtb(0, 0, 0, 1, ll)
+}
+
+fn update_search_results(cursive: &mut Cursive, search_term: &str) {
+    // Filter the results, update table
+    if let Some(mut tv) = cursive.find_name::<TableView<Row, VaultTableColumn>>("vault_table") {
+        let ud = cursive.get_user_data();
+
+        if let Some(search_res_rows) = search_rows(search_term, ud) {
+            tv.set_items(search_res_rows);
+        }
+    }
 }
 
 fn search_rows(term: &str, ud: &UserData) -> Option<Vec<Row>> {

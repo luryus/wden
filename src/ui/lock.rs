@@ -13,12 +13,16 @@ use super::{search, util::cursive_ext::CursiveExt, vault_table};
 const VIEW_NAME_PASSWORD: &str = "password";
 
 pub fn lock_vault(c: &mut Cursive) {
-    // Remove all layers first
+    // Get the search term, we want to restore it after unlocking
+    let search_term = vault_table::get_current_search_term(c);
+
+    // Remove all layers
     c.clear_layers();
 
     // Clear all keys from memory, and get stored email
+    let search_term = search_term.as_deref().map(|s| s.as_str());
     let ud = c.get_user_data();
-    ud.clear_data_for_locking();
+    ud.clear_data_for_locking(search_term);
     let email = match ud.email.clone() {
         Some(e) => e,
         None => {
@@ -102,7 +106,11 @@ fn submit_unlock(c: &mut Cursive) {
             // Search index gets cleared when locking, restore it
             search::update_search_index(user_data);
 
+            let search_term = user_data.decrypt_search_term();
             vault_table::show_vault(c);
+            if let Some(term) = search_term {
+                vault_table::set_search_term(c, term);
+            }
         }
     }
 }
