@@ -5,10 +5,9 @@ use crate::bitwarden::{
 use anyhow::Context;
 use cipher::decrypt_symmetric_keys;
 use directories_next::ProjectDirs;
-use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use simsearch::SimSearch;
-use std::{collections::HashMap, ffi::OsString, path::Path, str::FromStr, time::Duration};
+use std::{collections::{HashMap, HashSet}, ffi::OsString, path::Path, str::FromStr, time::Duration};
 use std::{
     path::PathBuf,
     sync::{Arc, Mutex},
@@ -156,9 +155,11 @@ impl UserData {
 
     pub fn get_org_keys_for_vault(&self) -> Option<HashMap<&String, (EncryptionKey, MacKey)>> {
         self.vault_data.as_ref().map(|vd| {
-            vd.values()
+            let org_ids: HashSet<_> = vd.values()
                 .filter_map(|i| i.organization_id.as_ref())
-                .unique()
+                .collect();
+
+            org_ids.into_iter()
                 .filter_map(|oid| {
                     self.decrypt_organization_keys(oid)
                         .map(|key| (oid, key))
@@ -230,7 +231,7 @@ impl ProfileStore {
                 let d = Self::load_file(&f.path()).ok()?;
                 Some((f.file_name().into_string().unwrap(), d))
             })
-            .collect_vec();
+            .collect();
 
         Ok(profiles)
     }

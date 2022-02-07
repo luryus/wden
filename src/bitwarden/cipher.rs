@@ -9,7 +9,6 @@ use hkdf::Hkdf;
 use hmac::crypto_mac::InvalidKeyLength;
 use hmac::crypto_mac::MacError;
 use hmac::{Hmac, Mac, NewMac};
-use itertools::Itertools;
 use rsa::pkcs8::FromPrivateKey;
 use rsa::{PaddingScheme, RsaPrivateKey};
 use serde::de;
@@ -209,22 +208,23 @@ impl FromStr for Cipher {
         }
 
         let (enc_type_str, rest) = s
-            .split('.')
-            .collect_tuple()
+            .split_once('.')
             .ok_or(CipherError::InvalidCipherStringFormat)?;
         let enc_type = EncType::from_str(enc_type_str)?;
 
         match (enc_type.has_iv(), enc_type.has_mac()) {
             (true, true) => {
-                let (iv_b64, ct_b64, mac_b64) = rest
-                    .split('|')
-                    .collect_tuple()
-                    .ok_or(CipherError::InvalidCipherStringFormat)?;
+                let b64_parts = rest.split('|').collect::<Vec<_>>();
+                if b64_parts.len() != 3 {
+                    return Err(CipherError::InvalidCipherStringFormat);
+                }
 
-                let iv = base64::decode(iv_b64).or(Err(CipherError::InvalidCipherStringFormat))?;
-                let ct = base64::decode(ct_b64).or(Err(CipherError::InvalidCipherStringFormat))?;
+                let iv =
+                    base64::decode(b64_parts[0]).or(Err(CipherError::InvalidCipherStringFormat))?;
+                let ct =
+                    base64::decode(b64_parts[1]).or(Err(CipherError::InvalidCipherStringFormat))?;
                 let mac =
-                    base64::decode(mac_b64).or(Err(CipherError::InvalidCipherStringFormat))?;
+                    base64::decode(b64_parts[2]).or(Err(CipherError::InvalidCipherStringFormat))?;
 
                 Ok(Cipher::Value {
                     enc_type,

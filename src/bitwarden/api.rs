@@ -1,6 +1,5 @@
 use super::cipher::Cipher;
 use anyhow::Error;
-use itertools::Itertools;
 use reqwest;
 use reqwest::Url;
 use serde::Deserialize;
@@ -141,7 +140,7 @@ impl ApiClient {
                                     .and_then(|x| (x as u8).try_into().ok())
                                     .or_else(|| p.as_str().and_then(|x| x.try_into().ok()))
                             })
-                            .collect_vec()
+                            .collect()
                     })
                     .ok_or_else(|| anyhow::anyhow!("Error parsing provider types"))?;
 
@@ -323,8 +322,8 @@ impl From<SyncResponseInternal> for SyncResponse {
             ciphers: sri
                 .ciphers
                 .into_iter()
-                .map_into::<CipherItem>()
-                .collect_vec(),
+                .map(|cii| cii.into())
+                .collect(),
             profile: sri.profile,
         }
     }

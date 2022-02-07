@@ -17,7 +17,6 @@ use cursive::{
     Cursive, View,
 };
 use cursive_table_view::{TableView, TableViewItem};
-use itertools::Itertools;
 use zeroize::Zeroize;
 
 use super::{
@@ -267,7 +266,7 @@ fn create_rows(user_data: &mut UserData, enc_key: &EncryptionKey, mac_key: &MacK
     // Find all organization keys we will need
     let org_keys = user_data.get_org_keys_for_vault().unwrap_or_default();
 
-    user_data
+    let mut rows: Vec<Row> = user_data
         .vault_data
         .as_ref()
         .unwrap_or(&HashMap::new())
@@ -298,8 +297,9 @@ fn create_rows(user_data: &mut UserData, enc_key: &EncryptionKey, mac_key: &MacK
                 is_in_organization: ci.organization_id.is_some(),
             })
         })
-        .sorted()
-        .collect_vec()
+        .collect();
+    rows.sort();
+    rows
 }
 
 fn show_item_details(cb: cursive::CbSink, row: &Row) {
