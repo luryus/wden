@@ -10,7 +10,7 @@ use cursive::{
     theme::{BaseColor, Color, Effect, Style},
     traits::{Nameable, Resizable},
     view::Margins,
-    views::{Dialog, LinearLayout, OnEventView, PaddedView, TextView, ViewRef},
+    views::{Dialog, LinearLayout, OnEventView, PaddedView, TextView, ViewRef, ScrollView},
     View,
 };
 use lazy_static::lazy_static;
@@ -56,9 +56,9 @@ pub fn item_detail_dialog(ud: &mut UserData, item_id: &str) -> Option<impl View>
     }
 
     let dialog = Dialog::around(
-        LinearLayout::vertical()
+        ScrollView::new(LinearLayout::vertical()
             .child(dialog_contents)
-            .child(key_hint_linear_layout),
+            .child(key_hint_linear_layout)),
     )
     .button("Close", |s| {
         s.pop_layer();
