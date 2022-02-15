@@ -155,7 +155,7 @@ fn card_dialog_contents(
             TextView::new(expiry).style(*VALUE_STYLE),
         ))
         .child(TextView::new("Card holder"))
-        .child(value_textview(&card.card_holder_name, enc_key, mac_key))
+        .child(value_textview(&card.cardholder_name, enc_key, mac_key))
         .child(TextView::new("Notes"))
         .child(value_textview(&item.notes, enc_key, mac_key))
 }

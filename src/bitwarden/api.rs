@@ -76,7 +76,7 @@ impl ApiClient {
 
         let iterations = res
             .as_object()
-            .and_then(|o| o.get("KdfIterations"))
+            .and_then(|o| o.get("kdfIterations").or_else(|| o.get("KdfIterations")))
             .and_then(|v| v.as_u64())
             .ok_or_else(|| anyhow::anyhow!("Parsing response failed"))?;
 
@@ -213,11 +213,13 @@ pub struct TokenResponseSuccess {
     #[serde(alias = "Key")]
     pub key: Cipher,
     #[serde(alias = "PrivateKey")]
+    #[serde(alias = "privateKey")]
     pub private_key: Cipher,
     pub access_token: String,
     expires_in: u32,
     pub refresh_token: String,
     #[serde(alias = "TwoFactorToken")]
+    #[serde(alias = "twoFactorToken")]
     pub two_factor_token: Option<String>,
     #[serde(skip, default = "token_response_timestamp")]
     token_timestamp: Instant,
@@ -286,28 +288,35 @@ impl TryFrom<&str> for TwoFactorProviderType {
 }
 
 #[derive(Deserialize, Debug)]
-#[serde(rename_all = "PascalCase")]
 struct SyncResponseInternal {
+    #[serde(alias = "Ciphers")]
     ciphers: Vec<CipherItemInternal>,
+    #[serde(alias = "Profile")]
     profile: Profile,
 }
 
 #[derive(Deserialize, Debug)]
-#[serde(rename_all = "PascalCase")]
 pub struct Profile {
+    #[serde(alias = "Email")]
     pub email: String,
+    #[serde(alias = "Id")]
     pub id: String,
+    #[serde(alias = "Name")]
     pub name: String,
+    #[serde(alias = "Organizations")]
     pub organizations: Vec<Organization>,
 }
 
 #[derive(Deserialize, Debug)]
-#[serde(rename_all = "PascalCase")]
 pub struct Organization {
+    #[serde(alias = "Enabled")]
     pub enabled: bool,
+    #[serde(alias = "Id")]
     pub id: String,
     #[serde(default)]
+    #[serde(alias = "Key")]
     pub key: Cipher,
+    #[serde(alias = "Name")]
     pub name: String,
 }
 
@@ -330,20 +339,31 @@ impl From<SyncResponseInternal> for SyncResponse {
 }
 
 #[derive(Deserialize, Debug)]
-#[serde(rename_all = "PascalCase")]
 struct CipherItemInternal {
+    #[serde(alias = "Id")]
     id: String,
     #[serde(alias = "Type")]
+    #[serde(alias = "type")]
     cipher_type: i32,
     #[serde(default)]
+    #[serde(alias = "Name")]
     name: Cipher,
     #[serde(default)]
+    #[serde(alias = "Notes")]
     notes: Cipher,
+    #[serde(alias = "Login")]
     login: Option<LoginItem>,
+    #[serde(alias = "Card")]
     card: Option<CardItem>,
+    #[serde(alias = "Identity")]
     identity: Option<IdentityItem>,
+    #[serde(alias = "Favorite")]
     favorite: bool,
+    #[serde(alias = "CollectionIds")]
+    #[serde(alias = "collectionIds")]
     collection_ids: Vec<String>,
+    #[serde(alias = "organizationId")]
+    #[serde(alias = "OrganizationId")]
     organization_id: Option<String>,
 }
 
@@ -388,71 +408,107 @@ pub struct CipherItem {
 }
 
 #[derive(Deserialize, Debug)]
-#[serde(rename_all = "PascalCase")]
 pub struct LoginItem {
     #[serde(default)]
+    #[serde(alias = "Username")]
     pub username: Cipher,
     #[serde(default)]
+    #[serde(alias = "Password")]
     pub password: Cipher,
     #[serde(default)]
+    #[serde(alias = "Uri")]
     pub uri: Cipher,
 }
 
 #[derive(Deserialize, Debug)]
-#[serde(rename_all = "PascalCase")]
 pub struct CardItem {
     #[serde(default)]
+    #[serde(alias = "Brand")]
     pub brand: Cipher,
     #[serde(default)]
-    pub card_holder_name: Cipher,
+    #[serde(alias = "CardholderName")]
+    #[serde(alias = "cardholderName")]
+    pub cardholder_name: Cipher,
     #[serde(default)]
+    #[serde(alias = "code")]
+    #[serde(alias = "Code")]
     pub code: Cipher,
     #[serde(default)]
+    #[serde(alias = "ExpMonth")]
+    #[serde(alias = "expMonth")]
     pub exp_month: Cipher,
     #[serde(default)]
+    #[serde(alias = "ExpYear")]
+    #[serde(alias = "expYear")]
     pub exp_year: Cipher,
     #[serde(default)]
+    #[serde(alias = "Number")]
     pub number: Cipher,
 }
 
 #[derive(Deserialize, Debug)]
-#[serde(rename_all = "PascalCase")]
 pub struct IdentityItem {
     #[serde(default)]
+    #[serde(alias = "Address1")]
+    #[serde(alias = "address1")]
     pub address_1: Cipher,
     #[serde(default)]
+    #[serde(alias = "Address2")]
+    #[serde(alias = "address2")]
     pub address_2: Cipher,
     #[serde(default)]
+    #[serde(alias = "Address3")]
+    #[serde(alias = "address3")]
     pub address_3: Cipher,
     #[serde(default)]
+    #[serde(alias = "City")]
     pub city: Cipher,
     #[serde(default)]
+    #[serde(alias = "Company")]
     pub company: Cipher,
     #[serde(default)]
+    #[serde(alias = "Country")]
     pub country: Cipher,
     #[serde(default)]
+    #[serde(alias = "Email")]
     pub email: Cipher,
     #[serde(default)]
+    #[serde(alias = "FirstName")]
+    #[serde(alias = "firstName")]
     pub first_name: Cipher,
     #[serde(default)]
+    #[serde(alias = "LastName")]
+    #[serde(alias = "lastName")]
     pub last_name: Cipher,
     #[serde(default)]
+    #[serde(alias = "LicenseNumber")]
+    #[serde(alias = "licenseNumber")]
     pub license_number: Cipher,
     #[serde(default)]
+    #[serde(alias = "MiddleName")]
+    #[serde(alias = "middleName")]
     pub middle_name: Cipher,
     #[serde(default)]
+    #[serde(alias = "PassportNumber")]
+    #[serde(alias = "passportNumber")]
     pub passport_number: Cipher,
     #[serde(default)]
+    #[serde(alias = "Phone")]
     pub phone: Cipher,
     #[serde(default)]
+    #[serde(alias = "PostalCode")]
+    #[serde(alias = "postalCode")]
     pub postal_code: Cipher,
-    #[serde(alias = "SSN")]
     #[serde(default)]
+    #[serde(alias = "SSN")]
     pub ssn: Cipher,
     #[serde(default)]
+    #[serde(alias = "State")]
     pub state: Cipher,
     #[serde(default)]
+    #[serde(alias = "Title")]
     pub title: Cipher,
     #[serde(default)]
+    #[serde(alias = "Username")]
     pub username: Cipher,
 }
