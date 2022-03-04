@@ -10,7 +10,7 @@ pub fn update_search_index(ud: &mut UserData) {
     ud.simsearch = Some(get_search_index(ud));
 }
 
-pub fn search_items<'a>(term: &str, ud: &'a UserData) -> Option<Vec<String>> {
+pub fn search_items(term: &str, ud: &UserData) -> Option<Vec<String>> {
     if term.is_empty() {
         return None;
     }

@@ -46,14 +46,15 @@ pub fn login_dialog(profile_name: &str, saved_email: &Option<String>) -> Dialog 
         .child(password_field);
 
     if saved_email.is_some() {
-        if layout.set_focus_index(3).is_err() {
+        let focus_res = layout.set_focus_index(3);
+        if focus_res.is_err() {
             log::warn!("Focusing password field failed");
         }
     }
 
     Dialog::around(layout)
         .title(format!("Log in ({})", profile_name))
-        .button("Submit", |c| submit_login(c))
+        .button("Submit", submit_login)
 }
 
 fn submit_login(c: &mut Cursive) {
@@ -138,7 +139,7 @@ pub fn handle_login_response(res: Result<TokenResponse, anyhow::Error>, cb: CbSi
                         }
 
                         ud.email = Some(email);
-                        ud.token = Some(t);
+                        ud.token = Some(*t);
 
                         do_sync(c, true);
                     }))

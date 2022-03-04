@@ -80,7 +80,7 @@ impl UserData {
         // Encrypt the vault view state with the current user keys
         if let Some((enc_key, mac_key)) = self.decrypt_keys() {
             self.encrypted_search_term =
-                search_term.and_then(|st| cipher::Cipher::encrypt(&st, &enc_key, &mac_key).ok());
+                search_term.and_then(|st| cipher::Cipher::encrypt(st, &enc_key, &mac_key).ok());
         }
 
         // Clear keys

@@ -155,7 +155,7 @@ impl ApiClient {
             .json::<TokenResponseSuccess>()
             .await?;
 
-        Ok(TokenResponse::Success(res))
+        Ok(TokenResponse::Success(Box::new(res)))
     }
 
     pub async fn refresh_token(&self, token: TokenResponseSuccess) -> Result<TokenResponse, Error> {
@@ -181,7 +181,7 @@ impl ApiClient {
         res.token_timestamp = refresh_res.token_timestamp;
         res.expires_in = refresh_res.expires_in;
 
-        Ok(TokenResponse::Success(res))
+        Ok(TokenResponse::Success(Box::new(res)))
     }
 
     pub async fn sync(&self) -> Result<SyncResponse, Error> {
@@ -204,7 +204,7 @@ impl ApiClient {
 }
 
 pub enum TokenResponse {
-    Success(TokenResponseSuccess),
+    Success(Box<TokenResponseSuccess>),
     TwoFactorRequired(Vec<TwoFactorProviderType>),
 }
 
