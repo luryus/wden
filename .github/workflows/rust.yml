@@ -3,6 +3,7 @@ name: Rust
 on:
   push:
     branches: [ main ]
+    tags: [ "v?[0-9]+.[0-9]+.[0-9]+*" ]
   #pull_request:
   #  branches: [ main ]
 
@@ -13,7 +14,7 @@ jobs:
   build:
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [ubuntu-20.04, windows-2022]
     name: Build and test on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     
@@ -42,3 +43,22 @@ jobs:
         path: |
           target/release/wden
           target/release/wden.exe
+
+    # For tags, copy and zip the binaries to files, and create a release
+    - name: Rename binaries
+      shell: bash
+      if: startsWith(github.ref, 'refs/tags/')
+      run: |
+        if [ "${{ matrix.os }}" = "windows-2022" ]; then
+          cp target/release/wden.exe ./wden-windows-x86_64.exe
+        elif [ "${{ matrix.os }}" = "ubuntu-20.04" ]; then
+          cp target/release/wden ./wden-linux-x86_64
+        fi
+    
+    - name: Release
+      uses: softprops/action-gh-release@v1
+      if: startsWith(github.ref, 'refs/tags/')
+      with:
+        files: |
+          LICENSE
+          wden-*
