@@ -18,6 +18,7 @@ fn try_read_profile_name(input: &str) -> Result<String, anyhow::Error> {
 }
 
 #[derive(Parser)]
+#[clap(version)]
 struct Opts {
     /// Sets the profile that will be used. Profile names can only
     /// include lowercase alphanumeric characters, dashes (-) and
