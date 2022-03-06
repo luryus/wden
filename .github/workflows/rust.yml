@@ -31,9 +31,6 @@ jobs:
         body_path: release-changelog.md
         body: ''  # Empty string as fallback
         draft: true
-        files: |
-          LICENSE
-          wden-*
 
   build:
     strategy:
@@ -42,10 +39,6 @@ jobs:
     name: Build and test on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
 
-    # If this is a tag workflow, require the release job first. Run always even if it's skipped or it fails
-    needs: ['create_release']
-    if: ${{ always() }}
-    
     steps:
     - uses: actions/checkout@v2
 
