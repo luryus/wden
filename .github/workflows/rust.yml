@@ -17,6 +17,11 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/')
 
     steps:
+    - uses: actions/checkout@v2
+    - uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        profile: minimal
     - name: Extract changelog
       shell: bash
       continue-on-error: true  # If parsing the changelog fails, continue with empty changelog
@@ -24,7 +29,6 @@ jobs:
         cargo install --verbose --version 0.4.7 parse-changelog
         export VERSION="$GITHUB_REF_NAME"
         parse-changelog CHANGELOG.md "$VERSION" > release-changelog.md
-
     - name: Release
       uses: softprops/action-gh-release@v1
       with:
