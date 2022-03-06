@@ -3,7 +3,7 @@ name: Rust
 on:
   push:
     branches: [ main ]
-    tags: [ "v?[0-9]+.[0-9]+.[0-9]+*" ]
+    tags: [ "[0-9]+.[0-9]+.[0-9]+*" ]
   #pull_request:
   #  branches: [ main ]
 
@@ -55,10 +55,20 @@ jobs:
           cp target/release/wden ./wden-linux-x86_64
         fi
     
+    - name: Extract changelog
+      if: startsWith(github.ref, 'refs/tags/')
+      continue-on-error: true  # If parsing the changelog fails, continue with empty changelog
+      run: |
+        cargo install --verbose --version 0.4.7 parse-changelog
+        export VERSION="$GITHUB_REF_NAME"
+        touch release-changelog.md
+        parse-changelog CHANGELOG.md "$VERSION" > release-changelog.md
+
     - name: Release
       uses: softprops/action-gh-release@v1
       if: startsWith(github.ref, 'refs/tags/')
       with:
+        body_path: release-changelog.md
         files: |
           LICENSE
           wden-*
