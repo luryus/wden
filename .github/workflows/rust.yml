@@ -11,12 +11,39 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  create_release:
+    name: Create release
+    runs-on: ubuntu-20.04
+    if: startsWith(github.ref, 'refs/tags/')
+
+    steps:
+    - name: Extract changelog
+      shell: bash
+      continue-on-error: true  # If parsing the changelog fails, continue with empty changelog
+      run: |
+        cargo install --verbose --version 0.4.7 parse-changelog
+        export VERSION="$GITHUB_REF_NAME"
+        parse-changelog CHANGELOG.md "$VERSION" > release-changelog.md
+
+    - name: Release
+      uses: softprops/action-gh-release@v1
+      with:
+        body_path: release-changelog.md
+        body: ''  # Empty string as fallback
+        files: |
+          LICENSE
+          wden-*
+
   build:
     strategy:
       matrix:
         os: [ubuntu-20.04, windows-2022]
     name: Build and test on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
+
+    # If this is a tag workflow, require the release job first. Run always even if it's skipped or it fails
+    needs: ['create_release']
+    if: ${{ always() }}
     
     steps:
     - uses: actions/checkout@v2
@@ -54,21 +81,10 @@ jobs:
         elif [ "${{ matrix.os }}" = "ubuntu-20.04" ]; then
           cp target/release/wden ./wden-linux-x86_64
         fi
-    
-    - name: Extract changelog
-      if: startsWith(github.ref, 'refs/tags/')
-      continue-on-error: true  # If parsing the changelog fails, continue with empty changelog
-      run: |
-        cargo install --verbose --version 0.4.7 parse-changelog
-        export VERSION="$GITHUB_REF_NAME"
-        touch release-changelog.md
-        parse-changelog CHANGELOG.md "$VERSION" > release-changelog.md
-
     - name: Release
       uses: softprops/action-gh-release@v1
       if: startsWith(github.ref, 'refs/tags/')
       with:
-        body_path: release-changelog.md
         files: |
           LICENSE
           wden-*
