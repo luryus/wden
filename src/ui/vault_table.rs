@@ -246,7 +246,7 @@ fn vault_table_view(
         .column(VaultTableColumn::ItemType, "T", |c| c.width(1))
         .column(VaultTableColumn::Name, "Name", |c| c)
         .column(VaultTableColumn::Username, "Username", |c| c)
-        .column(VaultTableColumn::IsInOrganization, "O", |c| c.width(1))
+        .column(VaultTableColumn::IsInOrganization, "O", |c| c.width(2))
         .items(rows)
         .on_submit(|siv: &mut Cursive, _, index| {
             let sink = siv.cb_sink().clone();
