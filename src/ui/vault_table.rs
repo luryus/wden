@@ -208,6 +208,11 @@ fn update_search_results(cursive: &mut Cursive, search_term: &str) {
 
         if let Some(search_res_rows) = search_rows(search_term, ud) {
             tv.set_items(search_res_rows);
+
+            // Explicitly set the first row as selected. This is needed, because
+            // for some reason the table view scrolls past and hides the first item
+            // without this
+            tv.set_selected_row(0);
         }
     }
 }

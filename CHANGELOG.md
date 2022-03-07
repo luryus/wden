@@ -2,6 +2,8 @@
 
 ## next
 
+- Fix first row being hidden after unlocking (#8)
+
 ## 0.3.0
 
 - Added version flag (#11)
