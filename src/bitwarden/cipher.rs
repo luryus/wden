@@ -1,16 +1,12 @@
 use aes::Aes256;
 use anyhow::Context;
 use base64;
-use block_modes::block_padding::Pkcs7;
-use block_modes::BlockMode;
-use block_modes::Cbc;
-use block_modes::InvalidKeyIvLength;
+use aes::cipher::block_padding::{Pkcs7, UnpadError};
 use hkdf::Hkdf;
-use hmac::crypto_mac::InvalidKeyLength;
-use hmac::crypto_mac::MacError;
-use hmac::{Hmac, Mac, NewMac};
-use rsa::pkcs8::FromPrivateKey;
-use rsa::{PaddingScheme, RsaPrivateKey};
+use hmac::digest::{MacError, InvalidLength};
+use hmac::{Hmac, Mac};
+use cbc::cipher::{BlockEncryptMut, BlockDecryptMut, KeyIvInit};
+use rsa::{PaddingScheme, RsaPrivateKey, pkcs8::DecodePrivateKey};
 use serde::de;
 use serde::{Deserialize, Deserializer};
 use sha2::Sha256;
@@ -77,10 +73,10 @@ pub enum CipherError {
     UnknownCipherEncryptionType(String),
     #[error("Invalid key type for cipher")]
     InvalidKeyTypeForCipher,
-    #[error("Invalid mac key length for encrypting")]
-    InvalidEncryptingMacKeyLength(InvalidKeyLength),
     #[error("Invalid key or IV length for encrypting")]
-    InvalidEncyptingKeyOrIvLength(InvalidKeyIvLength),
+    InvalidKeyOrIvLength(InvalidLength),
+    #[error("Invalid padding while decrypting")]
+    InvalidPadding(UnpadError)
 }
 
 pub fn create_master_key(user_email: &str, user_password: &str, hash_iterations: u32) -> MasterKey {
@@ -281,18 +277,18 @@ impl Cipher {
         mac_key: &MacKey,
     ) -> Result<Self, CipherError> {
         // Only support AesCbc256HmacSHa256B64 because why not
-        type Aes256Cbc = Cbc<Aes256, Pkcs7>;
+        type Aes256CbcEnc = cbc::Encryptor<Aes256>;
         type HmacSha256 = Hmac<Sha256>;
         // Generate iv of 128 bits (AES block size)
         let iv: [u8; 128 / 8] = rand::random();
         let iv = Vec::from(iv);
-        let aes = Aes256Cbc::new_from_slices(&enc_key.0, &iv)
-            .map_err(CipherError::InvalidEncyptingKeyOrIvLength)?;
+        let aes = Aes256CbcEnc::new_from_slices(&enc_key.0, &iv)
+            .map_err(CipherError::InvalidKeyOrIvLength)?;
 
-        let ct = aes.encrypt_vec(content.as_bytes());
+        let ct = aes.encrypt_padded_vec_mut::<Pkcs7>(content.as_bytes());
 
         let mut hmac = HmacSha256::new_from_slice(&mac_key.0)
-            .map_err(CipherError::InvalidEncryptingMacKeyLength)?;
+            .map_err(CipherError::InvalidKeyOrIvLength)?;
         hmac.update(&iv);
         hmac.update(&ct);
         let mac = hmac.finalize().into_bytes().as_slice().to_owned();
@@ -354,22 +350,22 @@ impl Cipher {
         mac_key: &MacKey,
     ) -> Result<Vec<u8>, CipherError> {
         if let Self::Value { iv, ct, mac, .. } = self {
-            type Aes256Cbc = Cbc<Aes256, Pkcs7>;
+            type Aes256CbcDec = cbc::Decryptor<Aes256>;
             type HmacSha256 = Hmac<Sha256>;
 
             let mut hmac = HmacSha256::new_from_slice(&mac_key.0).unwrap();
             let data = [&iv[..], &ct[..]].concat();
 
             hmac.update(&data);
-            hmac.verify(mac)
+            hmac.verify_slice(mac)
                 .map_err(CipherError::MacVerificationFailed)?;
 
-            let aes = Aes256Cbc::new_from_slices(&enc_key.0, iv.as_slice())
+            let aes = Aes256CbcDec::new_from_slices(&enc_key.0, iv.as_slice())
                 .context("Initializing AES failed")?;
 
             let decrypted = aes
-                .decrypt_vec(ct.as_slice())
-                .context("Aes decryption failed")?;
+                .decrypt_padded_vec_mut::<Pkcs7>(ct.as_slice())
+                .map_err(CipherError::InvalidPadding)?;
 
             Ok(decrypted)
         } else {

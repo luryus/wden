@@ -2,6 +2,7 @@
 
 ## next
 
+- Upgrade all RustCrypto crates
 
 ## 0.3.1
 
