@@ -4,6 +4,7 @@
 
 - Upgrade all RustCrypto crates
 - Support showing identity item details
+- Enable gzip in http requests
 
 ## 0.3.1
 
