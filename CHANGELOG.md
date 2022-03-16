@@ -3,6 +3,7 @@
 ## next
 
 - Upgrade all RustCrypto crates
+- Support showing identity item details
 
 ## 0.3.1
 

@@ -81,7 +81,6 @@ Configuration files, one for each profile, are stored under the user's config di
 
 - Collection support
 - Folder support
-- Identity details support
 - Additional 2FA methods
 - Local vault caching / offline support?
 - Attachment support
