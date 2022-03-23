@@ -24,16 +24,16 @@ pub struct GlobalSettings {
 }
 
 pub struct UserData {
-    pub global_settings: GlobalSettings,
-    pub profile_store: ProfileStore,
+    pub global_settings: Arc<GlobalSettings>,
+    pub profile_store: Arc<ProfileStore>,
     pub autolocker: Arc<Mutex<Autolocker>>,
-    pub email: Option<String>,
-    pub master_key: Option<cipher::MasterKey>,
-    pub master_password_hash: Option<cipher::MasterPasswordHash>,
+    pub email: Option<Arc<String>>,
+    pub master_key: Option<Arc<cipher::MasterKey>>,
+    pub master_password_hash: Option<Arc<cipher::MasterPasswordHash>>,
     pub password_hash_iterations: Option<u32>,
-    pub token: Option<api::TokenResponseSuccess>,
-    pub organizations: Option<HashMap<String, api::Organization>>,
-    pub vault_data: Option<HashMap<String, api::CipherItem>>,
+    pub token: Option<Arc<api::TokenResponseSuccess>>,
+    pub organizations: Option<Arc<HashMap<String, api::Organization>>>,
+    pub vault_data: Option<Arc<HashMap<String, api::CipherItem>>>,
     pub vault_table_rows: Option<Vec<vault_table::Row>>,
     pub simsearch: Option<SimSearch<String>>,
     encrypted_search_term: Option<cipher::Cipher>,
@@ -41,8 +41,8 @@ pub struct UserData {
 
 impl UserData {
     pub fn new(
-        global_settings: GlobalSettings,
-        profile_store: ProfileStore,
+        global_settings: Arc<GlobalSettings>,
+        profile_store: Arc<ProfileStore>,
         autolocker: Arc<Mutex<Autolocker>>,
     ) -> UserData {
         UserData {

@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use cursive::{
     traits::{Nameable, Resizable},
     views::{Dialog, EditView, LinearLayout, TextView},
@@ -6,7 +8,7 @@ use cursive::{
 
 use crate::bitwarden::{
     self,
-    api::{TokenResponse, TwoFactorProviderType},
+    api::{ApiClient, TokenResponse, TwoFactorProviderType},
     cipher::{self, MasterKey, MasterPasswordHash},
 };
 
@@ -20,14 +22,16 @@ use super::{
 const VIEW_NAME_PASSWORD: &str = "password";
 const VIEW_NAME_EMAIL: &str = "email";
 
-pub fn login_dialog(profile_name: &str, saved_email: &Option<String>) -> Dialog {
+pub fn login_dialog(profile_name: &str, saved_email: impl Into<Option<String>>) -> Dialog {
     let password_field = EditView::new()
         .secret()
         .on_submit(|siv, _| submit_login(siv))
         .with_name(VIEW_NAME_PASSWORD)
         .fixed_width(40);
 
-    let email_field = match saved_email {
+    let saved_email = saved_email.into();
+
+    let email_field = match &saved_email {
         Some(em) => EditView::new().content(em),
         _ => EditView::new(),
     }
@@ -73,14 +77,14 @@ fn submit_login(c: &mut Cursive) {
     let cb = c.cb_sink().clone();
 
     let ud = c.get_user_data();
-    let server_url = ud.global_settings.server_url.clone();
-    let device_id = ud.global_settings.device_id.clone();
+    let global_settings = ud.global_settings.clone();
     let profile_store = ud.profile_store.clone();
 
     tokio::spawn(async move {
+        let client = ApiClient::new(&global_settings.server_url, &global_settings.device_id);
         let res = async {
             let (master_key, master_pw_hash, iterations) =
-                do_prelogin(&server_url, device_id.clone(), &email, &password).await?;
+                do_prelogin(&client, &email, &password).await?;
 
             let store_pw_hash = master_pw_hash.clone();
             cb.send_msg(Box::new(move |c: &mut Cursive| {
@@ -90,19 +94,11 @@ fn submit_login(c: &mut Cursive) {
                 ud.password_hash_iterations = Some(iterations);
             }));
 
-            do_login(
-                &server_url,
-                device_id,
-                &email,
-                &master_pw_hash,
-                None,
-                &profile_store,
-            )
-            .await
+            do_login(&client, &email, &master_pw_hash, None, &profile_store).await
         }
         .await;
 
-        handle_login_response(res, cb, email.to_string());
+        handle_login_response(res, cb, email);
     });
 }
 
@@ -116,10 +112,13 @@ pub fn handle_login_response(res: Result<TokenResponse, anyhow::Error>, cb: CbSi
                     Dialog::text(err_msg)
                         .title("Login error")
                         .button("OK", move |siv| {
-                            let profile_name = siv.get_user_data().global_settings.profile.clone();
                             // Remove this dialog, and show the login dialog again
                             siv.pop_layer();
-                            siv.add_layer(login_dialog(&profile_name, &Some(email.clone())));
+                            let d = login_dialog(
+                                &siv.get_user_data().global_settings.profile,
+                                Some(email.clone()),
+                            );
+                            siv.add_layer(d);
                         }),
                 );
             }));
@@ -138,8 +137,8 @@ pub fn handle_login_response(res: Result<TokenResponse, anyhow::Error>, cb: CbSi
                             log::error!("Failed to store profile data: {}", e);
                         }
 
-                        ud.email = Some(email);
-                        ud.token = Some(*t);
+                        ud.email = Some(Arc::new(email));
+                        ud.token = Some(Arc::new(*t));
 
                         do_sync(c, true);
                     }))
@@ -147,8 +146,9 @@ pub fn handle_login_response(res: Result<TokenResponse, anyhow::Error>, cb: CbSi
                 bitwarden::api::TokenResponse::TwoFactorRequired(types) => {
                     cb.send_msg(Box::new(move |c: &mut Cursive| {
                         c.pop_layer();
-                        let p = c.get_user_data().global_settings.profile.clone();
-                        c.add_layer(two_factor_dialog(types, email, &p));
+                        let p = &c.get_user_data().global_settings.profile;
+                        let dialog = two_factor_dialog(types, email, p); 
+                        c.add_layer(dialog);
                     }));
                 }
             }
@@ -157,27 +157,23 @@ pub fn handle_login_response(res: Result<TokenResponse, anyhow::Error>, cb: CbSi
 }
 
 async fn do_prelogin(
-    server_url: &str,
-    device_identifier: String,
+    client: &ApiClient,
     email: &str,
     password: &str,
-) -> Result<(MasterKey, MasterPasswordHash, u32), anyhow::Error> {
-    let client = bitwarden::api::ApiClient::new(server_url, device_identifier);
+) -> Result<(Arc<MasterKey>, Arc<MasterPasswordHash>, u32), anyhow::Error> {
     let iterations = client.prelogin(email).await?;
     let master_key = cipher::create_master_key(email, password, iterations);
     let master_pw_hash = cipher::create_master_password_hash(&master_key, password);
-    Ok((master_key, master_pw_hash, iterations))
+    Ok((Arc::new(master_key), Arc::new(master_pw_hash), iterations))
 }
 
 pub async fn do_login(
-    server_url: &str,
-    device_identifier: String,
+    client: &ApiClient,
     email: &str,
     master_pw_hash: &MasterPasswordHash,
     second_factor: Option<(TwoFactorProviderType, &str)>,
     profile_store: &ProfileStore,
 ) -> Result<TokenResponse, anyhow::Error> {
-    let client = bitwarden::api::ApiClient::new(server_url, device_identifier);
     let mut token_res = if let Some((two_factor_type, two_factor_token)) = second_factor {
         client
             .get_token(

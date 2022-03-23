@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::{future::Future, sync::Arc};
 
 use cursive::{
     traits::Nameable,
@@ -6,11 +6,11 @@ use cursive::{
     Cursive,
 };
 
-use crate::bitwarden::api::TwoFactorProviderType;
+use crate::bitwarden::api::{ApiClient, TwoFactorProviderType};
 
 use super::{
     login::{do_login, handle_login_response, login_dialog},
-    util::cursive_ext::CursiveExt,
+    util::cursive_ext::{CursiveCallbackExt, CursiveExt},
 };
 
 const VIEW_NAME_AUTHENTICATOR_CODE: &str = "authenticator_code";
@@ -23,8 +23,7 @@ pub fn two_factor_dialog(
     if !types.contains(&TwoFactorProviderType::Authenticator) {
         Dialog::info("Account requires two-factor authentication, but active two-factor methods are not supported.")
     } else {
-        // Clone email because it's needed in multiple closures
-        let email = Rc::new(email);
+        let email = Arc::new(email);
         let email2 = email.clone();
         let email3 = email.clone();
         Dialog::around(
@@ -40,14 +39,14 @@ pub fn two_factor_dialog(
         .button("Submit", move |siv| submit_two_factor(siv, email2.clone()))
         .button("Cancel", move |siv| {
             let pn = &siv.get_user_data().global_settings.profile;
-            let d = login_dialog(pn, &Some((*email3).clone()));
+            let d = login_dialog(pn, Some(email3.to_string()));
             siv.clear_layers();
             siv.add_layer(d);
         })
     }
 }
 
-fn submit_two_factor(c: &mut Cursive, email: Rc<String>) {
+fn submit_two_factor(c: &mut Cursive, email: Arc<String>) {
     let code = c
         .call_on_name(VIEW_NAME_AUTHENTICATOR_CODE, |view: &mut EditView| {
             view.get_content()
@@ -58,34 +57,44 @@ fn submit_two_factor(c: &mut Cursive, email: Rc<String>) {
     c.pop_layer();
     c.add_layer(Dialog::text("Signing in..."));
 
-    let cb = c.cb_sink().clone();
-
     let ud = c.get_user_data();
 
-    let server_url = ud.global_settings.server_url.clone();
-    let device_id = ud.global_settings.device_id.clone();
+    let global_settings = ud.global_settings.clone();
     let profile_store = ud.profile_store.clone();
-
-    // Have to clone the hash here, because it's not
-    // really possible to access user_data inside the async
-    // block in any good form
     let master_pw_hash = ud
         .master_password_hash
         .clone()
         .expect("Password hash was not set while submitting 2FA");
+    let email2 = email.clone();
 
-    let email = (*email).clone();
+    async_thing(
+        c,
+        async move {
+            let client = ApiClient::new(&global_settings.server_url, &global_settings.device_id);
+            do_login(
+                &client,
+                &email,
+                &master_pw_hash,
+                Some((TwoFactorProviderType::Authenticator, &code)),
+                &profile_store,
+            )
+            .await
+        },
+        move |siv, res| handle_login_response(res, siv.cb_sink().clone(), email2.to_string()),
+    );
+}
 
+fn async_thing<A, B>(cursive: &mut Cursive, a: A, b: B)
+where
+    A: Future + Send + 'static,
+    A::Output: Send + 'static,
+    B: FnOnce(&mut Cursive, A::Output) -> () + Send + 'static,
+{
+    let cb = cursive.cb_sink().clone();
     tokio::spawn(async move {
-        let res = do_login(
-            &server_url,
-            device_id,
-            &email,
-            &master_pw_hash,
-            Some((TwoFactorProviderType::Authenticator, &code)),
-            &profile_store,
-        )
-        .await;
-        handle_login_response(res, cb, email);
+        let res = a.await;
+        cb.send_msg(Box::new(|siv| {
+            b(siv, res);
+        }))
     });
 }

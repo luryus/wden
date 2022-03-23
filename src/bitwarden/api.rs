@@ -37,7 +37,7 @@ pub struct ApiClient {
 }
 
 impl ApiClient {
-    pub fn new(server_url: &str, device_identifier: String) -> Self {
+    pub fn new(server_url: &str, device_identifier: impl Into<String>) -> Self {
         let http_client = reqwest::Client::builder()
             .user_agent(APP_USER_AGENT)
             .build()
@@ -46,12 +46,12 @@ impl ApiClient {
         ApiClient {
             http_client,
             base_url,
-            device_identifier,
+            device_identifier: device_identifier.into(),
             access_token: None,
         }
     }
 
-    pub fn with_token(server_url: &str, device_identifier: String, token: &str) -> Self {
+    pub fn with_token(server_url: &str, device_identifier: impl Into<String>, token: &str) -> Self {
         let mut c = Self::new(server_url, device_identifier);
         c.access_token = Some(token.to_string());
         c
@@ -157,7 +157,7 @@ impl ApiClient {
         Ok(TokenResponse::Success(Box::new(res)))
     }
 
-    pub async fn refresh_token(&self, token: TokenResponseSuccess) -> Result<TokenResponse, Error> {
+    pub async fn refresh_token(&self, token: &TokenResponseSuccess) -> Result<TokenResponse, Error> {
         let mut body = HashMap::new();
         body.insert("grant_type", "refresh_token");
         body.insert("refresh_token", &token.refresh_token);
@@ -174,7 +174,7 @@ impl ApiClient {
 
         // The token refresh response does not include all the
         // fields. Take the old token and replace the new fields.
-        let mut res = token;
+        let mut res = token.clone();
         res.access_token = refresh_res.access_token;
         res.refresh_token = refresh_res.refresh_token;
         res.token_timestamp = refresh_res.token_timestamp;

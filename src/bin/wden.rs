@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use clap::Parser;
 use cursive::{Cursive, CursiveRunnable};
 use wden::ui::{
@@ -54,13 +56,13 @@ async fn main() {
     let mut siv = cursive::default();
     let autolocker =
         autolock::start_autolocker(siv.cb_sink().clone(), global_settings.autolock_duration);
-    siv.set_user_data(UserData::new(global_settings, profile_store, autolocker));
+    siv.set_user_data(UserData::new(Arc::new(global_settings), Arc::new(profile_store), autolocker));
 
     siv.add_global_callback('§', Cursive::toggle_debug_console);
     cursive::logger::init();
     log::set_max_level(log::LevelFilter::Info);
 
-    siv.add_layer(login_dialog(&profile_name, &profile_data.saved_email));
+    siv.add_layer(login_dialog(&profile_name, profile_data.saved_email));
 
     run(siv);
 }

@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use cursive::{views::Dialog, Cursive};
 
 use crate::{
@@ -42,42 +44,43 @@ pub fn do_sync(cursive: &mut Cursive, just_refreshed_token: bool) {
         return;
     }
 
-    let server_url = user_data.global_settings.server_url.clone();
-    let device_id = user_data.global_settings.device_id.clone();
+    let global_settings = user_data.global_settings.clone();
 
     tokio::spawn(async move {
         if should_refresh {
             log::debug!("Refreshing access token");
-            let client = ApiClient::new(&server_url, device_id.clone());
-
-            let refresh_res = client.refresh_token(token).await;
-
-            login::handle_login_response(refresh_res, ccb, email);
+            let client = ApiClient::new(&global_settings.server_url, &global_settings.device_id);
+            let refresh_res = client.refresh_token(&token).await;
+            login::handle_login_response(refresh_res, ccb, email.to_string());
             return;
         }
 
-        let client = ApiClient::with_token(&server_url, device_id, &token.access_token);
+        let client = ApiClient::with_token(
+            &global_settings.server_url,
+            &global_settings.device_id,
+            &token.access_token,
+        );
         let sync_res = client.sync().await;
 
         match sync_res {
             Ok(sync_res) => {
                 ccb.send_msg(Box::new(move |c: &mut Cursive| {
                     let ud = c.get_user_data();
-                    ud.vault_data = Some(
+                    ud.vault_data = Some(Arc::new(
                         sync_res
                             .ciphers
                             .into_iter()
                             .map(|ci| (ci.id.clone(), ci))
                             .collect(),
-                    );
-                    ud.organizations = Some(
+                    ));
+                    ud.organizations = Some(Arc::new(
                         sync_res
                             .profile
                             .organizations
                             .into_iter()
                             .map(|o| (o.id.clone(), o))
                             .collect(),
-                    );
+                    ));
 
                     search::update_search_index(ud);
 
