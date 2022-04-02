@@ -1,4 +1,4 @@
-use std::{future::Future, sync::Arc};
+use std::sync::Arc;
 
 use cursive::{
     traits::Nameable,
@@ -10,20 +10,19 @@ use crate::bitwarden::api::{ApiClient, TwoFactorProviderType};
 
 use super::{
     login::{do_login, handle_login_response, login_dialog},
-    util::cursive_ext::{CursiveCallbackExt, CursiveExt},
+    util::cursive_ext::CursiveExt,
 };
 
 const VIEW_NAME_AUTHENTICATOR_CODE: &str = "authenticator_code";
 
 pub fn two_factor_dialog(
     types: Vec<TwoFactorProviderType>,
-    email: String,
+    email: Arc<String>,
     profile_name: &str,
 ) -> Dialog {
     if !types.contains(&TwoFactorProviderType::Authenticator) {
         Dialog::info("Account requires two-factor authentication, but active two-factor methods are not supported.")
     } else {
-        let email = Arc::new(email);
         let email2 = email.clone();
         let email3 = email.clone();
         Dialog::around(
@@ -67,34 +66,18 @@ fn submit_two_factor(c: &mut Cursive, email: Arc<String>) {
         .expect("Password hash was not set while submitting 2FA");
     let email2 = email.clone();
 
-    async_thing(
-        c,
+    c.async_op(
         async move {
             let client = ApiClient::new(&global_settings.server_url, &global_settings.device_id);
             do_login(
                 &client,
                 &email,
-                &master_pw_hash,
+                master_pw_hash,
                 Some((TwoFactorProviderType::Authenticator, &code)),
-                &profile_store,
+                &profile_store
             )
             .await
         },
-        move |siv, res| handle_login_response(res, siv.cb_sink().clone(), email2.to_string()),
+        move |siv, res| handle_login_response(siv, res, email2),
     );
-}
-
-fn async_thing<A, B>(cursive: &mut Cursive, a: A, b: B)
-where
-    A: Future + Send + 'static,
-    A::Output: Send + 'static,
-    B: FnOnce(&mut Cursive, A::Output) -> () + Send + 'static,
-{
-    let cb = cursive.cb_sink().clone();
-    tokio::spawn(async move {
-        let res = a.await;
-        cb.send_msg(Box::new(|siv| {
-            b(siv, res);
-        }))
-    });
 }
