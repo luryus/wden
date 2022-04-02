@@ -273,7 +273,7 @@ fn create_rows(user_data: &mut UserData, enc_key: &EncryptionKey, mac_key: &MacK
 
     let vault_data = match &user_data.vault_data {
         Some(vd) => vd.clone(),
-        None => return Vec::new()
+        None => return Vec::new(),
     };
 
     let mut rows: Vec<Row> = vault_data

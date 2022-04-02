@@ -7,10 +7,7 @@ use crate::{
     ui::{login, search},
 };
 
-use super::{
-    util::cursive_ext::CursiveExt,
-    vault_table::show_vault,
-};
+use super::{util::cursive_ext::CursiveExt, vault_table::show_vault};
 
 pub fn do_sync(cursive: &mut Cursive, just_refreshed_token: bool) {
     // Remove all layers first

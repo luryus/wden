@@ -35,7 +35,7 @@ pub fn lock_vault(c: &mut Cursive) {
     let profile = ud.global_settings.profile.as_str();
 
     // Vault data is left in place, but its all encrypted
-    
+
     // Show unlock dialog
     let d = unlock_dialog(profile, email);
     c.add_layer(d);

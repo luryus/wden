@@ -2,26 +2,25 @@ use std::sync::Arc;
 
 use cursive::{
     traits::{Nameable, Resizable},
-    views::{Dialog, EditView, LinearLayout, TextView}, Cursive,
+    views::{Dialog, EditView, LinearLayout, TextView},
+    Cursive,
 };
 
-use crate::bitwarden::{
-    self,
-    api::{ApiClient, TokenResponse, TwoFactorProviderType},
-    cipher::{self, MasterKey, MasterPasswordHash},
+use crate::{
+    bitwarden::{
+        self,
+        api::{ApiClient, TokenResponse, TwoFactorProviderType},
+        cipher::{self, MasterKey, MasterPasswordHash},
+    },
+    profile::ProfileStore,
 };
 
-use super::{
-    data::ProfileStore,
-    sync::do_sync,
-    two_factor::two_factor_dialog,
-    util::cursive_ext::CursiveExt,
-};
+use super::{sync::do_sync, two_factor::two_factor_dialog, util::cursive_ext::CursiveExt};
 
 const VIEW_NAME_PASSWORD: &str = "password";
 const VIEW_NAME_EMAIL: &str = "email";
 
-pub fn login_dialog<T: Into<String>>(profile_name: &str, saved_email: Option<T>) -> Dialog {
+pub fn login_dialog(profile_name: &str, saved_email: Option<String>) -> Dialog {
     let password_field = EditView::new()
         .secret()
         .on_submit(|siv, _| submit_login(siv))
@@ -105,10 +104,10 @@ fn submit_login(c: &mut Cursive) {
                     ud.master_password_hash = Some(master_pw_hash);
                     ud.password_hash_iterations = Some(iterations);
                     ud.email = Some(em.clone());
-                    
+
                     handle_login_response(siv, Ok(t), em);
                 }
-                Err(e) => handle_login_response(siv, Err(e), email2)
+                Err(e) => handle_login_response(siv, Err(e), email2),
             };
         },
     )
@@ -156,7 +155,7 @@ pub fn handle_login_response(
                 bitwarden::api::TokenResponse::TwoFactorRequired(types) => {
                     cursive.pop_layer();
                     let p = &cursive.get_user_data().global_settings.profile;
-                    let dialog = two_factor_dialog(types, email.clone(), p);
+                    let dialog = two_factor_dialog(types, email, p);
                     cursive.add_layer(dialog);
                 }
             }
@@ -185,7 +184,7 @@ pub async fn do_login(
     let mut token_res = if let Some((two_factor_type, two_factor_token)) = second_factor {
         client
             .get_token(
-                &email,
+                email,
                 &master_pw_hash.base64_encoded(),
                 Some((two_factor_type, two_factor_token, true)),
             )
@@ -203,7 +202,7 @@ pub async fn do_login(
             .unwrap_or(None);
 
         client
-            .get_token(&email, &master_pw_hash.base64_encoded(), two_factor_param)
+            .get_token(email, &master_pw_hash.base64_encoded(), two_factor_param)
             .await?
     };
 

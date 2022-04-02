@@ -3,7 +3,6 @@ name = "wden"
 version = "0.3.1"
 authors = ["Lauri Koskela <lk@lkoskela.com>"]
 edition = "2021"
-default-run = "wden"
 readme = "README.md"
 license = "MIT"
 

@@ -13,7 +13,7 @@ pub trait CursiveExt {
     where
         A: Future + Send + 'static,
         A::Output: Send + 'static,
-        B: FnOnce(&mut Cursive, A::Output) -> () + Send + 'static;
+        B: FnOnce(&mut Cursive, A::Output) + Send + 'static;
 }
 
 impl CursiveExt for Cursive {
@@ -29,7 +29,7 @@ impl CursiveExt for Cursive {
     where
         A: Future + Send + 'static,
         A::Output: Send + 'static,
-        C: FnOnce(&mut Cursive, A::Output) -> () + Send + 'static,
+        C: FnOnce(&mut Cursive, A::Output) + Send + 'static,
     {
         let cb = self.cb_sink().clone();
         tokio::spawn(async move {

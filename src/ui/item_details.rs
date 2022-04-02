@@ -10,7 +10,7 @@ use cursive::{
     theme::{BaseColor, Color, Effect, Style},
     traits::{Nameable, Resizable},
     view::Margins,
-    views::{Dialog, LinearLayout, OnEventView, PaddedView, TextView, ViewRef, ScrollView},
+    views::{Dialog, LinearLayout, OnEventView, PaddedView, ScrollView, TextView, ViewRef},
     View,
 };
 use lazy_static::lazy_static;
@@ -41,7 +41,7 @@ pub fn item_detail_dialog(ud: &mut UserData, item_id: &str) -> Option<impl View>
         CipherData::SecureNote => note_dialog_contents(item, &enc_key, &mac_key),
         CipherData::Card(..) => card_dialog_contents(item, &enc_key, &mac_key),
         CipherData::Identity(..) => identity_dialog_contents(item, &enc_key, &mac_key),
-        _ => LinearLayout::vertical()
+        _ => LinearLayout::vertical(),
     };
 
     let mut key_hint_linear_layout = LinearLayout::vertical();
@@ -56,11 +56,11 @@ pub fn item_detail_dialog(ud: &mut UserData, item_id: &str) -> Option<impl View>
         );
     }
 
-    let dialog = Dialog::around(
-        ScrollView::new(LinearLayout::vertical()
+    let dialog = Dialog::around(ScrollView::new(
+        LinearLayout::vertical()
             .child(dialog_contents)
-            .child(key_hint_linear_layout)),
-    )
+            .child(key_hint_linear_layout),
+    ))
     .button("Close", |s| {
         s.pop_layer();
     })
@@ -106,7 +106,7 @@ fn login_dialog_contents(
     ll.add_child(TextView::new("Password"));
     ll.add_child(
         value_secret_textview(&login.password, enc_key, mac_key).with_name("password_textview"),
-    );   
+    );
     add_label_value_text(&mut ll, "Uri", &login.uri, enc_key, mac_key);
     add_label_value_text(&mut ll, "Notes", &item.notes, enc_key, mac_key);
 
@@ -148,7 +148,13 @@ fn card_dialog_contents(
         Margins::tb(0, 1),
         TextView::new(expiry).style(*VALUE_STYLE),
     ));
-    add_label_value_text(&mut ll, "Card holder", &card.cardholder_name, enc_key, mac_key);
+    add_label_value_text(
+        &mut ll,
+        "Card holder",
+        &card.cardholder_name,
+        enc_key,
+        mac_key,
+    );
     add_label_value_text(&mut ll, "Notes", &item.notes, enc_key, mac_key);
     ll
 }
@@ -156,37 +162,67 @@ fn card_dialog_contents(
 fn identity_dialog_contents(
     item: &CipherItem,
     enc_key: &EncryptionKey,
-    mac_key: &MacKey
+    mac_key: &MacKey,
 ) -> LinearLayout {
     let identity = match &item.data {
         CipherData::Identity(id) => id,
-        _ => unreachable!()
+        _ => unreachable!(),
     };
 
     let mut ll = LinearLayout::vertical();
 
     add_label_value_text(&mut ll, "Name", &item.name, enc_key, mac_key);
-    
+
     add_label_value_text(&mut ll, "Title", &identity.title, enc_key, mac_key);
-    add_label_value_text(&mut ll, "First name", &identity.first_name, enc_key, mac_key);
-    add_label_value_text(&mut ll, "Middle name", &identity.middle_name, enc_key, mac_key);
+    add_label_value_text(
+        &mut ll,
+        "First name",
+        &identity.first_name,
+        enc_key,
+        mac_key,
+    );
+    add_label_value_text(
+        &mut ll,
+        "Middle name",
+        &identity.middle_name,
+        enc_key,
+        mac_key,
+    );
     add_label_value_text(&mut ll, "Last name", &identity.last_name, enc_key, mac_key);
-    
+
     add_label_value_text(&mut ll, "Phone", &identity.phone, enc_key, mac_key);
     add_label_value_text(&mut ll, "Email", &identity.email, enc_key, mac_key);
 
     add_label_value_text(&mut ll, "Address 1", &identity.address_1, enc_key, mac_key);
     add_label_value_text(&mut ll, "Address 2", &identity.address_2, enc_key, mac_key);
     add_label_value_text(&mut ll, "Address 3", &identity.address_3, enc_key, mac_key);
-    add_label_value_text(&mut ll, "Postal code", &identity.postal_code, enc_key, mac_key);
+    add_label_value_text(
+        &mut ll,
+        "Postal code",
+        &identity.postal_code,
+        enc_key,
+        mac_key,
+    );
     add_label_value_text(&mut ll, "City", &identity.city, enc_key, mac_key);
     add_label_value_text(&mut ll, "State", &identity.state, enc_key, mac_key);
     add_label_value_text(&mut ll, "Country", &identity.country, enc_key, mac_key);
 
     add_label_value_text(&mut ll, "Company", &identity.company, enc_key, mac_key);
     add_label_value_text(&mut ll, "SSN", &identity.ssn, enc_key, mac_key);
-    add_label_value_text(&mut ll, "License number", &identity.license_number, enc_key, mac_key);
-    add_label_value_text(&mut ll, "Passport number", &identity.passport_number, enc_key, mac_key);
+    add_label_value_text(
+        &mut ll,
+        "License number",
+        &identity.license_number,
+        enc_key,
+        mac_key,
+    );
+    add_label_value_text(
+        &mut ll,
+        "Passport number",
+        &identity.passport_number,
+        enc_key,
+        mac_key,
+    );
     add_label_value_text(&mut ll, "Username", &identity.username, enc_key, mac_key);
 
     add_label_value_text(&mut ll, "Notes", &item.notes, enc_key, mac_key);
@@ -199,7 +235,8 @@ fn add_label_value_text(
     name: &str,
     value: &Cipher,
     enc_key: &EncryptionKey,
-    mac_key: &MacKey) {
+    mac_key: &MacKey,
+) {
     ll.add_child(TextView::new(name));
     ll.add_child(value_textview(value, enc_key, mac_key));
 }

@@ -157,7 +157,10 @@ impl ApiClient {
         Ok(TokenResponse::Success(Box::new(res)))
     }
 
-    pub async fn refresh_token(&self, token: &TokenResponseSuccess) -> Result<TokenResponse, Error> {
+    pub async fn refresh_token(
+        &self,
+        token: &TokenResponseSuccess,
+    ) -> Result<TokenResponse, Error> {
         let mut body = HashMap::new();
         body.insert("grant_type", "refresh_token");
         body.insert("refresh_token", &token.refresh_token);
@@ -327,11 +330,7 @@ pub struct SyncResponse {
 impl From<SyncResponseInternal> for SyncResponse {
     fn from(sri: SyncResponseInternal) -> Self {
         SyncResponse {
-            ciphers: sri
-                .ciphers
-                .into_iter()
-                .map(|cii| cii.into())
-                .collect(),
+            ciphers: sri.ciphers.into_iter().map(|cii| cii.into()).collect(),
             profile: sri.profile,
         }
     }

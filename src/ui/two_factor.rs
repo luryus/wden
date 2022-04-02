@@ -74,7 +74,7 @@ fn submit_two_factor(c: &mut Cursive, email: Arc<String>) {
                 &email,
                 master_pw_hash,
                 Some((TwoFactorProviderType::Authenticator, &code)),
-                &profile_store
+                &profile_store,
             )
             .await
         },
