@@ -1,4 +1,4 @@
-use std::{collections::HashMap, rc::Rc, time::Duration};
+use std::{rc::Rc, time::Duration};
 
 use crate::bitwarden::{
     self,
@@ -271,10 +271,12 @@ fn create_rows(user_data: &mut UserData, enc_key: &EncryptionKey, mac_key: &MacK
     // Find all organization keys we will need
     let org_keys = user_data.get_org_keys_for_vault().unwrap_or_default();
 
-    let mut rows: Vec<Row> = user_data
-        .vault_data
-        .as_ref()
-        .unwrap_or(&HashMap::new())
+    let vault_data = match &user_data.vault_data {
+        Some(vd) => vd.clone(),
+        None => return Vec::new(),
+    };
+
+    let mut rows: Vec<Row> = vault_data
         .iter()
         .filter_map(|(id, ci)| {
             let (ec, mc) = if let Some(oid) = &ci.organization_id {

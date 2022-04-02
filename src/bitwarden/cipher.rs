@@ -1,12 +1,12 @@
+use aes::cipher::block_padding::{Pkcs7, UnpadError};
 use aes::Aes256;
 use anyhow::Context;
 use base64;
-use aes::cipher::block_padding::{Pkcs7, UnpadError};
+use cbc::cipher::{BlockDecryptMut, BlockEncryptMut, KeyIvInit};
 use hkdf::Hkdf;
-use hmac::digest::{MacError, InvalidLength};
+use hmac::digest::{InvalidLength, MacError};
 use hmac::{Hmac, Mac};
-use cbc::cipher::{BlockEncryptMut, BlockDecryptMut, KeyIvInit};
-use rsa::{PaddingScheme, RsaPrivateKey, pkcs8::DecodePrivateKey};
+use rsa::{pkcs8::DecodePrivateKey, PaddingScheme, RsaPrivateKey};
 use serde::de;
 use serde::{Deserialize, Deserializer};
 use sha2::Sha256;
@@ -76,7 +76,7 @@ pub enum CipherError {
     #[error("Invalid key or IV length for encrypting")]
     InvalidKeyOrIvLength(InvalidLength),
     #[error("Invalid padding while decrypting")]
-    InvalidPadding(UnpadError)
+    InvalidPadding(UnpadError),
 }
 
 pub fn create_master_key(user_email: &str, user_password: &str, hash_iterations: u32) -> MasterKey {
@@ -287,8 +287,8 @@ impl Cipher {
 
         let ct = aes.encrypt_padded_vec_mut::<Pkcs7>(content.as_bytes());
 
-        let mut hmac = HmacSha256::new_from_slice(&mac_key.0)
-            .map_err(CipherError::InvalidKeyOrIvLength)?;
+        let mut hmac =
+            HmacSha256::new_from_slice(&mac_key.0).map_err(CipherError::InvalidKeyOrIvLength)?;
         hmac.update(&iv);
         hmac.update(&ct);
         let mac = hmac.finalize().into_bytes().as_slice().to_owned();

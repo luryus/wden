@@ -3,7 +3,6 @@ name = "wden"
 version = "0.3.1"
 authors = ["Lauri Koskela <lk@lkoskela.com>"]
 edition = "2021"
-default-run = "wden"
 readme = "README.md"
 license = "MIT"
 
@@ -20,7 +19,7 @@ rsa = "0.6.0-pre"
 sha-1 = "0.10"
 sha2 = "0.10"
 hmac = "0.12"
-pbkdf2 = "0.10"
+pbkdf2 = "0.11"
 hkdf = "0.12"
 
 uuid = { version = "0.8.2", features = ["v4"] }

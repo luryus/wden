@@ -16,12 +16,12 @@ impl SecretTextView {
         }
     }
 
-    pub fn hidden(mut self) -> Self {
+    pub fn _hidden(mut self) -> Self {
         self.hidden = true;
         self
     }
 
-    pub fn visible(mut self) -> Self {
+    pub fn _visible(mut self) -> Self {
         self.hidden = false;
         self
     }
@@ -31,7 +31,7 @@ impl SecretTextView {
         self
     }
 
-    pub fn set_hidden(&mut self, hidden: bool) {
+    pub fn _set_hidden(&mut self, hidden: bool) {
         self.hidden = hidden;
     }
 

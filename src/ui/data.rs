@@ -1,39 +1,31 @@
-use crate::bitwarden::{
-    api,
-    cipher::{self, extract_enc_mac_keys, EncryptionKey, MacKey},
+use crate::{
+    bitwarden::{
+        api,
+        cipher::{self, extract_enc_mac_keys, EncryptionKey, MacKey},
+    },
+    profile::{GlobalSettings, ProfileStore},
 };
 use anyhow::Context;
 use cipher::decrypt_symmetric_keys;
-use directories_next::ProjectDirs;
-use serde::{Deserialize, Serialize};
 use simsearch::SimSearch;
-use std::{collections::{HashMap, HashSet}, ffi::OsString, path::Path, str::FromStr, time::Duration};
 use std::{
-    path::PathBuf,
+    collections::{HashMap, HashSet},
     sync::{Arc, Mutex},
 };
-use uuid::Uuid;
 
 use super::{autolock::Autolocker, vault_table};
 
-pub struct GlobalSettings {
-    pub server_url: String,
-    pub profile: String,
-    pub autolock_duration: Duration,
-    pub device_id: String,
-}
-
 pub struct UserData {
-    pub global_settings: GlobalSettings,
-    pub profile_store: ProfileStore,
+    pub global_settings: Arc<GlobalSettings>,
+    pub profile_store: Arc<ProfileStore>,
     pub autolocker: Arc<Mutex<Autolocker>>,
-    pub email: Option<String>,
-    pub master_key: Option<cipher::MasterKey>,
-    pub master_password_hash: Option<cipher::MasterPasswordHash>,
+    pub email: Option<Arc<String>>,
+    pub master_key: Option<Arc<cipher::MasterKey>>,
+    pub master_password_hash: Option<Arc<cipher::MasterPasswordHash>>,
     pub password_hash_iterations: Option<u32>,
-    pub token: Option<api::TokenResponseSuccess>,
-    pub organizations: Option<HashMap<String, api::Organization>>,
-    pub vault_data: Option<HashMap<String, api::CipherItem>>,
+    pub token: Option<Arc<api::TokenResponseSuccess>>,
+    pub organizations: Option<Arc<HashMap<String, api::Organization>>>,
+    pub vault_data: Option<Arc<HashMap<String, api::CipherItem>>>,
     pub vault_table_rows: Option<Vec<vault_table::Row>>,
     pub simsearch: Option<SimSearch<String>>,
     encrypted_search_term: Option<cipher::Cipher>,
@@ -41,8 +33,8 @@ pub struct UserData {
 
 impl UserData {
     pub fn new(
-        global_settings: GlobalSettings,
-        profile_store: ProfileStore,
+        global_settings: Arc<GlobalSettings>,
+        profile_store: Arc<ProfileStore>,
         autolocker: Arc<Mutex<Autolocker>>,
     ) -> UserData {
         UserData {
@@ -155,11 +147,13 @@ impl UserData {
 
     pub fn get_org_keys_for_vault(&self) -> Option<HashMap<&String, (EncryptionKey, MacKey)>> {
         self.vault_data.as_ref().map(|vd| {
-            let org_ids: HashSet<_> = vd.values()
+            let org_ids: HashSet<_> = vd
+                .values()
                 .filter_map(|i| i.organization_id.as_ref())
                 .collect();
 
-            org_ids.into_iter()
+            org_ids
+                .into_iter()
                 .filter_map(|oid| {
                     self.decrypt_organization_keys(oid)
                         .map(|key| (oid, key))
@@ -168,106 +162,4 @@ impl UserData {
                 .collect()
         })
     }
-}
-
-#[derive(Deserialize, Serialize)]
-pub struct ProfileData {
-    pub saved_email: Option<String>,
-    #[serde(default = "get_default_server_url")]
-    pub server_url: String,
-    pub saved_two_factor_token: Option<String>,
-    pub autolock_duration: Duration,
-    pub device_id: String,
-}
-
-fn get_default_server_url() -> String {
-    crate::bitwarden::api::DEFAULT_SERVER_URL.to_string()
-}
-
-impl Default for ProfileData {
-    fn default() -> Self {
-        ProfileData {
-            saved_email: None,
-            server_url: get_default_server_url(),
-            saved_two_factor_token: None,
-            autolock_duration: Duration::from_secs(5 * 60), // 5 minutes
-            device_id: format!("{}", Uuid::new_v4()),
-        }
-    }
-}
-
-#[derive(Clone)]
-pub struct ProfileStore {
-    config_dir: PathBuf,
-    profile_config_file: PathBuf,
-}
-
-impl ProfileStore {
-    pub fn new(profile_name: &str) -> ProfileStore {
-        let config_dir = get_config_dir();
-        let profile_config_file = config_dir.join(format!("{}.json", profile_name));
-
-        ProfileStore {
-            config_dir,
-            profile_config_file,
-        }
-    }
-
-    pub fn get_all_profiles() -> std::io::Result<Vec<(String, ProfileData)>> {
-        let config_dir = get_config_dir();
-        let files = match std::fs::read_dir(config_dir) {
-            Ok(f) => f,
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(vec![]),
-            Err(e) => return Err(e),
-        };
-
-        let json_ext = OsString::from_str("json").unwrap();
-
-        let profiles = files
-            .filter_map(Result::ok)
-            .filter(|f| f.file_type().map(|t| t.is_file()).unwrap_or(false))
-            .filter(|f| f.path().extension() == Some(json_ext.as_os_str()))
-            .filter_map(|f| {
-                let d = Self::load_file(&f.path()).ok()?;
-                Some((f.file_name().into_string().unwrap(), d))
-            })
-            .collect();
-
-        Ok(profiles)
-    }
-
-    pub fn load(&self) -> std::io::Result<ProfileData> {
-        Self::load_file(&self.profile_config_file)
-    }
-
-    fn load_file(path: &Path) -> std::io::Result<ProfileData> {
-        let contents = std::fs::read(path)?;
-        let parsed = serde_json::from_slice(&contents)?;
-
-        Ok(parsed)
-    }
-
-    pub fn store(&self, data: &ProfileData) -> std::io::Result<()> {
-        std::fs::create_dir_all(&self.config_dir)?;
-        let serialized = serde_json::to_vec_pretty(data)?;
-
-        std::fs::write(&self.profile_config_file, serialized)
-    }
-
-    pub fn edit<F>(&self, editor: F) -> std::io::Result<()>
-    where
-        F: FnOnce(&mut ProfileData),
-    {
-        // Load existing file for mutation
-        let mut data = self.load()?;
-        // Make changes
-        editor(&mut data);
-        // Store the edited data
-        self.store(&data)
-    }
-}
-
-fn get_config_dir() -> PathBuf {
-    let dirs = ProjectDirs::from("com.lkoskela", "", "wden").unwrap();
-    dirs.config_dir().to_path_buf()
 }
