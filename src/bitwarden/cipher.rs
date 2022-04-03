@@ -10,9 +10,9 @@ use rsa::{pkcs8::DecodePrivateKey, PaddingScheme, RsaPrivateKey};
 use serde::de;
 use serde::{Deserialize, Deserializer};
 use sha2::Sha256;
-use std::convert::TryInto;
 use std::fmt;
 
+use std::pin::Pin;
 use std::str::FromStr;
 use thiserror::Error;
 use zeroize::{Zeroize, Zeroizing};
@@ -21,33 +21,43 @@ const CREDENTIAL_LEN: usize = 256 / 8;
 
 #[derive(Zeroize)]
 #[zeroize(drop)]
-pub struct MasterKey([u8; CREDENTIAL_LEN]);
+pub struct MasterKey(Pin<Box<[u8; CREDENTIAL_LEN]>>);
 impl MasterKey {
     fn new() -> Self {
-        MasterKey([0; CREDENTIAL_LEN])
+        MasterKey(Box::pin([0; CREDENTIAL_LEN]))
     }
 }
 
 #[derive(Clone, Zeroize)]
 #[zeroize(drop)]
-pub struct MasterPasswordHash([u8; CREDENTIAL_LEN]);
+pub struct MasterPasswordHash(Pin<Box<[u8; CREDENTIAL_LEN]>>);
 impl MasterPasswordHash {
     fn new() -> Self {
-        MasterPasswordHash([0; CREDENTIAL_LEN])
+        MasterPasswordHash(Box::pin([0; CREDENTIAL_LEN]))
     }
 
     pub fn base64_encoded(&self) -> Zeroizing<String> {
-        base64::encode(&self.0).into()
+        base64::encode(self.0.as_slice()).into()
     }
 }
 
 #[derive(Zeroize)]
 #[zeroize(drop)]
-pub struct EncryptionKey([u8; CREDENTIAL_LEN]);
+pub struct EncryptionKey(Pin<Box<[u8; CREDENTIAL_LEN]>>);
+impl EncryptionKey {
+    fn new() -> Self {
+        Self(Box::pin([0u8; CREDENTIAL_LEN]))
+    }
+}
 
 #[derive(Zeroize)]
 #[zeroize(drop)]
-pub struct MacKey([u8; CREDENTIAL_LEN]);
+pub struct MacKey(Pin<Box<[u8; CREDENTIAL_LEN]>>);
+impl MacKey {
+    fn new() -> Self {
+        Self(Box::pin([0u8; CREDENTIAL_LEN]))
+    }
+}
 
 // Private key is in DER format
 #[derive(Zeroize)]
@@ -86,7 +96,7 @@ pub fn create_master_key(user_email: &str, user_password: &str, hash_iterations:
         // Email is always lowercased
         user_email.to_lowercase().as_bytes(),
         hash_iterations,
-        &mut res.0,
+        res.0.as_mut_slice(),
     );
     res
 }
@@ -96,7 +106,7 @@ pub fn create_master_password_hash(
     user_password: &str,
 ) -> MasterPasswordHash {
     let mut res = MasterPasswordHash::new();
-    pbkdf2::pbkdf2::<Hmac<Sha256>>(&master_key.0, user_password.as_bytes(), 1, &mut res.0);
+    pbkdf2::pbkdf2::<Hmac<Sha256>>(master_key.0.as_slice(), user_password.as_bytes(), 1, res.0.as_mut_slice());
     res
 }
 
@@ -111,20 +121,16 @@ pub fn decrypt_symmetric_keys(
 }
 
 pub fn extract_enc_mac_keys(full_key: &[u8]) -> Result<(EncryptionKey, MacKey), CipherError> {
-    let enc_key = full_key.iter().take(32).copied().collect::<Vec<_>>();
-    let mac_key = full_key
-        .iter()
-        .skip(32)
-        .take(32)
-        .copied()
-        .collect::<Vec<_>>();
-
-    if enc_key.len() != 32 || mac_key.len() != 32 {
+    // Enc key and mac key should both be 32 byets
+    if full_key.len() != 2 * 32 {
         return Err(CipherError::InvalidKeyLength);
     }
 
-    let enc_key: EncryptionKey = EncryptionKey(enc_key[..].try_into().unwrap());
-    let mac_key: MacKey = MacKey(mac_key[..].try_into().unwrap());
+    let mut enc_key = EncryptionKey::new();
+    let mut mac_key = MacKey::new();
+
+    enc_key.0.as_mut_slice().copy_from_slice(&full_key[..32]);
+    mac_key.0.as_mut_slice().copy_from_slice(&full_key[32..]);
 
     Ok((enc_key, mac_key))
 }
@@ -132,18 +138,17 @@ pub fn extract_enc_mac_keys(full_key: &[u8]) -> Result<(EncryptionKey, MacKey), 
 fn expand_master_key(master_key: &MasterKey) -> (EncryptionKey, MacKey) {
     type HkdfSha256 = Hkdf<Sha256>;
 
-    let prk = HkdfSha256::from_prk(&master_key.0).unwrap();
+    let prk = HkdfSha256::from_prk(master_key.0.as_slice()).unwrap();
 
     let enc_info = "enc".as_bytes();
     let mac_info = "mac".as_bytes();
 
-    let mut enc_out = [0u8; 32];
-    prk.expand(enc_info, &mut enc_out).unwrap();
+    let mut enc_key = EncryptionKey::new();
+    prk.expand(enc_info, enc_key.0.as_mut_slice()).unwrap();
+    let mut mac_key = MacKey::new();
+    prk.expand(mac_info, mac_key.0.as_mut_slice()).unwrap();
 
-    let mut mac_out = [0u8; 32];
-    prk.expand(mac_info, &mut mac_out).unwrap();
-
-    (EncryptionKey(enc_out), MacKey(mac_out))
+    (enc_key, mac_key)
 }
 
 #[derive(Clone)]
@@ -282,13 +287,13 @@ impl Cipher {
         // Generate iv of 128 bits (AES block size)
         let iv: [u8; 128 / 8] = rand::random();
         let iv = Vec::from(iv);
-        let aes = Aes256CbcEnc::new_from_slices(&enc_key.0, &iv)
+        let aes = Aes256CbcEnc::new_from_slices(enc_key.0.as_slice(), &iv)
             .map_err(CipherError::InvalidKeyOrIvLength)?;
 
         let ct = aes.encrypt_padded_vec_mut::<Pkcs7>(content.as_bytes());
 
         let mut hmac =
-            HmacSha256::new_from_slice(&mac_key.0).map_err(CipherError::InvalidKeyOrIvLength)?;
+            HmacSha256::new_from_slice(mac_key.0.as_slice()).map_err(CipherError::InvalidKeyOrIvLength)?;
         hmac.update(&iv);
         hmac.update(&ct);
         let mac = hmac.finalize().into_bytes().as_slice().to_owned();
@@ -353,14 +358,14 @@ impl Cipher {
             type Aes256CbcDec = cbc::Decryptor<Aes256>;
             type HmacSha256 = Hmac<Sha256>;
 
-            let mut hmac = HmacSha256::new_from_slice(&mac_key.0).unwrap();
+            let mut hmac = HmacSha256::new_from_slice(mac_key.0.as_slice()).unwrap();
             let data = [&iv[..], &ct[..]].concat();
 
             hmac.update(&data);
             hmac.verify_slice(mac)
                 .map_err(CipherError::MacVerificationFailed)?;
 
-            let aes = Aes256CbcDec::new_from_slices(&enc_key.0, iv.as_slice())
+            let aes = Aes256CbcDec::new_from_slices(enc_key.0.as_slice(), iv.as_slice())
                 .context("Initializing AES failed")?;
 
             let decrypted = aes
@@ -457,7 +462,7 @@ fn test_create_master_password_hash() {
     let key = create_master_key("foobar@example.com", "asdasdasd", 100_000);
     let pass_hash = create_master_password_hash(&key, "asdasdasd");
     assert_eq!(
-        base64::encode(&pass_hash.0),
+        base64::encode(pass_hash.0.as_slice()),
         "7jACo78yJ4rlybclGvCGjcE1bqPBXO3Gjvvg9mkFnl8="
     );
 }
@@ -466,7 +471,7 @@ fn test_create_master_password_hash() {
 fn test_create_master_key() {
     let key = create_master_key("foobar@example.com", "asdasdasd", 100_000);
     assert_eq!(
-        base64::encode(&key.0),
+        base64::encode(key.0.as_slice()),
         "WKBariwK2lofMJ27IZhzWlXvrriiH6Tht66VjxcRF7c="
     )
 }
