@@ -71,8 +71,8 @@ impl UserData {
     pub fn clear_data_for_locking(&mut self, search_term: Option<&str>) {
         // Encrypt the vault view state with the current user keys
         if let Some((enc_key, mac_key)) = self.decrypt_keys() {
-            self.encrypted_search_term =
-                search_term.and_then(|st| cipher::Cipher::encrypt(st, &enc_key, &mac_key).ok());
+            self.encrypted_search_term = search_term
+                .and_then(|st| cipher::Cipher::encrypt(st.as_bytes(), &enc_key, &mac_key).ok());
         }
 
         // Clear keys

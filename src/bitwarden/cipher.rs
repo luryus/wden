@@ -26,6 +26,18 @@ impl MasterKey {
     fn new() -> Self {
         MasterKey(Box::pin([0; CREDENTIAL_LEN]))
     }
+
+    #[cfg(test)]
+    fn from_base64(b64_data: &str) -> Result<Self, base64::DecodeError> {
+        let mut key = Self::new();
+        let len = base64::decode_config_slice(
+            b64_data, base64::STANDARD, key.0.as_mut_slice())?;
+        if len == key.0.len() {
+            Ok(key)   
+        } else {
+            Err(base64::DecodeError::InvalidLength)
+        }
+    }
 }
 
 #[derive(Clone, Zeroize)]
@@ -106,7 +118,12 @@ pub fn create_master_password_hash(
     user_password: &str,
 ) -> MasterPasswordHash {
     let mut res = MasterPasswordHash::new();
-    pbkdf2::pbkdf2::<Hmac<Sha256>>(master_key.0.as_slice(), user_password.as_bytes(), 1, res.0.as_mut_slice());
+    pbkdf2::pbkdf2::<Hmac<Sha256>>(
+        master_key.0.as_slice(),
+        user_password.as_bytes(),
+        1,
+        res.0.as_mut_slice(),
+    );
     res
 }
 
@@ -277,7 +294,7 @@ impl Cipher {
     }
 
     pub fn encrypt(
-        content: &str,
+        content: &[u8],
         enc_key: &EncryptionKey,
         mac_key: &MacKey,
     ) -> Result<Self, CipherError> {
@@ -290,10 +307,10 @@ impl Cipher {
         let aes = Aes256CbcEnc::new_from_slices(enc_key.0.as_slice(), &iv)
             .map_err(CipherError::InvalidKeyOrIvLength)?;
 
-        let ct = aes.encrypt_padded_vec_mut::<Pkcs7>(content.as_bytes());
+        let ct = aes.encrypt_padded_vec_mut::<Pkcs7>(content);
 
-        let mut hmac =
-            HmacSha256::new_from_slice(mac_key.0.as_slice()).map_err(CipherError::InvalidKeyOrIvLength)?;
+        let mut hmac = HmacSha256::new_from_slice(mac_key.0.as_slice())
+            .map_err(CipherError::InvalidKeyOrIvLength)?;
         hmac.update(&iv);
         hmac.update(&ct);
         let mac = hmac.finalize().into_bytes().as_slice().to_owned();
@@ -414,17 +431,37 @@ impl Cipher {
     ) -> Result<Vec<u8>, CipherError> {
         unimplemented!()
     }
+
+    pub fn encode(&self) -> String {
+        match self {
+            Cipher::Empty => String::new(),
+            Cipher::Value { enc_type, iv, ct, mac } => {
+                let b64_ct = base64::encode(&ct);
+                match (enc_type.has_mac(), enc_type.has_iv()) {
+                    (true, true) => {
+                        let b64_iv = base64::encode(&iv);
+                        let b64_mac = base64::encode(&mac);
+                        format!("{}.{}|{}|{}",
+                            *enc_type as u8,
+                            b64_iv, b64_ct, b64_mac)
+                    }
+                    (false, false) => format!("{}.{}", *enc_type as u8, b64_ct),
+                    _ => unimplemented!()
+                }
+            },
+        }
+    }
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub enum EncType {
-    AesCbc256B64,
-    AesCbc128HmacSha256B64,
-    AesCbc256HmacSha256B64,
-    Rsa2048OaepSha256B64,
-    Rsa2048OaepSha1B64,
-    Rsa2048OaepSha256HmacSha256B64,
-    Rsa2048OaepSha1HmacSha256B64,
+    AesCbc256B64 = 0,
+    AesCbc128HmacSha256B64 = 1,
+    AesCbc256HmacSha256B64 = 2,
+    Rsa2048OaepSha256B64 = 3,
+    Rsa2048OaepSha1B64 = 4,
+    Rsa2048OaepSha256HmacSha256B64 = 5,
+    Rsa2048OaepSha1HmacSha256B64 = 6,
 }
 
 impl EncType {
@@ -457,49 +494,134 @@ impl FromStr for EncType {
     }
 }
 
-#[test]
-fn test_create_master_password_hash() {
-    let key = create_master_key("foobar@example.com", "asdasdasd", 100_000);
-    let pass_hash = create_master_password_hash(&key, "asdasdasd");
-    assert_eq!(
-        base64::encode(pass_hash.0.as_slice()),
-        "7jACo78yJ4rlybclGvCGjcE1bqPBXO3Gjvvg9mkFnl8="
-    );
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-#[test]
-fn test_create_master_key() {
-    let key = create_master_key("foobar@example.com", "asdasdasd", 100_000);
-    assert_eq!(
-        base64::encode(key.0.as_slice()),
-        "WKBariwK2lofMJ27IZhzWlXvrriiH6Tht66VjxcRF7c="
-    )
-}
+    mod testdata {
+        pub const USER_EMAIL: &str = "foobar@example.com";
+        pub const USER_PASSWORD: &str = "asdasdasd";
+        pub const USER_HASH_ITERATIONS: u32 = 100_000;
 
-#[test]
-fn test_parse_cipher() {
-    let cipher_string = "2.ZgmAs5yxnEpBr7PoAnN9DA==|R8LcKh6xdKqzXm9s3yr2cw==|iAmlUJJFzPT/u7pVzyub44iwbVEpG7e9NDnwNubzV6M=";
-    let cipher = Cipher::from_str(cipher_string).unwrap();
+        pub const USER_MASTER_KEY_B64: &str = "WKBariwK2lofMJ27IZhzWlXvrriiH6Tht66VjxcRF7c=";
+        pub const USER_MASTER_PASSWORD_HASH_B64: &str =
+            "7jACo78yJ4rlybclGvCGjcE1bqPBXO3Gjvvg9mkFnl8=";
 
-    assert!(
-        matches!(cipher, Cipher::Value {enc_type, ..} if enc_type == EncType::AesCbc256HmacSha256B64)
-    );
-}
+        // Contains the encryption key of the user encrypted
+        // with the master key
+        pub const USER_SYMMETRIC_KEY_CIPHER_STRING: &str = 
+            "2.BztLR8IR0LVpkRL222P4rg==\
+             |cBSzwekYt1RPgYAEHI29mtqrjRge8U+FOSmtJtheAMnaEq4eCEurazgzRweksbE9abJYxriOXFnzTR/13HyCJqO9ytLK11N+G0kmhdW/scM=\
+             |nLLHbuK4KnVJnRyVIfOu396iI7xJ/ZXWYHRscMFugTI=";
 
-#[test]
-fn test_decrypt_cipher() {
-    let cipher_string = "2.OixUIKgN6/vWRoSvC0aTCA==|Ts7tpWXO28X2l7XSU4trsA==|q6Vz+/1QADVZRwZ1qoPoRoSvVd01A6le+nbSQxjmGDI=";
-    let cipher = Cipher::from_str(cipher_string).unwrap();
+        // Contains the (asymmetric) private key of the user,
+        // encrypted with the symmetric key
+        pub const USER_PRIVATE_KEY_CIPHER_STRING: &str =
+            "2.G+7HwPaG5oG6GqQAC1ANsA==|wH37HJOmlJ3N1BUo9sncrcoHRCKR6hJnCDyKOKvd1TfzRWu5uNLtzYmd33m\
+            G155jYTX6Sa+HD83eGRoWzjlZxPeX40nHVFEsLbqAyNgpMfLahtF4mM2fcaTLuPpOQxY+tNdFaU8lgjH42eYAkR\
+            R0aPjUaX9WYWZoJvFFz/4bQjMM9kmKIC6kuhHerDZq/hr+6TwMJXLz7Y+NXvP5ESdU8D1INaDBqlny5K1VtvvLj\
+            3hdVuBM6J1NaDPcrUBjGq9tBLa1fpc0r3HUHpRojWEfKUbwXE1w0DcCb/7XiVdSK0GUxhEJrjrdKoSjih5usXQ3\
+            lgj6sj2x/OA2zcHIpI1p5ATmbgEWtTsYPyBH+JxdIVL8IDuE2v3IcTIDDAsPIbYKy2Lzr/+GDAginVs3FH16o80\
+            e3lJf1r6Nj1szXgC617fNtrrU+hmZXk4vf0+YRr6GBIcfWk0pFV9Emf7cMiPGzopIK7OQLBME0xdQ2h3lMPQu6r\
+            PUbNmt4OWmDjUJ/1fqDhPZN0oJT6KLm7V/jdF8a0pnO7mm4WXc3/drekOEwugG7MAwzXfWohtnP0mceMNf7K2vF\
+            NbZGu4CfiICXVXszrHkusKCz/oa6aDUbX9XHYnzl5nulavp0TGI5CMPx5ryImIoXeYO9REdTT116iU0AR97e9ci\
+            mnMXcdj+s4vmYzvCDTuSFOsZ5VKFSAjzXJRbFErPBW6WO3P38IZWnviDUEgg9gPgJk64iX2+0XVUXppvpbe9OSq\
+            QTS5wOSRg1zQIabY7G7L7Oc6ohi9l8Av0f8OkS+nVqpJhSFiH/DPqsXKyswN17mcdVK1NBN9E5lHr++y6lfpopn\
+            Uou9Ub4LPUkshaFo3MK8mqvqIFl2h0Uo5JwGE51f2fJL/s4mLKMC2jmRbd83FCTmttrcCgRJJyuctbqN1G5HTCi\
+            jgi6B9Asj4UoQrhJPq8pAYgqdXpCTXHYn/8gXXVmzc8QrPIJAUfe6EsxZuL7IdjhgS0LUv16b1E0DqyXT6/3ipf\
+            LOjK/ay6VoUrTRuku9APdc4NGwLhNQLbmdscBBDlfd/3rgbv1f3StkSMtNDGTp6Bk+6MppjCKF1jcKE/HKhi8/q\
+            pgb+P5yN8P+g6QH/YmUVjYW8BQqvVraYoRVvrZZ5dJDGgdIlv15R0Lv/CvCtfRl9edcOZ9MDbHYcTtGYL+hIajs\
+            qMurJwadlQ6V9zY48V7SUyCbVFaW4ZqHsZeg2TqmhqJb8hvYjER8Jd7A1jdO6JuQCQI6TiZb+bXpomEOud3k6n2\
+            1Hcttk6N8uYXTX93Tf62tu4mnBqBq5FHJoaz0E4qYUmfKjhWXn2e7k4e0SGDx6wp/wr4mn/R6xGM3gI32puuUSD\
+            l5h0trrlIAbW0uGI8FWQKSskw7N+SOSTs7eYvQBrHKaaOtL6OPxBiahLtay48uR3CPBpstw1pSL6QSi9RnL1j42\
+            BKpr7YwlyXTceQ/0V0PTfsWBYg85nBG21qwvTHPMim2XRibnIsW5YQhxzUBQ/JDNOvsuVc3HTGvaXza0VRXWJ0S\
+            Yo0XZpjrQbGw6eICpXcUreZVecO5uoHh1WC1za2TY1IZ38IqwhZ8ZBjaN67H0GaTNqVjDaa46RoticfyDs0SJSW\
+            gssTLUwJts7RSd1+lQ=|rFzZYOkVQOu5mEWWDfvPpLrdIrOoOy8rmJfbJUjPV94=";
+            
+        // Contains the string "Test", encrypted with the public key of the user 
+        pub const TEST_CIPHER_STRING_ASYMMETRIC: &str =
+            "4.CzrGfIA+mHbPJy9km5J+gsC4mgwvu5267Xk2kfBscqroqEFza6g2a+fkRcaoXOIX+1Pq7DcwlbgQ\
+             6GVMMwA8Orm4uA4v8XCGH2Zsj3wVVnloNxsVYDmny6HFWMuJdfbNUXO/jdIjF8R8hzPka2hQ5jAZ\
+             3d81ivaQ+EqC9uKU+UOudAx9oPoD3F12DgVZJxKrbL+yi9Z8rD4ospic9ntuUfOUEesRD/q/g9yT\
+             aKWwdPnegyIfId9cB4PhUZhMx02kDildno4VOGu6iTpLmeRZPi2RY3YN9tCDzYnxbK1Nf41zzQYR\
+             bUPunAoQPCIv8Akpq0hEfUhciN3pqMSVtqUiKA==";
 
-    let master_key = create_master_key("foobar@example.com", "asdasdasd", 100_000);
-    let enc_key = "2.BztLR8IR0LVpkRL222P4rg==|cBSzwekYt1RPgYAEHI29mtqrjRge8U+FOSmtJtheAMnaEq4eCEurazgzRweksbE9abJYxriOXFnzTR/13HyCJqO9ytLK11N+G0kmhdW/scM=|nLLHbuK4KnVJnRyVIfOu396iI7xJ/ZXWYHRscMFugTI=";
+        // Contains the string "Test" encrypted with the key of the
+        // testdata user
+        pub const TEST_CIPHER_STRING: &str = 
+            "2.OixUIKgN6/vWRoSvC0aTCA==\
+             |Ts7tpWXO28X2l7XSU4trsA==\
+             |q6Vz+/1QADVZRwZ1qoPoRoSvVd01A6le+nbSQxjmGDI=";
+    }
 
-    let (dec_enc_key, dec_mac_key) =
-        decrypt_symmetric_keys(&enc_key.parse().unwrap(), &master_key).unwrap();
+    #[test]
+    fn test_create_master_password_hash() {
+        let master_key = MasterKey::from_base64(testdata::USER_MASTER_KEY_B64)
+            .expect("Master key decoding failed");
+        let pass_hash = create_master_password_hash(&master_key, testdata::USER_PASSWORD);
+        assert_eq!(
+            base64::encode(pass_hash.0.as_slice()),
+            testdata::USER_MASTER_PASSWORD_HASH_B64
+        );
+    }
 
-    let res = cipher.decrypt(&dec_enc_key, &dec_mac_key).unwrap();
+    #[test]
+    fn test_create_master_key() {
+        let key = create_master_key(
+            testdata::USER_EMAIL,
+            testdata::USER_PASSWORD,
+            testdata::USER_HASH_ITERATIONS
+        );
+        assert_eq!(
+            base64::encode(key.0.as_slice()),
+            testdata::USER_MASTER_KEY_B64
+        );
+    }
 
-    let res = String::from_utf8(res).unwrap();
+    #[test]
+    fn test_parse_cipher() {
+        let cipher = Cipher::from_str(testdata::TEST_CIPHER_STRING).unwrap();
 
-    assert_eq!("Test", res);
+        assert!(
+            matches!(cipher, Cipher::Value {enc_type, ..} if enc_type == EncType::AesCbc256HmacSha256B64)
+        );
+    }
+
+    #[test]
+    fn test_decrypt_cipher_with_user_symmetric_key() {
+        let cipher = Cipher::from_str(testdata::TEST_CIPHER_STRING).unwrap();
+
+        let master_key = MasterKey::from_base64(testdata::USER_MASTER_KEY_B64)
+            .expect("Master key decoding failed");
+        let enc_key = testdata::USER_SYMMETRIC_KEY_CIPHER_STRING.parse()
+            .expect("Parsing symmetric key Cipher failed");
+
+        let (dec_enc_key, dec_mac_key) = decrypt_symmetric_keys(&enc_key, &master_key).unwrap();
+
+        let res = cipher.decrypt(&dec_enc_key, &dec_mac_key).unwrap();
+
+        let res = String::from_utf8(res).unwrap();
+
+        assert_eq!("Test", res);
+    }
+
+    #[test]
+    fn test_decrypt_cipher_with_private_key() {
+        let master_key = MasterKey::from_base64(testdata::USER_MASTER_KEY_B64)
+            .expect("Master key decoding failed");
+        let enc_key = testdata::USER_SYMMETRIC_KEY_CIPHER_STRING.parse()
+            .expect("Parsing symmetric key Cipher failed");
+        let (dec_enc_key, dec_mac_key) = decrypt_symmetric_keys(&enc_key, &master_key).unwrap();
+
+        let der_private_key: DerPrivateKey = testdata::USER_PRIVATE_KEY_CIPHER_STRING
+            .parse::<Cipher>().unwrap()
+            .decrypt(&dec_enc_key, &dec_mac_key).unwrap()
+            .into();
+        
+        let test_cipher = Cipher::from_str(testdata::TEST_CIPHER_STRING_ASYMMETRIC).unwrap();
+        let res = test_cipher.decrypt_with_private_key(&der_private_key).unwrap();
+        let res = String::from_utf8(res).unwrap();
+
+        assert_eq!("Test", res);
+    }
 }
