@@ -61,7 +61,7 @@ jobs:
     - name: Run tests
       run: cargo test --verbose --release
 
-    - uses: actions/upload-artifact@v2
+    - uses: actions/upload-artifact@v3
       with:
         name: ${{ matrix.os }} wden binary
         path: |
