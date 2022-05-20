@@ -1,0 +1,17 @@
+name: Rust env setup
+description: Runs preparation steps for wden workflows
+ 
+runs:
+  using: 'composite'
+  steps:
+  - name: Install dependency libraries
+    shell: bash
+    if: ${{ runner.os == 'Linux' }}
+    run: sudo apt-get install -y libxcb1-dev libxcb-shape0-dev libxcb-xfixes0-dev
+
+  - uses: actions-rs/toolchain@v1
+    with:
+      toolchain: stable
+      profile: minimal
+  
+  - uses: Swatinem/rust-cache@v1.3.0
