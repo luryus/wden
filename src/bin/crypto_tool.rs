@@ -50,8 +50,7 @@ fn main() -> Result<(), anyhow::Error> {
         let mut input_data = vec![];
         stdin.read_to_end(&mut input_data).unwrap();
 
-        let res = Cipher::encrypt(&input_data, &enc_key, &mac_key)
-            .expect("Failed to encrypt");
+        let res = Cipher::encrypt(&input_data, &enc_key, &mac_key).expect("Failed to encrypt");
         println!("{}", res.encode());
     } else {
         let cipher = opts.cipher.unwrap().parse::<Cipher>()?;

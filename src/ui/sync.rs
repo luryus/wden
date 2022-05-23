@@ -2,10 +2,7 @@ use std::sync::Arc;
 
 use cursive::{views::Dialog, Cursive};
 
-use crate::{
-    bitwarden::api::ApiClient,
-    ui::login,
-};
+use crate::{bitwarden::api::ApiClient, ui::login};
 
 use super::{util::cursive_ext::CursiveExt, vault_table::show_vault};
 

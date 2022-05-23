@@ -9,27 +9,31 @@ use bitwarden::api::CipherData;
 use cursive::{
     event::Event,
     theme::{BaseColor, Color},
-    traits::{Nameable, Resizable, Finder},
+    traits::{Finder, Nameable, Resizable},
     view::{Margins, ViewWrapper},
     views::{
         Dialog, EditView, LayerPosition, LinearLayout, OnEventView, PaddedView, Panel, TextView,
     },
-    Cursive, View, wrap_impl,
+    wrap_impl, Cursive, View,
 };
 use cursive_table_view::{TableView, TableViewItem};
 use simsearch::SimSearch;
 use zeroize::Zeroize;
 
+use super::util::cursive_ext::CursiveExt;
 use super::{
-    data::{StatefulUserData, UnlockedMarker}, item_details::item_detail_dialog, lock::lock_vault, sync::do_sync,
-    util::cursive_ext::CursiveCallbackExt, search,
+    data::{StatefulUserData, UnlockedMarker},
+    item_details::item_detail_dialog,
+    lock::lock_vault,
+    search,
+    sync::do_sync,
+    util::cursive_ext::CursiveCallbackExt,
 };
-use super::{util::cursive_ext::CursiveExt};
 
 struct VaultView {
     view: OnEventView<LinearLayout>,
     rows: Vec<Row>,
-    simsearch: SimSearch<String>
+    simsearch: SimSearch<String>,
 }
 
 impl ViewWrapper for VaultView {
@@ -49,13 +53,14 @@ impl VaultView {
         VaultView {
             view,
             rows,
-            simsearch
+            simsearch,
         }
     }
 
     fn update_search_res(&mut self, term: &str) {
         if let Some(search_res_rows) = self.search_rows(term) {
-            if let Some(mut vt) = self.find_name::<TableView<Row, VaultTableColumn>>("vault_table") {
+            if let Some(mut vt) = self.find_name::<TableView<Row, VaultTableColumn>>("vault_table")
+            {
                 vt.set_items(search_res_rows);
                 // Explicitly set the first row as selected. This is needed, because
                 // for some reason the table view scrolls past and hides the first item
@@ -260,10 +265,7 @@ fn update_search_results(cursive: &mut Cursive, search_term: &str) {
     }
 }
 
-
-
 fn vault_table_view(rows: Vec<Row>) -> impl View {
-    
     let mut tv = TableView::new()
         .sorting_disabled()
         .column(VaultTableColumn::ItemType, "T", |c| c.width(1))
@@ -290,7 +292,11 @@ fn vault_table_view(rows: Vec<Row>) -> impl View {
     tv.with_name("vault_table").full_height()
 }
 
-fn create_rows(user_data: &StatefulUserData<UnlockedMarker>, enc_key: &EncryptionKey, mac_key: &MacKey) -> Vec<Row> {
+fn create_rows(
+    user_data: &StatefulUserData<UnlockedMarker>,
+    enc_key: &EncryptionKey,
+    mac_key: &MacKey,
+) -> Vec<Row> {
     // Find all organization keys we will need
     let org_keys = user_data.get_org_keys_for_vault();
 

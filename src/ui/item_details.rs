@@ -1,4 +1,7 @@
-use super::{data::{StatefulUserData, UnlockedMarker}, vault_table::show_copy_notification};
+use super::{
+    data::{StatefulUserData, UnlockedMarker},
+    vault_table::show_copy_notification,
+};
 use crate::{
     bitwarden::{
         api::{CipherData, CipherItem},
@@ -21,7 +24,10 @@ lazy_static! {
         Style::from(Effect::Reverse).combine(Color::Dark(BaseColor::Blue));
 }
 
-pub fn item_detail_dialog(ud: &StatefulUserData<UnlockedMarker>, item_id: &str) -> Option<impl View> {
+pub fn item_detail_dialog(
+    ud: &StatefulUserData<UnlockedMarker>,
+    item_id: &str,
+) -> Option<impl View> {
     // Find the item
     let vault_data = ud.vault_data();
     let item = vault_data

@@ -1,6 +1,6 @@
 use crate::{
     bitwarden::{
-        api::{self, TokenResponseSuccess, CipherItem, Organization},
+        api::{self, CipherItem, Organization, TokenResponseSuccess},
         cipher::{
             self, extract_enc_mac_keys, EncryptionKey, MacKey, MasterKey, MasterPasswordHash,
         },
@@ -160,7 +160,7 @@ enum AppStateData {
     Unlocking(UnlockingData),
 
     // An intermediate helper state used for moving the data values
-    // from behind references 
+    // from behind references
     Intermediate,
 }
 
@@ -320,7 +320,8 @@ impl<'a> StatefulUserData<'a, LoggingInMarker> {
         self,
         token: Arc<TokenResponseSuccess>,
     ) -> StatefulUserData<'a, LoggedInMarker> {
-        let state_data = std::mem::replace(&mut self.user_data.state_data, AppStateData::Intermediate);
+        let state_data =
+            std::mem::replace(&mut self.user_data.state_data, AppStateData::Intermediate);
         let logging_in_data = get_state_data!(state_data, AppStateData::LoggingIn);
 
         self.user_data.state_data = AppStateData::LoggedIn(LoggedInData {
@@ -336,26 +337,31 @@ impl<'a> StatefulUserData<'a, LoggingInMarker> {
 
     pub fn master_password_hash(&self) -> Arc<MasterPasswordHash> {
         let logging_in_data = get_state_data!(&self.user_data.state_data, AppStateData::LoggingIn);
-        logging_in_data.master_password_hash.clone() 
+        logging_in_data.master_password_hash.clone()
     }
 }
 
 impl<'a> StatefulUserData<'a, LoggedInMarker> {
     pub fn email(&self) -> Arc<String> {
         get_state_data!(&self.user_data.state_data, AppStateData::LoggedIn)
-            .logging_in_data.email.clone()
+            .logging_in_data
+            .email
+            .clone()
     }
 
     pub fn token(&self) -> Arc<TokenResponseSuccess> {
         get_state_data!(&self.user_data.state_data, AppStateData::LoggedIn)
-            .token.clone()
+            .token
+            .clone()
     }
 
-    pub fn into_unlocked(self,
+    pub fn into_unlocked(
+        self,
         vault_data: Arc<HashMap<String, CipherItem>>,
-        organizations: Arc<HashMap<String, Organization>>
+        organizations: Arc<HashMap<String, Organization>>,
     ) -> StatefulUserData<'a, UnlockedMarker> {
-        let state_data = std::mem::replace(&mut self.user_data.state_data, AppStateData::Intermediate);
+        let state_data =
+            std::mem::replace(&mut self.user_data.state_data, AppStateData::Intermediate);
         let logged_in_data = get_state_data!(state_data, AppStateData::LoggedIn);
         let unlocked_data = UnlockedData {
             logged_in_data,
@@ -367,34 +373,35 @@ impl<'a> StatefulUserData<'a, LoggedInMarker> {
 
         StatefulUserData {
             user_data: self.user_data,
-            state: PhantomData
+            state: PhantomData,
         }
     }
 
     pub fn into_logging_in(self) -> StatefulUserData<'a, LoggingInMarker> {
-        let state_data = std::mem::replace(&mut self.user_data.state_data, AppStateData::Intermediate);
+        let state_data =
+            std::mem::replace(&mut self.user_data.state_data, AppStateData::Intermediate);
         let logged_in_data = get_state_data!(state_data, AppStateData::LoggedIn);
 
         self.user_data.state_data = AppStateData::LoggingIn(logged_in_data.logging_in_data);
 
         StatefulUserData {
             user_data: self.user_data,
-            state: PhantomData
+            state: PhantomData,
         }
     }
 }
 
 impl<'a> StatefulUserData<'a, UnlockedMarker> {
     pub fn into_locked(self, search_term: Option<&str>) -> StatefulUserData<'a, LockedMarker> {
-        let state_data = std::mem::replace(&mut self.user_data.state_data, AppStateData::Intermediate);
+        let state_data =
+            std::mem::replace(&mut self.user_data.state_data, AppStateData::Intermediate);
         let unlocked_data = get_state_data!(state_data, AppStateData::Unlocked);
         // Encrypt the vault view state with the current user keys
-        let enc_search_term =
-            search_term
-                .zip(unlocked_data.logged_in_data.decrypt_keys())
-                .and_then(|(st, (enc_key, mac_key))| {
-                    cipher::Cipher::encrypt(st.as_bytes(), &enc_key, &mac_key).ok()
-                });
+        let enc_search_term = search_term
+            .zip(unlocked_data.logged_in_data.decrypt_keys())
+            .and_then(|(st, (enc_key, mac_key))| {
+                cipher::Cipher::encrypt(st.as_bytes(), &enc_key, &mac_key).ok()
+            });
 
         let locked_data = LockedData {
             email: unlocked_data.logged_in_data.logging_in_data.email,
@@ -417,14 +424,19 @@ impl<'a> StatefulUserData<'a, UnlockedMarker> {
     }
 
     pub fn into_logged_in(self) -> StatefulUserData<'a, LoggedInMarker> {
-        let state_data = std::mem::replace(&mut self.user_data.state_data, AppStateData::Intermediate);
+        let state_data =
+            std::mem::replace(&mut self.user_data.state_data, AppStateData::Intermediate);
         let unlocked_data = get_state_data!(state_data, AppStateData::Unlocked);
-        self.user_data.autolocker.lock().unwrap().clear_autolock_time();
+        self.user_data
+            .autolocker
+            .lock()
+            .unwrap()
+            .clear_autolock_time();
         self.user_data.state_data = AppStateData::LoggedIn(unlocked_data.logged_in_data);
 
         StatefulUserData {
             user_data: self.user_data,
-            state: PhantomData
+            state: PhantomData,
         }
     }
 
@@ -443,60 +455,64 @@ impl<'a> StatefulUserData<'a, UnlockedMarker> {
         d.get_keys_for_item(item)
     }
 
-    pub fn get_org_keys_for_vault(&self) -> HashMap<&String, (EncryptionKey, MacKey)>  {
+    pub fn get_org_keys_for_vault(&self) -> HashMap<&String, (EncryptionKey, MacKey)> {
         let d = get_state_data!(&self.user_data.state_data, AppStateData::Unlocked);
         d.get_org_keys_for_vault()
-    }   
+    }
 }
 
 impl<'a> StatefulUserData<'a, UnlockingMarker> {
     pub fn decrypt_search_term(&self) -> Option<String> {
         let d = get_state_data!(&self.user_data.state_data, AppStateData::Unlocking);
-        d.logged_in_data.decrypt_keys().map(|(ec, mc)| {
-            d.encrypted_search_term.decrypt_to_string(&ec, &mc)
-        })
+        d.logged_in_data
+            .decrypt_keys()
+            .map(|(ec, mc)| d.encrypted_search_term.decrypt_to_string(&ec, &mc))
     }
 
     pub fn into_unlocked(self) -> StatefulUserData<'a, UnlockedMarker> {
-        let state_data = std::mem::replace(&mut self.user_data.state_data, AppStateData::Intermediate);
+        let state_data =
+            std::mem::replace(&mut self.user_data.state_data, AppStateData::Intermediate);
         let unlocking_data = get_state_data!(state_data, AppStateData::Unlocking);
 
         let unlocked_data = UnlockedData {
             logged_in_data: unlocking_data.logged_in_data,
             organizations: unlocking_data.organizations,
-            vault_data: unlocking_data.vault_data
+            vault_data: unlocking_data.vault_data,
         };
 
         self.user_data.state_data = AppStateData::Unlocked(unlocked_data);
 
         StatefulUserData {
             user_data: self.user_data,
-            state: PhantomData
+            state: PhantomData,
         }
     }
 }
 
-impl <'a> StatefulUserData<'a, LockedMarker> {
+impl<'a> StatefulUserData<'a, LockedMarker> {
     pub fn email(&self) -> Arc<String> {
         get_state_data!(&self.user_data.state_data, AppStateData::Locked)
-            .email.clone()
+            .email
+            .clone()
     }
 
     pub fn token(&self) -> Arc<TokenResponseSuccess> {
         get_state_data!(&self.user_data.state_data, AppStateData::Locked)
-            .token.clone()
+            .token
+            .clone()
     }
 
     pub fn password_hash_iterations(&self) -> u32 {
-        get_state_data!(&self.user_data.state_data, AppStateData::Locked)
-            .password_hash_iterations
+        get_state_data!(&self.user_data.state_data, AppStateData::Locked).password_hash_iterations
     }
 
-    pub fn into_unlocking(self,
+    pub fn into_unlocking(
+        self,
         master_key: Arc<MasterKey>,
-        master_password_hash: Arc<MasterPasswordHash>) -> StatefulUserData<'a, UnlockingMarker> {
-            
-        let state_data = std::mem::replace(&mut self.user_data.state_data, AppStateData::Intermediate);
+        master_password_hash: Arc<MasterPasswordHash>,
+    ) -> StatefulUserData<'a, UnlockingMarker> {
+        let state_data =
+            std::mem::replace(&mut self.user_data.state_data, AppStateData::Intermediate);
         let locked_data = get_state_data!(state_data, AppStateData::Locked);
 
         let unlocking_data = UnlockingData {
@@ -505,20 +521,20 @@ impl <'a> StatefulUserData<'a, LockedMarker> {
                     email: locked_data.email,
                     password_hash_iterations: locked_data.password_hash_iterations,
                     master_key,
-                    master_password_hash
+                    master_password_hash,
                 },
-                token: locked_data.token
+                token: locked_data.token,
             },
             encrypted_search_term: locked_data.encrypted_search_term,
             organizations: locked_data.organizations,
-            vault_data: locked_data.vault_data
+            vault_data: locked_data.vault_data,
         };
 
         self.user_data.state_data = AppStateData::Unlocking(unlocking_data);
 
         StatefulUserData {
             user_data: self.user_data,
-            state: PhantomData
+            state: PhantomData,
         }
     }
 }

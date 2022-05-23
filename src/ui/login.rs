@@ -151,7 +151,9 @@ pub fn handle_login_response(
                         log::error!("Failed to store profile data: {}", e);
                     }
 
-                    ud.with_logging_in_state().unwrap().into_logged_in(Arc::new(*t));
+                    ud.with_logging_in_state()
+                        .unwrap()
+                        .into_logged_in(Arc::new(*t));
 
                     do_sync(cursive, true);
                 }
