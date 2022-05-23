@@ -10,7 +10,7 @@ use cursive::{
 
 use crate::bitwarden::cipher::{self, CipherError};
 
-use super::{search, util::cursive_ext::CursiveExt, vault_table};
+use super::{util::cursive_ext::CursiveExt, vault_table};
 
 const VIEW_NAME_PASSWORD: &str = "password";
 
@@ -24,20 +24,15 @@ pub fn lock_vault(c: &mut Cursive) {
     // Clear all keys from memory, and get stored email
     let search_term = search_term.as_deref().map(|s| s.as_str());
     let ud = c.get_user_data();
-    ud.clear_data_for_locking(search_term);
-    let email = match ud.email.as_ref() {
-        Some(e) => e.as_str(),
-        None => {
-            log::warn!("Email was missing while locking");
-            "???"
-        }
-    };
-    let profile = ud.global_settings.profile.as_str();
+    let global_settings = ud.global_settings();
+    let profile = global_settings.profile.as_str();
+    let ud = ud.with_unlocked_state().unwrap().into_locked(search_term);
+    let email = ud.email();
 
     // Vault data is left in place, but its all encrypted
 
     // Show unlock dialog
-    let d = unlock_dialog(profile, email);
+    let d = unlock_dialog(profile, &email);
     c.add_layer(d);
 }
 
@@ -72,10 +67,11 @@ fn submit_unlock(c: &mut Cursive) {
 
     // Get stuff from user data
     let user_data = c.get_user_data();
-    let iters = user_data.password_hash_iterations.unwrap();
-    let email = user_data.email.clone().unwrap();
-    let token_key = &user_data.token.clone().unwrap().key;
-    let global_settings = user_data.global_settings.clone();
+    let global_settings = user_data.global_settings();
+    let user_data = user_data.with_locked_state().unwrap();
+    let iters = user_data.password_hash_iterations();
+    let email = user_data.email();
+    let token_key = &user_data.token().key;
 
     let master_key = Arc::new(cipher::create_master_key(&email, &password, iters));
     let master_pw_hash = Arc::new(cipher::create_master_password_hash(&master_key, &password));
@@ -102,14 +98,15 @@ fn submit_unlock(c: &mut Cursive) {
         }
         Ok(_) => {
             // Success, store keys, restore other data and continue
-            user_data.master_key = Some(master_key);
-            user_data.master_password_hash = Some(master_pw_hash);
-            user_data.password_hash_iterations = Some(iters);
+            let user_data = user_data.into_unlocking(master_key, master_pw_hash);
 
             // Search index gets cleared when locking, restore it
-            search::update_search_index(user_data);
+            // TODO handle searching elsewhere
+            // search::update_search_index(user_data);
 
             let search_term = user_data.decrypt_search_term();
+            let _ = user_data.into_unlocked();
+
             vault_table::show_vault(c);
             if let Some(term) = search_term {
                 vault_table::set_search_term(c, term);

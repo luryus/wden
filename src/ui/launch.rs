@@ -38,7 +38,7 @@ fn run(mut cursive: CursiveRunnable) {
 
         if got_event {
             cursive.with_user_data(|ud: &mut UserData| {
-                ud.autolocker
+                ud.autolocker()
                     .lock()
                     .unwrap()
                     .update_next_autolock_time(false)

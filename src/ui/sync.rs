@@ -4,7 +4,7 @@ use cursive::{views::Dialog, Cursive};
 
 use crate::{
     bitwarden::api::ApiClient,
-    ui::{login, search},
+    ui::login,
 };
 
 use super::{util::cursive_ext::CursiveExt, vault_table::show_vault};
@@ -15,19 +15,17 @@ pub fn do_sync(cursive: &mut Cursive, just_refreshed_token: bool) {
     cursive.add_layer(Dialog::text("Syncing..."));
     log::info!("Running sync.");
     let user_data = cursive.get_user_data();
+    let global_settings = user_data.global_settings();
 
     // Clear any data remaining
-    user_data.vault_data = None;
-    user_data.vault_table_rows = None;
-    user_data.organizations = None;
-    user_data.autolocker.lock().unwrap().clear_autolock_time();
+    let user_data = if let Some(unlocked_user_data) = user_data.with_unlocked_state() {
+        unlocked_user_data.into_logged_in()
+    } else {
+        user_data.with_logged_in_state().unwrap()
+    };
 
-    let email = user_data
-        .email
-        .clone()
-        .expect("Email address was not set in UserData while syncing");
-
-    let token = user_data.token.clone().expect("Token not set");
+    let email = user_data.email();
+    let token = user_data.token();
 
     let should_refresh = token.should_refresh();
     if should_refresh && just_refreshed_token {
@@ -39,8 +37,6 @@ pub fn do_sync(cursive: &mut Cursive, just_refreshed_token: bool) {
         cursive.add_layer(alert);
         return;
     }
-
-    let global_settings = user_data.global_settings.clone();
 
     if should_refresh {
         cursive.async_op(
@@ -72,24 +68,27 @@ pub fn do_sync(cursive: &mut Cursive, just_refreshed_token: bool) {
         },
         |c, sync_res| match sync_res {
             Ok(sync_res) => {
-                let ud = c.get_user_data();
-                ud.vault_data = Some(Arc::new(
+                let ud = c.get_user_data().with_logged_in_state().unwrap();
+                let vault_data = Arc::new(
                     sync_res
                         .ciphers
                         .into_iter()
                         .map(|ci| (ci.id.clone(), ci))
                         .collect(),
-                ));
-                ud.organizations = Some(Arc::new(
+                );
+                let organizations = Arc::new(
                     sync_res
                         .profile
                         .organizations
                         .into_iter()
                         .map(|o| (o.id.clone(), o))
                         .collect(),
-                ));
+                );
 
-                search::update_search_index(ud);
+                // TODO: move search indexing somewhere else
+                // search::update_search_index(ud);
+
+                ud.into_unlocked(vault_data, organizations);
 
                 c.pop_layer();
                 show_vault(c);

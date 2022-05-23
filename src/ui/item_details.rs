@@ -1,4 +1,4 @@
-use super::{data::UserData, vault_table::show_copy_notification};
+use super::{data::{StatefulUserData, UnlockedMarker}, vault_table::show_copy_notification};
 use crate::{
     bitwarden::{
         api::{CipherData, CipherItem},
@@ -21,12 +21,11 @@ lazy_static! {
         Style::from(Effect::Reverse).combine(Color::Dark(BaseColor::Blue));
 }
 
-pub fn item_detail_dialog(ud: &mut UserData, item_id: &str) -> Option<impl View> {
+pub fn item_detail_dialog(ud: &StatefulUserData<UnlockedMarker>, item_id: &str) -> Option<impl View> {
     // Find the item
-    let item = ud
-        .vault_data
-        .as_ref()
-        .and_then(|vd| vd.get(item_id))
+    let vault_data = ud.vault_data();
+    let item = vault_data
+        .get(item_id)
         .expect("Item not found in vault data");
 
     // Find keys that should be used for decrypting details

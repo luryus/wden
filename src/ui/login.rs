@@ -74,8 +74,8 @@ fn submit_login(c: &mut Cursive) {
     c.add_layer(Dialog::text("Signing in..."));
 
     let ud = c.get_user_data();
-    let global_settings = ud.global_settings.clone();
-    let profile_store = ud.profile_store.clone();
+    let global_settings = ud.global_settings();
+    let profile_store = ud.profile_store();
 
     c.async_op(
         async move {
@@ -99,11 +99,10 @@ fn submit_login(c: &mut Cursive) {
         |siv, res| {
             match res {
                 Ok((t, master_key, master_pw_hash, em, iterations)) => {
-                    let mut ud = siv.get_user_data();
-                    ud.master_key = Some(master_key);
-                    ud.master_password_hash = Some(master_pw_hash);
-                    ud.password_hash_iterations = Some(iterations);
-                    ud.email = Some(em.clone());
+                    siv.get_user_data()
+                        .with_logged_out_state()
+                        .unwrap()
+                        .into_logging_in(master_key, master_pw_hash, iterations, em.clone());
 
                     handle_login_response(siv, Ok(t), em);
                 }
@@ -121,14 +120,18 @@ pub fn handle_login_response(
     match res {
         Result::Err(e) => {
             let err_msg = format!("Error: {:?}", e);
-            cursive.get_user_data().clear_login_data();
+            cursive
+                .get_user_data()
+                .with_logging_in_state()
+                .unwrap()
+                .into_logged_out();
             cursive.add_layer(Dialog::text(err_msg).title("Login error").button(
                 "OK",
                 move |siv| {
                     // Remove this dialog, and show the login dialog again
                     siv.pop_layer();
                     let d = login_dialog(
-                        &siv.get_user_data().global_settings.profile,
+                        &siv.get_user_data().global_settings().profile,
                         Some(String::clone(&email)),
                     );
                     siv.add_layer(d);
@@ -142,19 +145,19 @@ pub fn handle_login_response(
                     let ud = cursive.get_user_data();
                     // Try to store the email
                     let store_res = ud
-                        .profile_store
+                        .profile_store()
                         .edit(|d| d.saved_email = Some(String::clone(&email)));
                     if let Err(e) = store_res {
                         log::error!("Failed to store profile data: {}", e);
                     }
 
-                    ud.token = Some(Arc::new(*t));
+                    ud.with_logging_in_state().unwrap().into_logged_in(Arc::new(*t));
 
                     do_sync(cursive, true);
                 }
                 bitwarden::api::TokenResponse::TwoFactorRequired(types) => {
                     cursive.pop_layer();
-                    let p = &cursive.get_user_data().global_settings.profile;
+                    let p = &cursive.get_user_data().global_settings().profile;
                     let dialog = two_factor_dialog(types, email, p);
                     cursive.add_layer(dialog);
                 }

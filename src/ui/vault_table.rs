@@ -20,10 +20,10 @@ use cursive_table_view::{TableView, TableViewItem};
 use zeroize::Zeroize;
 
 use super::{
-    data::UserData, item_details::item_detail_dialog, lock::lock_vault, sync::do_sync,
+    data::{StatefulUserData, UnlockedMarker}, item_details::item_detail_dialog, lock::lock_vault, sync::do_sync,
     util::cursive_ext::CursiveCallbackExt,
 };
-use super::{search::search_items, util::cursive_ext::CursiveExt};
+use super::{util::cursive_ext::CursiveExt};
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub enum VaultTableColumn {
@@ -90,7 +90,7 @@ impl TableViewItem<VaultTableColumn> for Row {
     }
 }
 
-pub fn vault_view(user_data: &mut UserData) -> impl View {
+pub fn vault_view(user_data: &StatefulUserData<UnlockedMarker>) -> impl View {
     let (enc_key, mac_key) = user_data.decrypt_keys().unwrap();
     let table = vault_table_view(user_data, &enc_key, &mac_key);
 
@@ -142,9 +142,9 @@ fn copy_current_item_field(siv: &mut Cursive, field: Copyable) {
         .find_name::<TableView<Row, VaultTableColumn>>("vault_table")
         .unwrap();
     let row = table.borrow_item(table.item().unwrap()).unwrap();
-    let ud = siv.get_user_data();
+    let ud = siv.get_user_data().with_unlocked_state().unwrap();
 
-    let vd = ud.vault_data.as_ref().unwrap();
+    let vd = ud.vault_data();
     match (vd.get(&row.id), field) {
         (
             Some(
@@ -204,9 +204,9 @@ fn filter_edit_view() -> impl View {
 fn update_search_results(cursive: &mut Cursive, search_term: &str) {
     // Filter the results, update table
     if let Some(mut tv) = cursive.find_name::<TableView<Row, VaultTableColumn>>("vault_table") {
-        let ud = cursive.get_user_data();
+        let ud = cursive.get_user_data().with_unlocked_state().unwrap();
 
-        if let Some(search_res_rows) = search_rows(search_term, ud) {
+        if let Some(search_res_rows) = search_rows(search_term, &ud) {
             tv.set_items(search_res_rows);
 
             // Explicitly set the first row as selected. This is needed, because
@@ -217,21 +217,25 @@ fn update_search_results(cursive: &mut Cursive, search_term: &str) {
     }
 }
 
-fn search_rows(term: &str, ud: &UserData) -> Option<Vec<Row>> {
-    let all_rows = ud.vault_table_rows.as_ref()?;
-    let filtered = match search_items(term, ud) {
-        Some(matching_items) => matching_items
-            .into_iter()
-            .filter_map(|id| all_rows.iter().find(|r| r.id == id))
-            .cloned()
-            .collect(),
-        _ => all_rows.clone(),
-    };
-    Some(filtered)
+fn search_rows(term: &str, ud: &StatefulUserData<UnlockedMarker>) -> Option<Vec<Row>> {
+    
+    return Some(vec![]);
+    //let all_rows = ud.vault_table_rows.as_ref()?;
+
+    // TODO fix search later
+    //let filtered = match search_items(term, ud) {
+    //    Some(matching_items) => matching_items
+    //        .into_iter()
+    //        .filter_map(|id| all_rows.iter().find(|r| r.id == id))
+    //        .cloned()
+    //        .collect(),
+    //    _ => all_rows.clone(),
+    //};
+    //Some(filtered)
 }
 
 fn vault_table_view(
-    user_data: &mut UserData,
+    user_data: &StatefulUserData<UnlockedMarker>,
     enc_key: &EncryptionKey,
     mac_key: &MacKey,
 ) -> impl View {
@@ -239,7 +243,6 @@ fn vault_table_view(
     // These are stored in user_data. Only the filter results are stored
     // as the table's rows.
     let rows = create_rows(user_data, enc_key, mac_key);
-    user_data.vault_table_rows = Some(rows.clone());
 
     let mut tv = TableView::new()
         .sorting_disabled()
@@ -267,14 +270,11 @@ fn vault_table_view(
     tv.with_name("vault_table").full_height()
 }
 
-fn create_rows(user_data: &mut UserData, enc_key: &EncryptionKey, mac_key: &MacKey) -> Vec<Row> {
+fn create_rows(user_data: &StatefulUserData<UnlockedMarker>, enc_key: &EncryptionKey, mac_key: &MacKey) -> Vec<Row> {
     // Find all organization keys we will need
-    let org_keys = user_data.get_org_keys_for_vault().unwrap_or_default();
+    let org_keys = user_data.get_org_keys_for_vault();
 
-    let vault_data = match &user_data.vault_data {
-        Some(vd) => vd.clone(),
-        None => return Vec::new(),
-    };
+    let vault_data = user_data.vault_data();
 
     let mut rows: Vec<Row> = vault_data
         .iter()
@@ -312,8 +312,8 @@ fn create_rows(user_data: &mut UserData, enc_key: &EncryptionKey, mac_key: &MacK
 fn show_item_details(cb: cursive::CbSink, row: &Row) {
     let item_id = row.id.clone();
     cb.send_msg(Box::new(move |siv: &mut Cursive| {
-        let ud = siv.get_user_data();
-        let dialog = item_detail_dialog(ud, &item_id);
+        let ud = siv.get_user_data().with_unlocked_state().unwrap();
+        let dialog = item_detail_dialog(&ud, &item_id);
         if let Some(d) = dialog {
             siv.add_layer(d);
         }
@@ -359,14 +359,17 @@ pub fn show_copy_notification(cursive: &mut Cursive, message: &'static str) {
 
 pub fn show_vault(c: &mut Cursive) {
     let ud = c.get_user_data();
-    ud.autolocker
+    ud.autolocker()
         .lock()
         .unwrap()
         .update_next_autolock_time(true);
+    let global_settings = ud.global_settings();
 
-    let table = vault_view(ud);
+    let ud = ud.with_unlocked_state().unwrap();
+
+    let table = vault_view(&ud);
     let panel = Panel::new(table)
-        .title(format!("Vault ({})", &ud.global_settings.profile))
+        .title(format!("Vault ({})", &global_settings.profile))
         .full_screen();
 
     // Clear all, and add the vault
