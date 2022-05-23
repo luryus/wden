@@ -39,9 +39,10 @@ pub fn do_sync(cursive: &mut Cursive, just_refreshed_token: bool) {
     }
 
     if should_refresh {
+        let _ = user_data.into_logging_in();
         cursive.async_op(
             async move {
-                log::debug!("Refreshing access token");
+                log::info!("Refreshing access token");
                 let client =
                     ApiClient::new(&global_settings.server_url, &global_settings.device_id);
                 let refresh_res = client.refresh_token(&token).await;
@@ -84,9 +85,6 @@ pub fn do_sync(cursive: &mut Cursive, just_refreshed_token: bool) {
                         .map(|o| (o.id.clone(), o))
                         .collect(),
                 );
-
-                // TODO: move search indexing somewhere else
-                // search::update_search_index(ud);
 
                 ud.into_unlocked(vault_data, organizations);
 

@@ -370,6 +370,18 @@ impl<'a> StatefulUserData<'a, LoggedInMarker> {
             state: PhantomData
         }
     }
+
+    pub fn into_logging_in(self) -> StatefulUserData<'a, LoggingInMarker> {
+        let state_data = std::mem::replace(&mut self.user_data.state_data, AppStateData::Intermediate);
+        let logged_in_data = get_state_data!(state_data, AppStateData::LoggedIn);
+
+        self.user_data.state_data = AppStateData::LoggingIn(logged_in_data.logging_in_data);
+
+        StatefulUserData {
+            user_data: self.user_data,
+            state: PhantomData
+        }
+    }
 }
 
 impl<'a> StatefulUserData<'a, UnlockedMarker> {
@@ -379,7 +391,7 @@ impl<'a> StatefulUserData<'a, UnlockedMarker> {
         // Encrypt the vault view state with the current user keys
         let enc_search_term =
             search_term
-                .zip(self.decrypt_keys())
+                .zip(unlocked_data.logged_in_data.decrypt_keys())
                 .and_then(|(st, (enc_key, mac_key))| {
                     cipher::Cipher::encrypt(st.as_bytes(), &enc_key, &mac_key).ok()
                 });

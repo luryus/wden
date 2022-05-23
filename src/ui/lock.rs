@@ -100,10 +100,6 @@ fn submit_unlock(c: &mut Cursive) {
             // Success, store keys, restore other data and continue
             let user_data = user_data.into_unlocking(master_key, master_pw_hash);
 
-            // Search index gets cleared when locking, restore it
-            // TODO handle searching elsewhere
-            // search::update_search_index(user_data);
-
             let search_term = user_data.decrypt_search_term();
             let _ = user_data.into_unlocked();
 

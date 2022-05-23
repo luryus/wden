@@ -6,7 +6,7 @@ mod item_details;
 mod launch;
 mod lock;
 mod login;
-//mod search;
+mod search;
 mod sync;
 mod two_factor;
 mod util;
