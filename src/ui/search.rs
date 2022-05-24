@@ -4,7 +4,7 @@ use simsearch::SimSearch;
 
 use crate::bitwarden::api::CipherData;
 
-use super::data::{StatefulUserData, UnlockedMarker};
+use super::data::{StatefulUserData, Unlocked};
 
 pub fn search_items(term: &str, simsearch: &SimSearch<String>) -> Option<Vec<String>> {
     if term.is_empty() {
@@ -14,7 +14,7 @@ pub fn search_items(term: &str, simsearch: &SimSearch<String>) -> Option<Vec<Str
     Some(simsearch.search(term))
 }
 
-pub fn get_search_index(ud: &StatefulUserData<UnlockedMarker>) -> SimSearch<String> {
+pub fn get_search_index(ud: &StatefulUserData<Unlocked>) -> SimSearch<String> {
     let mut ss = SimSearch::new();
 
     if let Some(tokenized_rows) = get_tokenized_rows(ud) {
@@ -30,9 +30,7 @@ pub fn get_search_index(ud: &StatefulUserData<UnlockedMarker>) -> SimSearch<Stri
     ss
 }
 
-fn get_tokenized_rows(
-    ud: &StatefulUserData<UnlockedMarker>,
-) -> Option<HashMap<String, Vec<String>>> {
+fn get_tokenized_rows(ud: &StatefulUserData<Unlocked>) -> Option<HashMap<String, Vec<String>>> {
     let vd = ud.vault_data();
     let org_keys = ud.get_org_keys_for_vault();
     let (user_enc_key, user_mac_key) = ud.decrypt_keys()?;

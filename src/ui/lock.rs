@@ -23,10 +23,13 @@ pub fn lock_vault(c: &mut Cursive) {
 
     // Clear all keys from memory, and get stored email
     let search_term = search_term.as_deref().map(|s| s.as_str());
-    let ud = c.get_user_data();
+    let ud = c
+        .get_user_data()
+        .with_unlocked_state()
+        .unwrap()
+        .into_locked(search_term);
     let global_settings = ud.global_settings();
     let profile = global_settings.profile.as_str();
-    let ud = ud.with_unlocked_state().unwrap().into_locked(search_term);
     let email = ud.email();
 
     // Vault data is left in place, but its all encrypted
@@ -66,9 +69,8 @@ fn submit_unlock(c: &mut Cursive) {
     c.add_layer(Dialog::text("Unlocking..."));
 
     // Get stuff from user data
-    let user_data = c.get_user_data();
+    let user_data = c.get_user_data().with_locked_state().unwrap();
     let global_settings = user_data.global_settings();
-    let user_data = user_data.with_locked_state().unwrap();
     let iters = user_data.password_hash_iterations();
     let email = user_data.email();
     let token_key = &user_data.token().key;

@@ -33,34 +33,36 @@ macro_rules! get_state_data {
     }};
 }
 
-struct LoggingInData {
-    pub email: Arc<String>,
-    pub password_hash_iterations: u32,
-    pub master_key: Arc<cipher::MasterKey>,
-    pub master_password_hash: Arc<cipher::MasterPasswordHash>,
+pub struct LoggedOut;
+
+pub struct LoggingIn {
+    email: Arc<String>,
+    password_hash_iterations: u32,
+    master_key: Arc<cipher::MasterKey>,
+    master_password_hash: Arc<cipher::MasterPasswordHash>,
 }
 
-struct LoggedInData {
-    pub logging_in_data: LoggingInData,
-    pub token: Arc<api::TokenResponseSuccess>,
+pub struct LoggedIn {
+    logging_in_data: LoggingIn,
+    token: Arc<api::TokenResponseSuccess>,
 }
 
-impl LoggedInData {
-    pub fn decrypt_keys(&self) -> Option<(EncryptionKey, MacKey)> {
+impl LoggedIn {
+    fn decrypt_keys(&self) -> Option<(EncryptionKey, MacKey)> {
         let token_key = &self.token.key;
         let master_key = &self.logging_in_data.master_key;
         decrypt_symmetric_keys(token_key, master_key).ok()
     }
 }
 
-struct UnlockedData {
-    pub logged_in_data: LoggedInData,
-    pub vault_data: Arc<HashMap<String, api::CipherItem>>,
-    pub organizations: Arc<HashMap<String, api::Organization>>,
+pub struct Unlocked {
+    logged_in_data: LoggedIn,
+    vault_data: Arc<HashMap<String, api::CipherItem>>,
+    organizations: Arc<HashMap<String, api::Organization>>,
 }
 
-impl UnlockedData {
-    pub fn decrypt_organization_keys(
+impl Unlocked {
+    fn decrypt_organization_keys(
         &self,
         organization_id: &str,
     ) -> anyhow::Result<(EncryptionKey, MacKey)> {
@@ -88,7 +90,7 @@ impl UnlockedData {
         Ok(extract_enc_mac_keys(&full_org_key)?)
     }
 
-    pub fn get_keys_for_item(&self, item: &api::CipherItem) -> Option<(EncryptionKey, MacKey)> {
+    fn get_keys_for_item(&self, item: &api::CipherItem) -> Option<(EncryptionKey, MacKey)> {
         if let Some(oid) = &item.organization_id {
             let res = self.decrypt_organization_keys(oid);
             match res {
@@ -104,7 +106,7 @@ impl UnlockedData {
         }
     }
 
-    pub fn get_org_keys_for_vault(&self) -> HashMap<&String, (EncryptionKey, MacKey)> {
+    fn get_org_keys_for_vault(&self) -> HashMap<&String, (EncryptionKey, MacKey)> {
         let org_ids: HashSet<_> = self
             .vault_data
             .values()
@@ -122,42 +124,29 @@ impl UnlockedData {
     }
 }
 
-struct LockedData {
-    pub email: Arc<String>,
-    pub password_hash_iterations: u32,
-    pub token: Arc<api::TokenResponseSuccess>,
+pub struct Locked {
+    email: Arc<String>,
+    password_hash_iterations: u32,
+    token: Arc<api::TokenResponseSuccess>,
+    vault_data: Arc<HashMap<String, api::CipherItem>>,
+    organizations: Arc<HashMap<String, api::Organization>>,
+    encrypted_search_term: cipher::Cipher,
+}
+
+pub struct Unlocking {
+    pub logged_in_data: LoggedIn,
     pub vault_data: Arc<HashMap<String, api::CipherItem>>,
     pub organizations: Arc<HashMap<String, api::Organization>>,
     pub encrypted_search_term: cipher::Cipher,
 }
-
-struct UnlockingData {
-    pub logged_in_data: LoggedInData,
-    pub vault_data: Arc<HashMap<String, api::CipherItem>>,
-    pub organizations: Arc<HashMap<String, api::Organization>>,
-    pub encrypted_search_term: cipher::Cipher,
-}
-
-// pub struct UserData {
-//     pub global_settings: Arc<GlobalSettings>,
-//     pub profile_store: Arc<ProfileStore>,
-//     pub autolocker: Arc<Mutex<Autolocker>>,
-//     pub email: Option<Arc<String>>,
-//     pub master_key: Option<Arc<cipher::MasterKey>>,
-//     pub master_password_hash: Option<Arc<cipher::MasterPasswordHash>>,
-//     pub password_hash_iterations: Option<u32>,
-//     pub token: Option<Arc<api::TokenResponseSuccess>>,
-//     pub organizations: Option<Arc<HashMap<String, api::Organization>>>,
-//     pub vault_data: Option<Arc<HashMap<String, api::CipherItem>>>,
-// }
 
 enum AppStateData {
-    LoggedOut,
-    LoggingIn(LoggingInData),
-    LoggedIn(LoggedInData),
-    Unlocked(UnlockedData),
-    Locked(LockedData),
-    Unlocking(UnlockingData),
+    LoggedOut(LoggedOut),
+    LoggingIn(LoggingIn),
+    LoggedIn(LoggedIn),
+    Unlocked(Unlocked),
+    Locked(Locked),
+    Unlocking(Unlocking),
 
     // An intermediate helper state used for moving the data values
     // from behind references
@@ -167,7 +156,7 @@ enum AppStateData {
 impl Display for AppStateData {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            AppStateData::LoggedOut => f.write_str("LoggedOut"),
+            AppStateData::LoggedOut(_) => f.write_str("LoggedOut"),
             AppStateData::LoggingIn(_) => f.write_str("LoggingIn"),
             AppStateData::LoggedIn(_) => f.write_str("LoggedIn"),
             AppStateData::Unlocked(_) => f.write_str("Unlocked"),
@@ -185,16 +174,30 @@ pub struct UserData {
     state_data: AppStateData,
 }
 
-pub struct LoggedOutMarker;
-pub struct LoggingInMarker;
-pub struct LoggedInMarker;
-pub struct UnlockedMarker;
-pub struct LockedMarker;
-pub struct UnlockingMarker;
-
 pub struct StatefulUserData<'a, T> {
     user_data: &'a mut UserData,
     state: PhantomData<T>,
+}
+
+impl<'a, T> StatefulUserData<'a, T> {
+    fn new(user_data: &'a mut UserData) -> Self {
+        Self {
+            user_data,
+            state: PhantomData,
+        }
+    }
+
+    pub fn global_settings(&self) -> Arc<GlobalSettings> {
+        self.user_data.global_settings.clone()
+    }
+
+    pub fn profile_store(&self) -> Arc<ProfileStore> {
+        self.user_data.profile_store.clone()
+    }
+
+    pub fn autolocker(&self) -> Arc<Mutex<Autolocker>> {
+        self.user_data.autolocker.clone()
+    }
 }
 
 impl UserData {
@@ -203,7 +206,7 @@ impl UserData {
         profile_store: Arc<ProfileStore>,
         autolocker: Arc<Mutex<Autolocker>>,
     ) -> UserData {
-        let state = AppStateData::LoggedOut;
+        let state = AppStateData::LoggedOut(LoggedOut);
         UserData {
             autolocker,
             profile_store,
@@ -212,127 +215,86 @@ impl UserData {
         }
     }
 
-    pub fn with_logged_out_state(&mut self) -> Option<StatefulUserData<LoggedOutMarker>> {
-        if matches!(&self.state_data, &AppStateData::LoggedOut) {
-            Some(StatefulUserData {
-                user_data: self,
-                state: PhantomData,
-            })
-        } else {
-            None
+    pub fn with_logged_out_state(&mut self) -> Option<StatefulUserData<LoggedOut>> {
+        match &self.state_data {
+            &AppStateData::LoggedOut(_) => Some(StatefulUserData::new(self)),
+            _ => None,
         }
     }
 
-    pub fn with_logging_in_state(&mut self) -> Option<StatefulUserData<LoggingInMarker>> {
-        if matches!(&self.state_data, &AppStateData::LoggingIn(_)) {
-            Some(StatefulUserData {
-                user_data: self,
-                state: PhantomData,
-            })
-        } else {
-            None
+    pub fn with_logging_in_state(&mut self) -> Option<StatefulUserData<LoggingIn>> {
+        match &self.state_data {
+            &AppStateData::LoggingIn(_) => Some(StatefulUserData::new(self)),
+            _ => None,
         }
     }
 
-    pub fn with_logged_in_state(&mut self) -> Option<StatefulUserData<LoggedInMarker>> {
-        if matches!(&self.state_data, &AppStateData::LoggedIn(_)) {
-            Some(StatefulUserData {
-                user_data: self,
-                state: PhantomData,
-            })
-        } else {
-            None
+    pub fn with_logged_in_state(&mut self) -> Option<StatefulUserData<LoggedIn>> {
+        match &self.state_data {
+            &AppStateData::LoggedIn(_) => Some(StatefulUserData::new(self)),
+            _ => None,
         }
     }
 
-    pub fn with_unlocked_state(&mut self) -> Option<StatefulUserData<UnlockedMarker>> {
-        if matches!(&self.state_data, &AppStateData::Unlocked(_)) {
-            Some(StatefulUserData {
-                user_data: self,
-                state: PhantomData,
-            })
-        } else {
-            None
+    pub fn with_unlocked_state(&mut self) -> Option<StatefulUserData<Unlocked>> {
+        match &self.state_data {
+            &AppStateData::Unlocked(_) => Some(StatefulUserData::new(self)),
+            _ => None,
         }
     }
 
-    pub fn with_locked_state(&mut self) -> Option<StatefulUserData<LockedMarker>> {
-        if matches!(&self.state_data, &AppStateData::Locked(_)) {
-            Some(StatefulUserData {
-                user_data: self,
-                state: PhantomData,
-            })
-        } else {
-            None
+    pub fn with_locked_state(&mut self) -> Option<StatefulUserData<Locked>> {
+        match &self.state_data {
+            &AppStateData::Locked(_) => Some(StatefulUserData::new(self)),
+            _ => None,
         }
-    }
-
-    pub fn global_settings(&self) -> Arc<GlobalSettings> {
-        self.global_settings.clone()
-    }
-
-    pub fn profile_store(&self) -> Arc<ProfileStore> {
-        self.profile_store.clone()
-    }
-
-    pub fn autolocker(&self) -> Arc<Mutex<Autolocker>> {
-        self.autolocker.clone()
     }
 }
 
-impl<'a> StatefulUserData<'a, LoggedOutMarker> {
+impl<'a> StatefulUserData<'a, LoggedOut> {
     pub fn into_logging_in(
         self,
         master_key: Arc<MasterKey>,
         master_password_hash: Arc<MasterPasswordHash>,
         password_hash_iterations: u32,
         email: Arc<String>,
-    ) -> StatefulUserData<'a, LoggingInMarker> {
-        self.user_data.state_data = AppStateData::LoggingIn(LoggingInData {
+    ) -> StatefulUserData<'a, LoggingIn> {
+        self.user_data.state_data = AppStateData::LoggingIn(LoggingIn {
             email,
             password_hash_iterations,
             master_key,
             master_password_hash,
         });
 
-        StatefulUserData {
-            user_data: self.user_data,
-            state: PhantomData,
-        }
+        StatefulUserData::new(self.user_data)
     }
 }
 
-impl<'a> StatefulUserData<'a, LoggingInMarker> {
-    pub fn into_logged_out(self) -> StatefulUserData<'a, LoggedOutMarker> {
+impl<'a> StatefulUserData<'a, LoggingIn> {
+    pub fn into_logged_out(self) -> StatefulUserData<'a, LoggedOut> {
         self.user_data
             .autolocker
             .lock()
             .unwrap()
             .clear_autolock_time();
-        self.user_data.state_data = AppStateData::LoggedOut;
-        StatefulUserData {
-            user_data: self.user_data,
-            state: PhantomData,
-        }
+        self.user_data.state_data = AppStateData::LoggedOut(LoggedOut);
+        StatefulUserData::new(self.user_data)
     }
 
     pub fn into_logged_in(
         self,
         token: Arc<TokenResponseSuccess>,
-    ) -> StatefulUserData<'a, LoggedInMarker> {
+    ) -> StatefulUserData<'a, LoggedIn> {
         let state_data =
             std::mem::replace(&mut self.user_data.state_data, AppStateData::Intermediate);
         let logging_in_data = get_state_data!(state_data, AppStateData::LoggingIn);
 
-        self.user_data.state_data = AppStateData::LoggedIn(LoggedInData {
+        self.user_data.state_data = AppStateData::LoggedIn(LoggedIn {
             logging_in_data,
             token,
         });
 
-        StatefulUserData {
-            user_data: self.user_data,
-            state: PhantomData,
-        }
+        StatefulUserData::new(self.user_data)
     }
 
     pub fn master_password_hash(&self) -> Arc<MasterPasswordHash> {
@@ -341,7 +303,7 @@ impl<'a> StatefulUserData<'a, LoggingInMarker> {
     }
 }
 
-impl<'a> StatefulUserData<'a, LoggedInMarker> {
+impl<'a> StatefulUserData<'a, LoggedIn> {
     pub fn email(&self) -> Arc<String> {
         get_state_data!(&self.user_data.state_data, AppStateData::LoggedIn)
             .logging_in_data
@@ -359,11 +321,11 @@ impl<'a> StatefulUserData<'a, LoggedInMarker> {
         self,
         vault_data: Arc<HashMap<String, CipherItem>>,
         organizations: Arc<HashMap<String, Organization>>,
-    ) -> StatefulUserData<'a, UnlockedMarker> {
+    ) -> StatefulUserData<'a, Unlocked> {
         let state_data =
             std::mem::replace(&mut self.user_data.state_data, AppStateData::Intermediate);
         let logged_in_data = get_state_data!(state_data, AppStateData::LoggedIn);
-        let unlocked_data = UnlockedData {
+        let unlocked_data = Unlocked {
             logged_in_data,
             vault_data,
             organizations,
@@ -371,31 +333,32 @@ impl<'a> StatefulUserData<'a, LoggedInMarker> {
 
         self.user_data.state_data = AppStateData::Unlocked(unlocked_data);
 
-        StatefulUserData {
-            user_data: self.user_data,
-            state: PhantomData,
-        }
+        StatefulUserData::new(self.user_data)
     }
 
-    pub fn into_logging_in(self) -> StatefulUserData<'a, LoggingInMarker> {
+    pub fn into_logging_in(self) -> StatefulUserData<'a, LoggingIn> {
         let state_data =
             std::mem::replace(&mut self.user_data.state_data, AppStateData::Intermediate);
         let logged_in_data = get_state_data!(state_data, AppStateData::LoggedIn);
 
         self.user_data.state_data = AppStateData::LoggingIn(logged_in_data.logging_in_data);
 
-        StatefulUserData {
-            user_data: self.user_data,
-            state: PhantomData,
-        }
+        StatefulUserData::new(self.user_data)
     }
 }
 
-impl<'a> StatefulUserData<'a, UnlockedMarker> {
-    pub fn into_locked(self, search_term: Option<&str>) -> StatefulUserData<'a, LockedMarker> {
+impl<'a> StatefulUserData<'a, Unlocked> {
+    pub fn into_locked(self, search_term: Option<&str>) -> StatefulUserData<'a, Locked> {
         let state_data =
             std::mem::replace(&mut self.user_data.state_data, AppStateData::Intermediate);
         let unlocked_data = get_state_data!(state_data, AppStateData::Unlocked);
+
+        self.user_data
+            .autolocker
+            .lock()
+            .unwrap()
+            .clear_autolock_time();
+
         // Encrypt the vault view state with the current user keys
         let enc_search_term = search_term
             .zip(unlocked_data.logged_in_data.decrypt_keys())
@@ -403,7 +366,7 @@ impl<'a> StatefulUserData<'a, UnlockedMarker> {
                 cipher::Cipher::encrypt(st.as_bytes(), &enc_key, &mac_key).ok()
             });
 
-        let locked_data = LockedData {
+        let locked_data = Locked {
             email: unlocked_data.logged_in_data.logging_in_data.email,
             password_hash_iterations: unlocked_data
                 .logged_in_data
@@ -417,13 +380,10 @@ impl<'a> StatefulUserData<'a, UnlockedMarker> {
 
         self.user_data.state_data = AppStateData::Locked(locked_data);
 
-        StatefulUserData {
-            user_data: self.user_data,
-            state: PhantomData,
-        }
+        StatefulUserData::new(self.user_data)
     }
 
-    pub fn into_logged_in(self) -> StatefulUserData<'a, LoggedInMarker> {
+    pub fn into_logged_in(self) -> StatefulUserData<'a, LoggedIn> {
         let state_data =
             std::mem::replace(&mut self.user_data.state_data, AppStateData::Intermediate);
         let unlocked_data = get_state_data!(state_data, AppStateData::Unlocked);
@@ -434,10 +394,7 @@ impl<'a> StatefulUserData<'a, UnlockedMarker> {
             .clear_autolock_time();
         self.user_data.state_data = AppStateData::LoggedIn(unlocked_data.logged_in_data);
 
-        StatefulUserData {
-            user_data: self.user_data,
-            state: PhantomData,
-        }
+        StatefulUserData::new(self.user_data)
     }
 
     pub fn decrypt_keys(&self) -> Option<(EncryptionKey, MacKey)> {
@@ -461,7 +418,7 @@ impl<'a> StatefulUserData<'a, UnlockedMarker> {
     }
 }
 
-impl<'a> StatefulUserData<'a, UnlockingMarker> {
+impl<'a> StatefulUserData<'a, Unlocking> {
     pub fn decrypt_search_term(&self) -> Option<String> {
         let d = get_state_data!(&self.user_data.state_data, AppStateData::Unlocking);
         d.logged_in_data
@@ -469,12 +426,12 @@ impl<'a> StatefulUserData<'a, UnlockingMarker> {
             .map(|(ec, mc)| d.encrypted_search_term.decrypt_to_string(&ec, &mc))
     }
 
-    pub fn into_unlocked(self) -> StatefulUserData<'a, UnlockedMarker> {
+    pub fn into_unlocked(self) -> StatefulUserData<'a, Unlocked> {
         let state_data =
             std::mem::replace(&mut self.user_data.state_data, AppStateData::Intermediate);
         let unlocking_data = get_state_data!(state_data, AppStateData::Unlocking);
 
-        let unlocked_data = UnlockedData {
+        let unlocked_data = Unlocked {
             logged_in_data: unlocking_data.logged_in_data,
             organizations: unlocking_data.organizations,
             vault_data: unlocking_data.vault_data,
@@ -482,14 +439,11 @@ impl<'a> StatefulUserData<'a, UnlockingMarker> {
 
         self.user_data.state_data = AppStateData::Unlocked(unlocked_data);
 
-        StatefulUserData {
-            user_data: self.user_data,
-            state: PhantomData,
-        }
+        StatefulUserData::new(self.user_data)
     }
 }
 
-impl<'a> StatefulUserData<'a, LockedMarker> {
+impl<'a> StatefulUserData<'a, Locked> {
     pub fn email(&self) -> Arc<String> {
         get_state_data!(&self.user_data.state_data, AppStateData::Locked)
             .email
@@ -510,14 +464,14 @@ impl<'a> StatefulUserData<'a, LockedMarker> {
         self,
         master_key: Arc<MasterKey>,
         master_password_hash: Arc<MasterPasswordHash>,
-    ) -> StatefulUserData<'a, UnlockingMarker> {
+    ) -> StatefulUserData<'a, Unlocking> {
         let state_data =
             std::mem::replace(&mut self.user_data.state_data, AppStateData::Intermediate);
         let locked_data = get_state_data!(state_data, AppStateData::Locked);
 
-        let unlocking_data = UnlockingData {
-            logged_in_data: LoggedInData {
-                logging_in_data: LoggingInData {
+        let unlocking_data = Unlocking {
+            logged_in_data: LoggedIn {
+                logging_in_data: LoggingIn {
                     email: locked_data.email,
                     password_hash_iterations: locked_data.password_hash_iterations,
                     master_key,
@@ -532,9 +486,6 @@ impl<'a> StatefulUserData<'a, LockedMarker> {
 
         self.user_data.state_data = AppStateData::Unlocking(unlocking_data);
 
-        StatefulUserData {
-            user_data: self.user_data,
-            state: PhantomData,
-        }
+        StatefulUserData::new(self.user_data)
     }
 }

@@ -73,7 +73,7 @@ fn submit_login(c: &mut Cursive) {
     c.pop_layer();
     c.add_layer(Dialog::text("Signing in..."));
 
-    let ud = c.get_user_data();
+    let ud = c.get_user_data().with_logged_out_state().unwrap();
     let global_settings = ud.global_settings();
     let profile_store = ud.profile_store();
 
@@ -120,18 +120,20 @@ pub fn handle_login_response(
     match res {
         Result::Err(e) => {
             let err_msg = format!("Error: {:?}", e);
-            cursive
-                .get_user_data()
-                .with_logging_in_state()
-                .unwrap()
-                .into_logged_out();
+            if let Some(ud) = cursive.get_user_data().with_logging_in_state() {
+                ud.into_logged_out();
+            }
             cursive.add_layer(Dialog::text(err_msg).title("Login error").button(
                 "OK",
                 move |siv| {
                     // Remove this dialog, and show the login dialog again
                     siv.pop_layer();
                     let d = login_dialog(
-                        &siv.get_user_data().global_settings().profile,
+                        &siv.get_user_data()
+                            .with_logged_out_state()
+                            .unwrap()
+                            .global_settings()
+                            .profile,
                         Some(String::clone(&email)),
                     );
                     siv.add_layer(d);
@@ -142,7 +144,7 @@ pub fn handle_login_response(
             match token {
                 bitwarden::api::TokenResponse::Success(t) => {
                     cursive.pop_layer();
-                    let ud = cursive.get_user_data();
+                    let ud = cursive.get_user_data().with_logging_in_state().unwrap();
                     // Try to store the email
                     let store_res = ud
                         .profile_store()
@@ -151,15 +153,18 @@ pub fn handle_login_response(
                         log::error!("Failed to store profile data: {}", e);
                     }
 
-                    ud.with_logging_in_state()
-                        .unwrap()
-                        .into_logged_in(Arc::new(*t));
+                    ud.into_logged_in(Arc::new(*t));
 
                     do_sync(cursive, true);
                 }
                 bitwarden::api::TokenResponse::TwoFactorRequired(types) => {
                     cursive.pop_layer();
-                    let p = &cursive.get_user_data().global_settings().profile;
+                    let p = &cursive
+                        .get_user_data()
+                        .with_logging_in_state()
+                        .unwrap()
+                        .global_settings()
+                        .profile;
                     let dialog = two_factor_dialog(types, email, p);
                     cursive.add_layer(dialog);
                 }

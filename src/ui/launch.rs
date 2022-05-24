@@ -38,10 +38,12 @@ fn run(mut cursive: CursiveRunnable) {
 
         if got_event {
             cursive.with_user_data(|ud: &mut UserData| {
-                ud.autolocker()
-                    .lock()
-                    .unwrap()
-                    .update_next_autolock_time(false)
+                if let Some(ud) = ud.with_unlocked_state() {
+                    ud.autolocker()
+                        .lock()
+                        .unwrap()
+                        .update_next_autolock_time(false)
+                }
             });
         }
     }

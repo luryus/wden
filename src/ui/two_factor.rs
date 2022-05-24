@@ -37,7 +37,9 @@ pub fn two_factor_dialog(
         .title(format!("Two-factor Login ({})", profile_name))
         .button("Submit", move |siv| submit_two_factor(siv, email2.clone()))
         .button("Cancel", move |siv| {
-            let pn = &siv.get_user_data().global_settings().profile;
+            let ud = siv.get_user_data().with_logging_in_state().unwrap();
+            let ud = ud.into_logged_out();
+            let pn = &ud.global_settings().profile;
             let d = login_dialog(pn, Some(email3.to_string()));
             siv.clear_layers();
             siv.add_layer(d);
@@ -56,11 +58,10 @@ fn submit_two_factor(c: &mut Cursive, email: Arc<String>) {
     c.pop_layer();
     c.add_layer(Dialog::text("Signing in..."));
 
-    let ud = c.get_user_data();
+    let ud = c.get_user_data().with_logging_in_state().unwrap();
 
     let global_settings = ud.global_settings();
     let profile_store = ud.profile_store();
-    let ud = ud.with_logging_in_state().unwrap();
     let master_pw_hash = ud.master_password_hash();
     let email2 = email.clone();
 

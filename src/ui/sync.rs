@@ -12,7 +12,6 @@ pub fn do_sync(cursive: &mut Cursive, just_refreshed_token: bool) {
     cursive.add_layer(Dialog::text("Syncing..."));
     log::info!("Running sync.");
     let user_data = cursive.get_user_data();
-    let global_settings = user_data.global_settings();
 
     // Clear any data remaining
     let user_data = if let Some(unlocked_user_data) = user_data.with_unlocked_state() {
@@ -21,6 +20,7 @@ pub fn do_sync(cursive: &mut Cursive, just_refreshed_token: bool) {
         user_data.with_logged_in_state().unwrap()
     };
 
+    let global_settings = user_data.global_settings();
     let email = user_data.email();
     let token = user_data.token();
 

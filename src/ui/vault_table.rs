@@ -22,7 +22,7 @@ use zeroize::Zeroize;
 
 use super::util::cursive_ext::CursiveExt;
 use super::{
-    data::{StatefulUserData, UnlockedMarker},
+    data::{StatefulUserData, Unlocked},
     item_details::item_detail_dialog,
     lock::lock_vault,
     search,
@@ -41,7 +41,7 @@ impl ViewWrapper for VaultView {
 }
 
 impl VaultView {
-    fn new(user_data: &StatefulUserData<UnlockedMarker>) -> VaultView {
+    fn new(user_data: &StatefulUserData<Unlocked>) -> VaultView {
         let (enc_key, mac_key) = user_data.decrypt_keys().unwrap();
         // Generate row items (with some decrypted data for all cipher items)
         // These are stored in user_data. Only the filter results are stored
@@ -293,7 +293,7 @@ fn vault_table_view(rows: Vec<Row>) -> impl View {
 }
 
 fn create_rows(
-    user_data: &StatefulUserData<UnlockedMarker>,
+    user_data: &StatefulUserData<Unlocked>,
     enc_key: &EncryptionKey,
     mac_key: &MacKey,
 ) -> Vec<Row> {
@@ -384,14 +384,12 @@ pub fn show_copy_notification(cursive: &mut Cursive, message: &'static str) {
 }
 
 pub fn show_vault(c: &mut Cursive) {
-    let ud = c.get_user_data();
+    let ud = c.get_user_data().with_unlocked_state().unwrap();
     ud.autolocker()
         .lock()
         .unwrap()
         .update_next_autolock_time(true);
     let global_settings = ud.global_settings();
-
-    let ud = ud.with_unlocked_state().unwrap();
 
     let view = VaultView::new(&ud).with_name("vault_view");
 
