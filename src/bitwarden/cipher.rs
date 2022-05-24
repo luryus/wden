@@ -30,10 +30,9 @@ impl MasterKey {
     #[cfg(test)]
     fn from_base64(b64_data: &str) -> Result<Self, base64::DecodeError> {
         let mut key = Self::new();
-        let len = base64::decode_config_slice(
-            b64_data, base64::STANDARD, key.0.as_mut_slice())?;
+        let len = base64::decode_config_slice(b64_data, base64::STANDARD, key.0.as_mut_slice())?;
         if len == key.0.len() {
-            Ok(key)   
+            Ok(key)
         } else {
             Err(base64::DecodeError::InvalidLength)
         }
@@ -435,20 +434,23 @@ impl Cipher {
     pub fn encode(&self) -> String {
         match self {
             Cipher::Empty => String::new(),
-            Cipher::Value { enc_type, iv, ct, mac } => {
+            Cipher::Value {
+                enc_type,
+                iv,
+                ct,
+                mac,
+            } => {
                 let b64_ct = base64::encode(&ct);
                 match (enc_type.has_mac(), enc_type.has_iv()) {
                     (true, true) => {
                         let b64_iv = base64::encode(&iv);
                         let b64_mac = base64::encode(&mac);
-                        format!("{}.{}|{}|{}",
-                            *enc_type as u8,
-                            b64_iv, b64_ct, b64_mac)
+                        format!("{}.{}|{}|{}", *enc_type as u8, b64_iv, b64_ct, b64_mac)
                     }
                     (false, false) => format!("{}.{}", *enc_type as u8, b64_ct),
-                    _ => unimplemented!()
+                    _ => unimplemented!(),
                 }
-            },
+            }
         }
     }
 }
@@ -509,7 +511,7 @@ mod tests {
 
         // Contains the encryption key of the user encrypted
         // with the master key
-        pub const USER_SYMMETRIC_KEY_CIPHER_STRING: &str = 
+        pub const USER_SYMMETRIC_KEY_CIPHER_STRING: &str =
             "2.BztLR8IR0LVpkRL222P4rg==\
              |cBSzwekYt1RPgYAEHI29mtqrjRge8U+FOSmtJtheAMnaEq4eCEurazgzRweksbE9abJYxriOXFnzTR/13HyCJqO9ytLK11N+G0kmhdW/scM=\
              |nLLHbuK4KnVJnRyVIfOu396iI7xJ/ZXWYHRscMFugTI=";
@@ -537,8 +539,8 @@ mod tests {
             BKpr7YwlyXTceQ/0V0PTfsWBYg85nBG21qwvTHPMim2XRibnIsW5YQhxzUBQ/JDNOvsuVc3HTGvaXza0VRXWJ0S\
             Yo0XZpjrQbGw6eICpXcUreZVecO5uoHh1WC1za2TY1IZ38IqwhZ8ZBjaN67H0GaTNqVjDaa46RoticfyDs0SJSW\
             gssTLUwJts7RSd1+lQ=|rFzZYOkVQOu5mEWWDfvPpLrdIrOoOy8rmJfbJUjPV94=";
-            
-        // Contains the string "Test", encrypted with the public key of the user 
+
+        // Contains the string "Test", encrypted with the public key of the user
         pub const TEST_CIPHER_STRING_ASYMMETRIC: &str =
             "4.CzrGfIA+mHbPJy9km5J+gsC4mgwvu5267Xk2kfBscqroqEFza6g2a+fkRcaoXOIX+1Pq7DcwlbgQ\
              6GVMMwA8Orm4uA4v8XCGH2Zsj3wVVnloNxsVYDmny6HFWMuJdfbNUXO/jdIjF8R8hzPka2hQ5jAZ\
@@ -548,8 +550,7 @@ mod tests {
 
         // Contains the string "Test" encrypted with the key of the
         // testdata user
-        pub const TEST_CIPHER_STRING: &str = 
-            "2.OixUIKgN6/vWRoSvC0aTCA==\
+        pub const TEST_CIPHER_STRING: &str = "2.OixUIKgN6/vWRoSvC0aTCA==\
              |Ts7tpWXO28X2l7XSU4trsA==\
              |q6Vz+/1QADVZRwZ1qoPoRoSvVd01A6le+nbSQxjmGDI=";
     }
@@ -570,7 +571,7 @@ mod tests {
         let key = create_master_key(
             testdata::USER_EMAIL,
             testdata::USER_PASSWORD,
-            testdata::USER_HASH_ITERATIONS
+            testdata::USER_HASH_ITERATIONS,
         );
         assert_eq!(
             base64::encode(key.0.as_slice()),
@@ -593,7 +594,8 @@ mod tests {
 
         let master_key = MasterKey::from_base64(testdata::USER_MASTER_KEY_B64)
             .expect("Master key decoding failed");
-        let enc_key = testdata::USER_SYMMETRIC_KEY_CIPHER_STRING.parse()
+        let enc_key = testdata::USER_SYMMETRIC_KEY_CIPHER_STRING
+            .parse()
             .expect("Parsing symmetric key Cipher failed");
 
         let (dec_enc_key, dec_mac_key) = decrypt_symmetric_keys(&enc_key, &master_key).unwrap();
@@ -609,17 +611,22 @@ mod tests {
     fn test_decrypt_cipher_with_private_key() {
         let master_key = MasterKey::from_base64(testdata::USER_MASTER_KEY_B64)
             .expect("Master key decoding failed");
-        let enc_key = testdata::USER_SYMMETRIC_KEY_CIPHER_STRING.parse()
+        let enc_key = testdata::USER_SYMMETRIC_KEY_CIPHER_STRING
+            .parse()
             .expect("Parsing symmetric key Cipher failed");
         let (dec_enc_key, dec_mac_key) = decrypt_symmetric_keys(&enc_key, &master_key).unwrap();
 
         let der_private_key: DerPrivateKey = testdata::USER_PRIVATE_KEY_CIPHER_STRING
-            .parse::<Cipher>().unwrap()
-            .decrypt(&dec_enc_key, &dec_mac_key).unwrap()
+            .parse::<Cipher>()
+            .unwrap()
+            .decrypt(&dec_enc_key, &dec_mac_key)
+            .unwrap()
             .into();
-        
+
         let test_cipher = Cipher::from_str(testdata::TEST_CIPHER_STRING_ASYMMETRIC).unwrap();
-        let res = test_cipher.decrypt_with_private_key(&der_private_key).unwrap();
+        let res = test_cipher
+            .decrypt_with_private_key(&der_private_key)
+            .unwrap();
         let res = String::from_utf8(res).unwrap();
 
         assert_eq!("Test", res);
