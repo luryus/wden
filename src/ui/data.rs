@@ -107,14 +107,7 @@ impl Unlocked {
     }
 
     fn get_org_keys_for_vault(&self) -> HashMap<&String, (EncryptionKey, MacKey)> {
-        let org_ids: HashSet<_> = self
-            .vault_data
-            .values()
-            .filter_map(|i| i.organization_id.as_ref())
-            .collect();
-
-        org_ids
-            .into_iter()
+        self.organizations.keys()
             .filter_map(|oid| {
                 self.decrypt_organization_keys(oid)
                     .map(|key| (oid, key))
