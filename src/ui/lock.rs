@@ -16,23 +16,23 @@ const VIEW_NAME_PASSWORD: &str = "password";
 
 pub fn lock_vault(c: &mut Cursive) {
     // Get the search term, we want to restore it after unlocking
-    let search_term = vault_table::get_current_search_term(c);
+    let (search_term, collection_selection) = vault_table::get_filters(c)
+        .unwrap_or_default();
 
     // Remove all layers
     c.clear_layers();
 
     // Clear all keys from memory, and get stored email
-    let search_term = search_term.as_deref().map(|s| s.as_str());
     let ud = c
         .get_user_data()
         .with_unlocked_state()
         .unwrap()
-        .into_locked(search_term);
+        .into_locked(&search_term, collection_selection);
     let global_settings = ud.global_settings();
     let profile = global_settings.profile.as_str();
     let email = ud.email();
 
-    // Vault data is left in place, but its all encrypted
+    // Vault data is left in place, but it's all encrypted
 
     // Show unlock dialog
     let d = unlock_dialog(profile, &email);
@@ -102,13 +102,11 @@ fn submit_unlock(c: &mut Cursive) {
             // Success, store keys, restore other data and continue
             let user_data = user_data.into_unlocking(master_key, master_pw_hash);
 
-            let search_term = user_data.decrypt_search_term();
+            let search_term = user_data.decrypt_search_term().unwrap_or_default();
+            let collection_selection = user_data.collection_selection();
             let _ = user_data.into_unlocked();
 
-            vault_table::show_vault(c);
-            if let Some(term) = search_term {
-                vault_table::set_search_term(c, term);
-            }
+            vault_table::show_vault_with_filters(c, search_term, collection_selection);
         }
     }
 }

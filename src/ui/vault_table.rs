@@ -1,4 +1,4 @@
-use std::{rc::Rc, time::Duration};
+use std::time::Duration;
 
 use crate::bitwarden::{
     self,
@@ -46,26 +46,34 @@ impl ViewWrapper for VaultView {
 }
 
 impl VaultView {
-    fn new(user_data: &StatefulUserData<Unlocked>) -> VaultView {
+    fn new_with_filters(
+        user_data: &StatefulUserData<Unlocked>,
+        collection_selection: CollectionSelection,
+        search_term: String,
+    ) -> VaultView {
         let (enc_key, mac_key) = user_data.decrypt_keys().unwrap();
         // Generate row items (with some decrypted data for all cipher items)
         // These are stored in user_data. Only the filter results are stored
         // as the table's rows.
         let rows = create_rows(user_data, &enc_key, &mac_key);
         let simsearch = search::get_search_index(user_data);
-        let view = vault_view(rows.clone());
+        let view = vault_view(&search_term);
 
-        VaultView {
+        let mut vv = VaultView {
             view,
             rows,
             simsearch,
-            collection_selection: CollectionSelection::default(),
-            search_term: String::new(),
-        }
+            collection_selection,
+            search_term,
+        };
+
+        vv.update_search_results();
+
+        vv
     }
 
-    fn set_search_term(&mut self, term: &str) {
-        self.search_term = term.to_string();
+    fn set_search_term(&mut self, term: impl Into<String>) {
+        self.search_term = term.into();
         self.update_search_results();
     }
 
@@ -75,8 +83,7 @@ impl VaultView {
     }
 
     fn update_search_results(&mut self) {
-        if let Some(mut vt) = self.find_name::<TableView<Row, VaultTableColumn>>("vault_table")
-        {
+        if let Some(mut vt) = self.find_name::<TableView<Row, VaultTableColumn>>("vault_table") {
             let search_res_rows = self.search_rows();
             vt.set_items(search_res_rows);
             // Explicitly set the first row as selected. This is needed, because
@@ -87,7 +94,7 @@ impl VaultView {
     }
 
     fn search_rows(&self) -> Vec<Row> {
-        fn collection_matches(collection: &CollectionSelection, row: &Row) -> bool{
+        fn collection_matches(collection: &CollectionSelection, row: &Row) -> bool {
             match collection {
                 CollectionSelection::All => true,
                 CollectionSelection::Unassigned => row.collection_ids.is_empty(),
@@ -178,11 +185,11 @@ impl TableViewItem<VaultTableColumn> for Row {
     }
 }
 
-fn vault_view(rows: Vec<Row>) -> OnEventView<LinearLayout> {
-    let table = vault_table_view(rows);
+fn vault_view(search_term: &str) -> OnEventView<LinearLayout> {
+    let table = vault_table_view();
 
     let ll = LinearLayout::vertical()
-        .child(filter_edit_view())
+        .child(filter_edit_view(search_term))
         .child(table)
         .weight(100)
         .child(key_hint_view());
@@ -218,18 +225,12 @@ fn vault_view(rows: Vec<Row>) -> OnEventView<LinearLayout> {
         })
 }
 
-pub fn get_current_search_term(cursive: &mut Cursive) -> Option<Rc<String>> {
-    let edit = cursive.find_name::<EditView>("search_edit")?;
-    Some(edit.get_content())
-}
-
-pub fn set_search_term(cursive: &mut Cursive, search_term: String) {
-    if let Some(mut vault_view) = cursive.find_name::<VaultView>("vault_view") {
-        vault_view.set_search_term(&search_term);
-    }
-    if let Some(mut edit) = cursive.find_name::<EditView>("search_edit") {
-        edit.set_content(search_term);
-    }
+pub fn get_filters(cursive: &mut Cursive) -> Option<(String, CollectionSelection)> {
+    let vault_view = cursive.find_name::<VaultView>("vault_view")?;
+    Some((
+        vault_view.search_term.to_string(),
+        vault_view.collection_selection.clone(),
+    ))
 }
 
 fn copy_current_item_field(siv: &mut Cursive, field: Copyable) {
@@ -279,7 +280,7 @@ enum Copyable {
     Username,
 }
 
-fn filter_edit_view() -> impl View {
+fn filter_edit_view(search_term: &str) -> impl View {
     let filter_edit = EditView::new()
         .on_edit(|siv, text, _| {
             if let Some(mut vv) = siv.find_name::<VaultView>("vault_view") {
@@ -290,6 +291,7 @@ fn filter_edit_view() -> impl View {
             siv.focus_name("vault_table")
                 .expect("Focusing table failed");
         })
+        .content(search_term)
         .with_name("search_edit")
         .full_width();
 
@@ -300,14 +302,13 @@ fn filter_edit_view() -> impl View {
     PaddedView::lrtb(0, 0, 0, 1, ll)
 }
 
-fn vault_table_view(rows: Vec<Row>) -> impl View {
-    let mut tv = TableView::new()
+fn vault_table_view() -> impl View {
+    let tv: TableView<Row, VaultTableColumn> = TableView::new()
         .sorting_disabled()
         .column(VaultTableColumn::ItemType, "T", |c| c.width(1))
         .column(VaultTableColumn::Name, "Name", |c| c)
         .column(VaultTableColumn::Username, "Username", |c| c)
         .column(VaultTableColumn::IsInOrganization, "O", |c| c.width(2))
-        .items(rows)
         .on_submit(|siv: &mut Cursive, _, index| {
             let sink = siv.cb_sink().clone();
             siv.call_on_name(
@@ -318,11 +319,6 @@ fn vault_table_view(rows: Vec<Row>) -> impl View {
             )
             .unwrap();
         });
-
-    // Explicitly set the first row as selected. This is needed, because
-    // for some reason the table view scrolls past and hides the first item
-    // without this
-    tv.set_selected_row(0);
 
     tv.with_name("vault_table").full_height()
 }
@@ -420,21 +416,30 @@ pub fn show_copy_notification(cursive: &mut Cursive, message: &'static str) {
     });
 }
 
-pub fn show_vault(c: &mut Cursive) {
-    let ud = c.get_user_data().with_unlocked_state().unwrap();
+pub fn show_vault(cursive: &mut Cursive) {
+    show_vault_with_filters(cursive, Default::default(), Default::default())
+}
+
+pub fn show_vault_with_filters(
+    cursive: &mut Cursive,
+    search_term: String,
+    collection_selection: CollectionSelection,
+) {
+    let ud = cursive.get_user_data().with_unlocked_state().unwrap();
     ud.autolocker()
         .lock()
         .unwrap()
         .update_next_autolock_time(true);
     let global_settings = ud.global_settings();
 
-    let view = VaultView::new(&ud).with_name("vault_view");
+    let view = VaultView::new_with_filters(&ud, collection_selection, search_term)
+        .with_name("vault_view");
 
     let panel = Panel::new(view)
         .title(format!("Vault ({})", &global_settings.profile))
         .full_screen();
 
     // Clear all, and add the vault
-    c.clear_layers();
-    c.add_fullscreen_layer(panel);
+    cursive.clear_layers();
+    cursive.add_fullscreen_layer(panel);
 }
