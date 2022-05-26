@@ -20,7 +20,10 @@ use cursive_table_view::{TableView, TableViewItem};
 use simsearch::SimSearch;
 use zeroize::Zeroize;
 
-use super::util::cursive_ext::CursiveExt;
+use super::{
+    collections::{show_collection_filter, CollectionSelection},
+    util::cursive_ext::CursiveExt,
+};
 use super::{
     data::{StatefulUserData, Unlocked},
     item_details::item_detail_dialog,
@@ -34,6 +37,8 @@ struct VaultView {
     view: OnEventView<LinearLayout>,
     rows: Vec<Row>,
     simsearch: SimSearch<String>,
+    search_term: String,
+    collection_selection: CollectionSelection,
 }
 
 impl ViewWrapper for VaultView {
@@ -54,32 +59,56 @@ impl VaultView {
             view,
             rows,
             simsearch,
+            collection_selection: CollectionSelection::default(),
+            search_term: String::new(),
         }
     }
 
-    fn update_search_res(&mut self, term: &str) {
-        if let Some(search_res_rows) = self.search_rows(term) {
-            if let Some(mut vt) = self.find_name::<TableView<Row, VaultTableColumn>>("vault_table")
-            {
-                vt.set_items(search_res_rows);
-                // Explicitly set the first row as selected. This is needed, because
-                // for some reason the table view scrolls past and hides the first item
-                // without this
-                vt.set_selected_row(0);
+    fn set_search_term(&mut self, term: &str) {
+        self.search_term = term.to_string();
+        self.update_search_results();
+    }
+
+    fn set_collection_selection(&mut self, sel: CollectionSelection) {
+        self.collection_selection = sel;
+        self.update_search_results();
+    }
+
+    fn update_search_results(&mut self) {
+        if let Some(mut vt) = self.find_name::<TableView<Row, VaultTableColumn>>("vault_table")
+        {
+            let search_res_rows = self.search_rows();
+            vt.set_items(search_res_rows);
+            // Explicitly set the first row as selected. This is needed, because
+            // for some reason the table view scrolls past and hides the first item
+            // without this
+            vt.set_selected_row(0);
+        }
+    }
+
+    fn search_rows(&self) -> Vec<Row> {
+        fn collection_matches(collection: &CollectionSelection, row: &Row) -> bool{
+            match collection {
+                CollectionSelection::All => true,
+                CollectionSelection::Unassigned => row.collection_ids.is_empty(),
+                CollectionSelection::Collection(coll) => row.collection_ids.contains(coll),
             }
         }
-    }
 
-    fn search_rows(&self, term: &str) -> Option<Vec<Row>> {
-        let filtered = match search::search_items(term, &self.simsearch) {
+        match search::search_items(&self.search_term, &self.simsearch) {
             Some(matching_items) => matching_items
                 .into_iter()
                 .filter_map(|id| self.rows.iter().find(|r| r.id == id))
+                .filter(|row| collection_matches(&self.collection_selection, row))
                 .cloned()
                 .collect(),
-            _ => self.rows.clone(),
-        };
-        Some(filtered)
+            None => self
+                .rows
+                .iter()
+                .filter(|row| collection_matches(&self.collection_selection, row))
+                .cloned()
+                .collect(),
+        }
     }
 }
 
@@ -99,6 +128,7 @@ struct Row {
     username: String,
     item_type: String,
     is_in_organization: bool,
+    collection_ids: Vec<String>,
 }
 
 impl PartialEq for Row {
@@ -180,6 +210,12 @@ fn vault_view(rows: Vec<Row>) -> OnEventView<LinearLayout> {
         .on_event('u', |siv| {
             copy_current_item_field(siv, Copyable::Username);
         })
+        .on_event('c', |siv| {
+            show_collection_filter(siv, |siv, sel| {
+                let mut vault_view = siv.find_name::<VaultView>("vault_view").unwrap();
+                vault_view.set_collection_selection(sel);
+            });
+        })
 }
 
 pub fn get_current_search_term(cursive: &mut Cursive) -> Option<Rc<String>> {
@@ -188,8 +224,10 @@ pub fn get_current_search_term(cursive: &mut Cursive) -> Option<Rc<String>> {
 }
 
 pub fn set_search_term(cursive: &mut Cursive, search_term: String) {
+    if let Some(mut vault_view) = cursive.find_name::<VaultView>("vault_view") {
+        vault_view.set_search_term(&search_term);
+    }
     if let Some(mut edit) = cursive.find_name::<EditView>("search_edit") {
-        update_search_results(cursive, &search_term);
         edit.set_content(search_term);
     }
 }
@@ -243,7 +281,11 @@ enum Copyable {
 
 fn filter_edit_view() -> impl View {
     let filter_edit = EditView::new()
-        .on_edit(|siv, text, _| update_search_results(siv, text))
+        .on_edit(|siv, text, _| {
+            if let Some(mut vv) = siv.find_name::<VaultView>("vault_view") {
+                vv.set_search_term(text);
+            }
+        })
         .on_submit(|siv, _| {
             siv.focus_name("vault_table")
                 .expect("Focusing table failed");
@@ -256,13 +298,6 @@ fn filter_edit_view() -> impl View {
         .child(filter_edit);
 
     PaddedView::lrtb(0, 0, 0, 1, ll)
-}
-
-fn update_search_results(cursive: &mut Cursive, search_term: &str) {
-    // Filter the results, update table
-    if let Some(mut vv) = cursive.find_name::<VaultView>("vault_view") {
-        vv.update_search_res(search_term);
-    }
 }
 
 fn vault_table_view(rows: Vec<Row>) -> impl View {
@@ -328,6 +363,7 @@ fn create_rows(
                 }
                 .to_string(),
                 is_in_organization: ci.organization_id.is_some(),
+                collection_ids: ci.collection_ids.clone(),
             })
         })
         .collect();
@@ -356,6 +392,7 @@ fn key_hint_view() -> impl View {
 
     LinearLayout::horizontal()
         .child(hint_text("</> Search"))
+        .child(hint_text("<c> Collections"))
         .child(hint_text("<p> Copy password"))
         .child(hint_text("<u> Copy username"))
         .child(hint_text("<q> Quit"))
