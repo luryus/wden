@@ -82,8 +82,15 @@ pub fn do_sync(cursive: &mut Cursive, just_refreshed_token: bool) {
                         .map(|o| (o.id.clone(), o))
                         .collect(),
                 );
+                let collections = Arc::new(
+                    sync_res
+                        .collections
+                        .into_iter()
+                        .map(|c| (c.id.clone(), c))
+                        .collect(),
+                );
 
-                ud.into_unlocked(vault_data, organizations);
+                ud.into_unlocked(vault_data, organizations, collections);
 
                 c.pop_layer();
                 show_vault(c);
