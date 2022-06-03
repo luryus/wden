@@ -2,6 +2,8 @@
 
 ## next
 
+## 0.4.0
+
 - Collection filtering support
 - New theme (UI colors)
 - Upgrade all RustCrypto crates
