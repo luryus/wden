@@ -107,6 +107,17 @@ impl Unlocked {
         }
     }
 
+    fn get_keys_for_collection(&self, collection: &Collection) -> Option<(EncryptionKey, MacKey)> {
+        let res = self.decrypt_organization_keys(&collection.organization_id);
+        match res {
+            Ok(k) => Some(k),
+            Err(e) => {
+                log::warn!("Error decrypting org keys: {}", e);
+                None
+            }
+        }
+    }
+
     fn get_org_keys_for_vault(&self) -> HashMap<&String, (EncryptionKey, MacKey)> {
         self.organizations
             .keys()
@@ -424,6 +435,11 @@ impl<'a> StatefulUserData<'a, Unlocked> {
     pub fn get_keys_for_item(&self, item: &CipherItem) -> Option<(EncryptionKey, MacKey)> {
         let d = get_state_data!(&self.user_data.state_data, AppStateData::Unlocked);
         d.get_keys_for_item(item)
+    }
+
+    pub fn get_keys_for_collection(&self, collection: &Collection) -> Option<(EncryptionKey, MacKey)> {
+        let d = get_state_data!(&self.user_data.state_data, AppStateData::Unlocked);
+        d.get_keys_for_collection(collection)
     }
 
     pub fn get_org_keys_for_vault(&self) -> HashMap<&String, (EncryptionKey, MacKey)> {

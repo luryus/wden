@@ -8,7 +8,7 @@ use crate::bitwarden::{
 use bitwarden::api::CipherData;
 use cursive::{
     event::Event,
-    theme::{BaseColor, Color},
+    theme::{BaseColor, Color, PaletteColor},
     traits::{Finder, Nameable, Resizable},
     view::{Margins, ViewWrapper},
     views::{
@@ -57,7 +57,7 @@ impl VaultView {
         // as the table's rows.
         let rows = create_rows(user_data, &enc_key, &mac_key);
         let simsearch = search::get_search_index(user_data);
-        let view = vault_view(&search_term);
+        let view = vault_view(&search_term, &collection_selection, user_data);
 
         let mut vv = VaultView {
             view,
@@ -77,8 +77,20 @@ impl VaultView {
         self.update_search_results();
     }
 
-    fn set_collection_selection(&mut self, sel: CollectionSelection) {
+    fn set_collection_selection(
+        &mut self,
+        sel: CollectionSelection,
+        user_data: &StatefulUserData<Unlocked>,
+    ) {
         self.collection_selection = sel;
+        if let Some(mut label_text_view) =
+            self.find_name::<TextView>("active_collection_filter_label")
+        {
+            label_text_view.set_content(active_collection_filter_label_text(
+                &self.collection_selection,
+                user_data,
+            ));
+        }
         self.update_search_results();
     }
 
@@ -185,11 +197,16 @@ impl TableViewItem<VaultTableColumn> for Row {
     }
 }
 
-fn vault_view(search_term: &str) -> OnEventView<LinearLayout> {
+fn vault_view(
+    search_term: &str,
+    collection: &CollectionSelection,
+    user_data: &StatefulUserData<Unlocked>,
+) -> OnEventView<LinearLayout> {
     let table = vault_table_view();
 
     let ll = LinearLayout::vertical()
-        .child(filter_edit_view(search_term))
+        .child(search_edit_view(search_term))
+        .child(active_collection_filter_view(collection, user_data))
         .child(table)
         .weight(100)
         .child(key_hint_view());
@@ -220,7 +237,8 @@ fn vault_view(search_term: &str) -> OnEventView<LinearLayout> {
         .on_event('c', |siv| {
             show_collection_filter(siv, |siv, sel| {
                 let mut vault_view = siv.find_name::<VaultView>("vault_view").unwrap();
-                vault_view.set_collection_selection(sel);
+                let user_data = siv.get_user_data().with_unlocked_state().unwrap();
+                vault_view.set_collection_selection(sel, &user_data);
             });
         })
 }
@@ -280,8 +298,8 @@ enum Copyable {
     Username,
 }
 
-fn filter_edit_view(search_term: &str) -> impl View {
-    let filter_edit = EditView::new()
+fn search_edit_view(search_term: &str) -> impl View {
+    let search_edit = EditView::new()
         .on_edit(|siv, text, _| {
             if let Some(mut vv) = siv.find_name::<VaultView>("vault_view") {
                 vv.set_search_term(text);
@@ -295,11 +313,38 @@ fn filter_edit_view(search_term: &str) -> impl View {
         .with_name("search_edit")
         .full_width();
 
-    let ll = LinearLayout::horizontal()
+    LinearLayout::horizontal()
         .child(TextView::new("🔍"))
-        .child(filter_edit);
+        .child(search_edit)
+}
 
-    PaddedView::lrtb(0, 0, 0, 1, ll)
+fn active_collection_filter_view(
+    collection: &CollectionSelection,
+    user_data: &StatefulUserData<Unlocked>,
+) -> impl View {
+    let label = TextView::new(active_collection_filter_label_text(collection, user_data))
+        .style(PaletteColor::Secondary)
+        .with_name("active_collection_filter_label");
+    PaddedView::new(Margins::trbl(0, 2, 1, 2), label)
+}
+
+fn active_collection_filter_label_text(
+    collection: &CollectionSelection,
+    user_data: &StatefulUserData<Unlocked>,
+) -> String {
+    match collection {
+        CollectionSelection::All => "All items".to_string(),
+        CollectionSelection::Unassigned => "Collection: Unassigned".to_string(),
+        CollectionSelection::Collection(collection_id) => {
+            let collection_name = user_data
+                .collections()
+                .get(collection_id)
+                .and_then(|coll| Some((coll, user_data.get_keys_for_collection(coll)?)))
+                .map(|(coll, (enc, mac))| coll.name.decrypt_to_string(&enc, &mac))
+                .unwrap_or_else(|| "<unknown>".to_string());
+            format!("Collection: {collection_name}")
+        }
+    }
 }
 
 fn vault_table_view() -> impl View {
@@ -432,8 +477,8 @@ pub fn show_vault_with_filters(
         .update_next_autolock_time(true);
     let global_settings = ud.global_settings();
 
-    let view = VaultView::new_with_filters(&ud, collection_selection, search_term)
-        .with_name("vault_view");
+    let view =
+        VaultView::new_with_filters(&ud, collection_selection, search_term).with_name("vault_view");
 
     let panel = Panel::new(view)
         .title(format!("Vault ({})", &global_settings.profile))
