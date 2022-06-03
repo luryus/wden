@@ -1,5 +1,6 @@
 mod autolock;
 mod clipboard;
+mod collections;
 mod components;
 mod data;
 mod item_details;

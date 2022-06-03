@@ -1,4 +1,4 @@
-use std::{rc::Rc, time::Duration};
+use std::time::Duration;
 
 use crate::bitwarden::{
     self,
@@ -8,7 +8,7 @@ use crate::bitwarden::{
 use bitwarden::api::CipherData;
 use cursive::{
     event::Event,
-    theme::{BaseColor, Color},
+    theme::{BaseColor, Color, PaletteColor},
     traits::{Finder, Nameable, Resizable},
     view::{Margins, ViewWrapper},
     views::{
@@ -20,7 +20,10 @@ use cursive_table_view::{TableView, TableViewItem};
 use simsearch::SimSearch;
 use zeroize::Zeroize;
 
-use super::util::cursive_ext::CursiveExt;
+use super::{
+    collections::{show_collection_filter, CollectionSelection},
+    util::cursive_ext::CursiveExt,
+};
 use super::{
     data::{StatefulUserData, Unlocked},
     item_details::item_detail_dialog,
@@ -34,6 +37,8 @@ struct VaultView {
     view: OnEventView<LinearLayout>,
     rows: Vec<Row>,
     simsearch: SimSearch<String>,
+    search_term: String,
+    collection_selection: CollectionSelection,
 }
 
 impl ViewWrapper for VaultView {
@@ -41,45 +46,88 @@ impl ViewWrapper for VaultView {
 }
 
 impl VaultView {
-    fn new(user_data: &StatefulUserData<Unlocked>) -> VaultView {
+    fn new_with_filters(
+        user_data: &StatefulUserData<Unlocked>,
+        collection_selection: CollectionSelection,
+        search_term: String,
+    ) -> VaultView {
         let (enc_key, mac_key) = user_data.decrypt_keys().unwrap();
         // Generate row items (with some decrypted data for all cipher items)
         // These are stored in user_data. Only the filter results are stored
         // as the table's rows.
         let rows = create_rows(user_data, &enc_key, &mac_key);
         let simsearch = search::get_search_index(user_data);
-        let view = vault_view(rows.clone());
+        let view = vault_view(&search_term, &collection_selection, user_data);
 
-        VaultView {
+        let mut vv = VaultView {
             view,
             rows,
             simsearch,
+            collection_selection,
+            search_term,
+        };
+
+        vv.update_search_results();
+
+        vv
+    }
+
+    fn set_search_term(&mut self, term: impl Into<String>) {
+        self.search_term = term.into();
+        self.update_search_results();
+    }
+
+    fn set_collection_selection(
+        &mut self,
+        sel: CollectionSelection,
+        user_data: &StatefulUserData<Unlocked>,
+    ) {
+        self.collection_selection = sel;
+        if let Some(mut label_text_view) =
+            self.find_name::<TextView>("active_collection_filter_label")
+        {
+            label_text_view.set_content(active_collection_filter_label_text(
+                &self.collection_selection,
+                user_data,
+            ));
+        }
+        self.update_search_results();
+    }
+
+    fn update_search_results(&mut self) {
+        if let Some(mut vt) = self.find_name::<TableView<Row, VaultTableColumn>>("vault_table") {
+            let search_res_rows = self.search_rows();
+            vt.set_items(search_res_rows);
+            // Explicitly set the first row as selected. This is needed, because
+            // for some reason the table view scrolls past and hides the first item
+            // without this
+            vt.set_selected_row(0);
         }
     }
 
-    fn update_search_res(&mut self, term: &str) {
-        if let Some(search_res_rows) = self.search_rows(term) {
-            if let Some(mut vt) = self.find_name::<TableView<Row, VaultTableColumn>>("vault_table")
-            {
-                vt.set_items(search_res_rows);
-                // Explicitly set the first row as selected. This is needed, because
-                // for some reason the table view scrolls past and hides the first item
-                // without this
-                vt.set_selected_row(0);
+    fn search_rows(&self) -> Vec<Row> {
+        fn collection_matches(collection: &CollectionSelection, row: &Row) -> bool {
+            match collection {
+                CollectionSelection::All => true,
+                CollectionSelection::Unassigned => row.collection_ids.is_empty(),
+                CollectionSelection::Collection(coll) => row.collection_ids.contains(coll),
             }
         }
-    }
 
-    fn search_rows(&self, term: &str) -> Option<Vec<Row>> {
-        let filtered = match search::search_items(term, &self.simsearch) {
+        match search::search_items(&self.search_term, &self.simsearch) {
             Some(matching_items) => matching_items
                 .into_iter()
                 .filter_map(|id| self.rows.iter().find(|r| r.id == id))
+                .filter(|row| collection_matches(&self.collection_selection, row))
                 .cloned()
                 .collect(),
-            _ => self.rows.clone(),
-        };
-        Some(filtered)
+            None => self
+                .rows
+                .iter()
+                .filter(|row| collection_matches(&self.collection_selection, row))
+                .cloned()
+                .collect(),
+        }
     }
 }
 
@@ -99,6 +147,7 @@ struct Row {
     username: String,
     item_type: String,
     is_in_organization: bool,
+    collection_ids: Vec<String>,
 }
 
 impl PartialEq for Row {
@@ -148,11 +197,16 @@ impl TableViewItem<VaultTableColumn> for Row {
     }
 }
 
-fn vault_view(rows: Vec<Row>) -> OnEventView<LinearLayout> {
-    let table = vault_table_view(rows);
+fn vault_view(
+    search_term: &str,
+    collection: &CollectionSelection,
+    user_data: &StatefulUserData<Unlocked>,
+) -> OnEventView<LinearLayout> {
+    let table = vault_table_view();
 
     let ll = LinearLayout::vertical()
-        .child(filter_edit_view())
+        .child(search_edit_view(search_term))
+        .child(active_collection_filter_view(collection, user_data))
         .child(table)
         .weight(100)
         .child(key_hint_view());
@@ -180,18 +234,21 @@ fn vault_view(rows: Vec<Row>) -> OnEventView<LinearLayout> {
         .on_event('u', |siv| {
             copy_current_item_field(siv, Copyable::Username);
         })
+        .on_event('c', |siv| {
+            show_collection_filter(siv, |siv, sel| {
+                let mut vault_view = siv.find_name::<VaultView>("vault_view").unwrap();
+                let user_data = siv.get_user_data().with_unlocked_state().unwrap();
+                vault_view.set_collection_selection(sel, &user_data);
+            });
+        })
 }
 
-pub fn get_current_search_term(cursive: &mut Cursive) -> Option<Rc<String>> {
-    let edit = cursive.find_name::<EditView>("search_edit")?;
-    Some(edit.get_content())
-}
-
-pub fn set_search_term(cursive: &mut Cursive, search_term: String) {
-    if let Some(mut edit) = cursive.find_name::<EditView>("search_edit") {
-        update_search_results(cursive, &search_term);
-        edit.set_content(search_term);
-    }
+pub fn get_filters(cursive: &mut Cursive) -> Option<(String, CollectionSelection)> {
+    let vault_view = cursive.find_name::<VaultView>("vault_view")?;
+    Some((
+        vault_view.search_term.to_string(),
+        vault_view.collection_selection.clone(),
+    ))
 }
 
 fn copy_current_item_field(siv: &mut Cursive, field: Copyable) {
@@ -241,38 +298,62 @@ enum Copyable {
     Username,
 }
 
-fn filter_edit_view() -> impl View {
-    let filter_edit = EditView::new()
-        .on_edit(|siv, text, _| update_search_results(siv, text))
+fn search_edit_view(search_term: &str) -> impl View {
+    let search_edit = EditView::new()
+        .on_edit(|siv, text, _| {
+            if let Some(mut vv) = siv.find_name::<VaultView>("vault_view") {
+                vv.set_search_term(text);
+            }
+        })
         .on_submit(|siv, _| {
             siv.focus_name("vault_table")
                 .expect("Focusing table failed");
         })
+        .content(search_term)
         .with_name("search_edit")
         .full_width();
 
-    let ll = LinearLayout::horizontal()
+    LinearLayout::horizontal()
         .child(TextView::new("🔍"))
-        .child(filter_edit);
-
-    PaddedView::lrtb(0, 0, 0, 1, ll)
+        .child(search_edit)
 }
 
-fn update_search_results(cursive: &mut Cursive, search_term: &str) {
-    // Filter the results, update table
-    if let Some(mut vv) = cursive.find_name::<VaultView>("vault_view") {
-        vv.update_search_res(search_term);
+fn active_collection_filter_view(
+    collection: &CollectionSelection,
+    user_data: &StatefulUserData<Unlocked>,
+) -> impl View {
+    let label = TextView::new(active_collection_filter_label_text(collection, user_data))
+        .style(PaletteColor::Secondary)
+        .with_name("active_collection_filter_label");
+    PaddedView::new(Margins::trbl(0, 2, 1, 2), label)
+}
+
+fn active_collection_filter_label_text(
+    collection: &CollectionSelection,
+    user_data: &StatefulUserData<Unlocked>,
+) -> String {
+    match collection {
+        CollectionSelection::All => "All items".to_string(),
+        CollectionSelection::Unassigned => "Collection: Unassigned".to_string(),
+        CollectionSelection::Collection(collection_id) => {
+            let collection_name = user_data
+                .collections()
+                .get(collection_id)
+                .and_then(|coll| Some((coll, user_data.get_keys_for_collection(coll)?)))
+                .map(|(coll, (enc, mac))| coll.name.decrypt_to_string(&enc, &mac))
+                .unwrap_or_else(|| "<unknown>".to_string());
+            format!("Collection: {collection_name}")
+        }
     }
 }
 
-fn vault_table_view(rows: Vec<Row>) -> impl View {
-    let mut tv = TableView::new()
+fn vault_table_view() -> impl View {
+    let tv: TableView<Row, VaultTableColumn> = TableView::new()
         .sorting_disabled()
         .column(VaultTableColumn::ItemType, "T", |c| c.width(1))
         .column(VaultTableColumn::Name, "Name", |c| c)
         .column(VaultTableColumn::Username, "Username", |c| c)
         .column(VaultTableColumn::IsInOrganization, "O", |c| c.width(2))
-        .items(rows)
         .on_submit(|siv: &mut Cursive, _, index| {
             let sink = siv.cb_sink().clone();
             siv.call_on_name(
@@ -283,11 +364,6 @@ fn vault_table_view(rows: Vec<Row>) -> impl View {
             )
             .unwrap();
         });
-
-    // Explicitly set the first row as selected. This is needed, because
-    // for some reason the table view scrolls past and hides the first item
-    // without this
-    tv.set_selected_row(0);
 
     tv.with_name("vault_table").full_height()
 }
@@ -328,6 +404,7 @@ fn create_rows(
                 }
                 .to_string(),
                 is_in_organization: ci.organization_id.is_some(),
+                collection_ids: ci.collection_ids.clone(),
             })
         })
         .collect();
@@ -356,6 +433,7 @@ fn key_hint_view() -> impl View {
 
     LinearLayout::horizontal()
         .child(hint_text("</> Search"))
+        .child(hint_text("<c> Collections"))
         .child(hint_text("<p> Copy password"))
         .child(hint_text("<u> Copy username"))
         .child(hint_text("<q> Quit"))
@@ -383,21 +461,30 @@ pub fn show_copy_notification(cursive: &mut Cursive, message: &'static str) {
     });
 }
 
-pub fn show_vault(c: &mut Cursive) {
-    let ud = c.get_user_data().with_unlocked_state().unwrap();
+pub fn show_vault(cursive: &mut Cursive) {
+    show_vault_with_filters(cursive, Default::default(), Default::default())
+}
+
+pub fn show_vault_with_filters(
+    cursive: &mut Cursive,
+    search_term: String,
+    collection_selection: CollectionSelection,
+) {
+    let ud = cursive.get_user_data().with_unlocked_state().unwrap();
     ud.autolocker()
         .lock()
         .unwrap()
         .update_next_autolock_time(true);
     let global_settings = ud.global_settings();
 
-    let view = VaultView::new(&ud).with_name("vault_view");
+    let view =
+        VaultView::new_with_filters(&ud, collection_selection, search_term).with_name("vault_view");
 
     let panel = Panel::new(view)
         .title(format!("Vault ({})", &global_settings.profile))
         .full_screen();
 
     // Clear all, and add the vault
-    c.clear_layers();
-    c.add_fullscreen_layer(panel);
+    cursive.clear_layers();
+    cursive.add_fullscreen_layer(panel);
 }

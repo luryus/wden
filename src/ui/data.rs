@@ -1,6 +1,6 @@
 use crate::{
     bitwarden::{
-        api::{self, CipherItem, Organization, TokenResponseSuccess},
+        api::{self, CipherItem, Collection, Organization, TokenResponseSuccess},
         cipher::{
             self, extract_enc_mac_keys, EncryptionKey, MacKey, MasterKey, MasterPasswordHash,
         },
@@ -11,13 +11,13 @@ use anyhow::Context;
 use cipher::decrypt_symmetric_keys;
 
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     fmt::Display,
     marker::PhantomData,
     sync::{Arc, Mutex},
 };
 
-use super::autolock::Autolocker;
+use super::{autolock::Autolocker, collections::CollectionSelection};
 
 macro_rules! get_state_data {
     ($app_state_data: expr, $state: path) => {{
@@ -44,7 +44,7 @@ pub struct LoggingIn {
 
 pub struct LoggedIn {
     logging_in_data: LoggingIn,
-    token: Arc<api::TokenResponseSuccess>,
+    token: Arc<TokenResponseSuccess>,
 }
 
 impl LoggedIn {
@@ -57,8 +57,9 @@ impl LoggedIn {
 
 pub struct Unlocked {
     logged_in_data: LoggedIn,
-    vault_data: Arc<HashMap<String, api::CipherItem>>,
-    organizations: Arc<HashMap<String, api::Organization>>,
+    vault_data: Arc<HashMap<String, CipherItem>>,
+    organizations: Arc<HashMap<String, Organization>>,
+    collections: Arc<HashMap<String, Collection>>,
 }
 
 impl Unlocked {
@@ -106,15 +107,20 @@ impl Unlocked {
         }
     }
 
-    fn get_org_keys_for_vault(&self) -> HashMap<&String, (EncryptionKey, MacKey)> {
-        let org_ids: HashSet<_> = self
-            .vault_data
-            .values()
-            .filter_map(|i| i.organization_id.as_ref())
-            .collect();
+    fn get_keys_for_collection(&self, collection: &Collection) -> Option<(EncryptionKey, MacKey)> {
+        let res = self.decrypt_organization_keys(&collection.organization_id);
+        match res {
+            Ok(k) => Some(k),
+            Err(e) => {
+                log::warn!("Error decrypting org keys: {}", e);
+                None
+            }
+        }
+    }
 
-        org_ids
-            .into_iter()
+    fn get_org_keys_for_vault(&self) -> HashMap<&String, (EncryptionKey, MacKey)> {
+        self.organizations
+            .keys()
             .filter_map(|oid| {
                 self.decrypt_organization_keys(oid)
                     .map(|key| (oid, key))
@@ -127,17 +133,21 @@ impl Unlocked {
 pub struct Locked {
     email: Arc<String>,
     password_hash_iterations: u32,
-    token: Arc<api::TokenResponseSuccess>,
-    vault_data: Arc<HashMap<String, api::CipherItem>>,
-    organizations: Arc<HashMap<String, api::Organization>>,
+    token: Arc<TokenResponseSuccess>,
+    vault_data: Arc<HashMap<String, CipherItem>>,
+    organizations: Arc<HashMap<String, Organization>>,
+    collections: Arc<HashMap<String, Collection>>,
     encrypted_search_term: cipher::Cipher,
+    collection_selection: CollectionSelection,
 }
 
 pub struct Unlocking {
-    pub logged_in_data: LoggedIn,
-    pub vault_data: Arc<HashMap<String, api::CipherItem>>,
-    pub organizations: Arc<HashMap<String, api::Organization>>,
-    pub encrypted_search_term: cipher::Cipher,
+    logged_in_data: LoggedIn,
+    vault_data: Arc<HashMap<String, CipherItem>>,
+    organizations: Arc<HashMap<String, Organization>>,
+    collections: Arc<HashMap<String, Collection>>,
+    encrypted_search_term: cipher::Cipher,
+    collection_selection: CollectionSelection,
 }
 
 enum AppStateData {
@@ -321,6 +331,7 @@ impl<'a> StatefulUserData<'a, LoggedIn> {
         self,
         vault_data: Arc<HashMap<String, CipherItem>>,
         organizations: Arc<HashMap<String, Organization>>,
+        collections: Arc<HashMap<String, Collection>>,
     ) -> StatefulUserData<'a, Unlocked> {
         let state_data =
             std::mem::replace(&mut self.user_data.state_data, AppStateData::Intermediate);
@@ -329,6 +340,7 @@ impl<'a> StatefulUserData<'a, LoggedIn> {
             logged_in_data,
             vault_data,
             organizations,
+            collections,
         };
 
         self.user_data.state_data = AppStateData::Unlocked(unlocked_data);
@@ -348,7 +360,11 @@ impl<'a> StatefulUserData<'a, LoggedIn> {
 }
 
 impl<'a> StatefulUserData<'a, Unlocked> {
-    pub fn into_locked(self, search_term: Option<&str>) -> StatefulUserData<'a, Locked> {
+    pub fn into_locked(
+        self,
+        search_term: &str,
+        collection_selection: CollectionSelection,
+    ) -> StatefulUserData<'a, Locked> {
         let state_data =
             std::mem::replace(&mut self.user_data.state_data, AppStateData::Intermediate);
         let unlocked_data = get_state_data!(state_data, AppStateData::Unlocked);
@@ -360,11 +376,13 @@ impl<'a> StatefulUserData<'a, Unlocked> {
             .clear_autolock_time();
 
         // Encrypt the vault view state with the current user keys
-        let enc_search_term = search_term
-            .zip(unlocked_data.logged_in_data.decrypt_keys())
-            .and_then(|(st, (enc_key, mac_key))| {
-                cipher::Cipher::encrypt(st.as_bytes(), &enc_key, &mac_key).ok()
-            });
+        let enc_search_term =
+            unlocked_data
+                .logged_in_data
+                .decrypt_keys()
+                .and_then(|(enc_key, mac_key)| {
+                    cipher::Cipher::encrypt(search_term.as_bytes(), &enc_key, &mac_key).ok()
+                });
 
         let locked_data = Locked {
             email: unlocked_data.logged_in_data.logging_in_data.email,
@@ -374,8 +392,10 @@ impl<'a> StatefulUserData<'a, Unlocked> {
                 .password_hash_iterations,
             token: unlocked_data.logged_in_data.token,
             vault_data: unlocked_data.vault_data,
-            encrypted_search_term: enc_search_term.unwrap_or_default(),
             organizations: unlocked_data.organizations,
+            collections: unlocked_data.collections,
+            encrypted_search_term: enc_search_term.unwrap_or_default(),
+            collection_selection,
         };
 
         self.user_data.state_data = AppStateData::Locked(locked_data);
@@ -407,9 +427,19 @@ impl<'a> StatefulUserData<'a, Unlocked> {
         d.vault_data.clone()
     }
 
+    pub fn collections(&self) -> Arc<HashMap<String, Collection>> {
+        let d = get_state_data!(&self.user_data.state_data, AppStateData::Unlocked);
+        d.collections.clone()
+    }
+
     pub fn get_keys_for_item(&self, item: &CipherItem) -> Option<(EncryptionKey, MacKey)> {
         let d = get_state_data!(&self.user_data.state_data, AppStateData::Unlocked);
         d.get_keys_for_item(item)
+    }
+
+    pub fn get_keys_for_collection(&self, collection: &Collection) -> Option<(EncryptionKey, MacKey)> {
+        let d = get_state_data!(&self.user_data.state_data, AppStateData::Unlocked);
+        d.get_keys_for_collection(collection)
     }
 
     pub fn get_org_keys_for_vault(&self) -> HashMap<&String, (EncryptionKey, MacKey)> {
@@ -426,6 +456,11 @@ impl<'a> StatefulUserData<'a, Unlocking> {
             .map(|(ec, mc)| d.encrypted_search_term.decrypt_to_string(&ec, &mc))
     }
 
+    pub fn collection_selection(&self) -> CollectionSelection {
+        let d = get_state_data!(&self.user_data.state_data, AppStateData::Unlocking);
+        d.collection_selection.clone()
+    }
+
     pub fn into_unlocked(self) -> StatefulUserData<'a, Unlocked> {
         let state_data =
             std::mem::replace(&mut self.user_data.state_data, AppStateData::Intermediate);
@@ -435,6 +470,7 @@ impl<'a> StatefulUserData<'a, Unlocking> {
             logged_in_data: unlocking_data.logged_in_data,
             organizations: unlocking_data.organizations,
             vault_data: unlocking_data.vault_data,
+            collections: unlocking_data.collections,
         };
 
         self.user_data.state_data = AppStateData::Unlocked(unlocked_data);
@@ -479,9 +515,11 @@ impl<'a> StatefulUserData<'a, Locked> {
                 },
                 token: locked_data.token,
             },
-            encrypted_search_term: locked_data.encrypted_search_term,
             organizations: locked_data.organizations,
             vault_data: locked_data.vault_data,
+            collections: locked_data.collections,
+            encrypted_search_term: locked_data.encrypted_search_term,
+            collection_selection: locked_data.collection_selection,
         };
 
         self.user_data.state_data = AppStateData::Unlocking(unlocking_data);

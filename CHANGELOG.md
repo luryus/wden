@@ -2,10 +2,12 @@
 
 ## next
 
+- Collection filtering support
 - Upgrade all RustCrypto crates
+- Other crate updates (and Github dependabot integration helping with future updates)
 - Support showing identity item details
 - Enable gzip in http requests
-- Internal refactoring
+- A lot of internal refactoring
 
 ## 0.3.1
 
