@@ -3,6 +3,7 @@
 ## next
 
 - Collection filtering support
+- New theme (UI colors)
 - Upgrade all RustCrypto crates
 - Other crate updates (and Github dependabot integration helping with future updates)
 - Support showing identity item details

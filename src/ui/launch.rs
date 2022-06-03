@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use cursive::{Cursive, CursiveRunnable};
+use cursive::{Cursive, CursiveRunnable, theme::Theme, theme::PaletteColor::*, theme::BaseColor, theme::Color};
 
 use crate::profile::{GlobalSettings, ProfileData, ProfileStore};
 
@@ -11,6 +11,7 @@ pub fn launch(profile: String, server_url: Option<String>) {
     let profile_name = global_settings.profile.clone();
 
     let mut siv = cursive::default();
+    siv.set_theme(custom_theme());
     let autolocker =
         autolock::start_autolocker(siv.cb_sink().clone(), global_settings.autolock_duration);
     siv.set_user_data(UserData::new(
@@ -70,4 +71,19 @@ fn load_profile(
         .expect("Failed to write profile settings");
 
     (global_settings, profile_data, profile_store)
+}
+
+fn custom_theme() -> Theme {
+    let mut t = Theme::default();
+
+    t.palette[Background] = Color::TerminalDefault;
+    t.palette[View] = Color::parse("#f0f4f7").unwrap();
+    t.palette[Primary] = Color::Dark(BaseColor::Black);
+    t.palette[Secondary] = Color::parse("#525252").unwrap();
+    t.palette[TitlePrimary] = Color::parse("#1b98e0").unwrap();
+    t.palette[Highlight] = Color::parse("#126391").unwrap();
+    t.palette[HighlightInactive] = Color::parse("#233d4d").unwrap();
+    t.palette[HighlightText] = Color::parse("#f0f4f7").unwrap();
+
+    t
 }

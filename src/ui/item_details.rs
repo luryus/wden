@@ -10,7 +10,7 @@ use crate::{
     ui::components::secret_text_view::SecretTextView,
 };
 use cursive::{
-    theme::{BaseColor, Color, Effect, Style},
+    theme::{BaseColor, Color, Effect, Style, ColorStyle},
     traits::{Nameable, Resizable},
     view::Margins,
     views::{Dialog, LinearLayout, OnEventView, PaddedView, ScrollView, TextView, ViewRef},
@@ -21,7 +21,7 @@ use log::warn;
 
 lazy_static! {
     static ref VALUE_STYLE: Style =
-        Style::from(Effect::Reverse).combine(Color::Dark(BaseColor::Blue));
+        Style::from(Effect::Reverse).combine(ColorStyle::secondary());
 }
 
 pub fn item_detail_dialog(ud: &StatefulUserData<Unlocked>, item_id: &str) -> Option<impl View> {
