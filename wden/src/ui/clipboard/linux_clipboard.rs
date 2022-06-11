@@ -164,6 +164,9 @@ mod wayland {
 
         log::info!("Wayland res: {:?}", res);
 
-        matches!(res, Ok(_) | Err(Error::ClipboardEmpty) | Err(Error::NoMimeType))
+        matches!(
+            res,
+            Ok(_) | Err(Error::ClipboardEmpty) | Err(Error::NoMimeType)
+        )
     }
 }
