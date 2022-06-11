@@ -3,15 +3,29 @@ pub struct LinuxClipboard;
 
 impl PlatformClipboard for LinuxClipboard {
     fn clip_string(s: String) -> PlatformClipboardResult<()> {
-        x11::clip_string(s)
+        if !wayland::is_available() {
+            log::info!("Clipping using x11");
+            x11::clip_string(s)
+        } else {
+            log::info!("Clipping using wayland");
+            wayland::clip_string(s)
+        }
     }
 
     fn get_string_contents() -> PlatformClipboardResult<String> {
-        x11::get_string_contents()
+        if !wayland::is_available() {
+            x11::get_string_contents()
+        } else {
+            wayland::get_string_contents()
+        }
     }
 
     fn clear() -> PlatformClipboardResult<()> {
-        Self::clip_string(String::new())
+        if !wayland::is_available() {
+            x11::clip_string(String::new())
+        } else {
+            wayland::clear()
+        }
     }
 }
 
@@ -30,6 +44,10 @@ mod x11 {
 
     lazy_static! {
         static ref CLIPBOARD: Mutex<Option<Clipboard>> = Mutex::new(None);
+    }
+
+    pub fn is_available() -> bool {
+        get_cb().is_ok()
     }
 
     pub fn clip_string(s: String) -> PlatformClipboardResult<()> {
@@ -74,5 +92,78 @@ mod x11 {
     fn get_kde_password_hint_atom(connection: &impl Connection) -> PlatformClipboardResult<Atom> {
         let cookie = connection.intern_atom(false, b"x-kde-passwordManagerHint")?;
         Ok(cookie.reply()?.atom)
+    }
+}
+
+mod wayland {
+
+    use anyhow::Context;
+    use std::io::Read;
+    use wl_clipboard_rs::{
+        copy,
+        copy::{MimeSource, Options, Source},
+        paste,
+        paste::{get_contents, ClipboardType, Error, Seat},
+    };
+
+    use super::PlatformClipboardResult;
+
+    pub fn get_string_contents() -> PlatformClipboardResult<String> {
+        let res = get_contents(
+            ClipboardType::Regular,
+            Seat::Unspecified,
+            paste::MimeType::Text,
+        );
+        match res {
+            Ok((mut pipe, _mime_type)) => {
+                let mut buf = vec![];
+                pipe.read_to_end(&mut buf)?;
+                Ok(String::from_utf8_lossy(&buf).into_owned())
+            }
+
+            Err(Error::NoSeats) | Err(Error::ClipboardEmpty) | Err(Error::NoMimeType) => {
+                // This can be considered as empty
+                Ok(String::new())
+            }
+
+            Err(e) => Err(e).context("Getting wayland clipboard failed"),
+        }
+    }
+
+    pub fn clip_string(s: String) -> PlatformClipboardResult<()> {
+        let opts = Options::new();
+
+        let data = vec![
+            MimeSource {
+                source: Source::Bytes(s.as_bytes().into()),
+                mime_type: copy::MimeType::Text,
+            },
+            MimeSource {
+                source: Source::Bytes("secret".as_bytes().into()),
+                mime_type: kde_password_hint_mime_type(),
+            },
+        ];
+
+        opts.copy_multi(data).context("Copying failed")
+    }
+
+    pub fn kde_password_hint_mime_type() -> copy::MimeType {
+        copy::MimeType::Specific("x-kde-passwordManagerHint".into())
+    }
+
+    pub fn clear() -> PlatformClipboardResult<()> {
+        copy::clear(copy::ClipboardType::Regular, copy::Seat::All).context("Clearing failed")
+    }
+
+    pub fn is_available() -> bool {
+        let res = get_contents(
+            ClipboardType::Regular,
+            Seat::Unspecified,
+            paste::MimeType::Any,
+        );
+
+        log::info!("Wayland res: {:?}", res);
+
+        matches!(res, Ok(_) | Err(Error::ClipboardEmpty) | Err(Error::NoMimeType))
     }
 }
