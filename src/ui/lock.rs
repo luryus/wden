@@ -16,8 +16,7 @@ const VIEW_NAME_PASSWORD: &str = "password";
 
 pub fn lock_vault(c: &mut Cursive) {
     // Get the search term, we want to restore it after unlocking
-    let (search_term, collection_selection) = vault_table::get_filters(c)
-        .unwrap_or_default();
+    let (search_term, collection_selection) = vault_table::get_filters(c).unwrap_or_default();
 
     // Remove all layers
     c.clear_layers();

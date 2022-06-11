@@ -296,7 +296,7 @@ struct SyncResponseInternal {
     #[serde(alias = "Profile")]
     profile: Profile,
     #[serde(alias = "Collections")]
-    collections: Vec<Collection>
+    collections: Vec<Collection>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -307,7 +307,7 @@ pub struct Collection {
     #[serde(alias = "OrganizationId")]
     pub organization_id: String,
     #[serde(alias = "Name")]
-    pub name: Cipher
+    pub name: Cipher,
 }
 
 #[derive(Deserialize, Debug)]
@@ -338,7 +338,7 @@ pub struct Organization {
 pub struct SyncResponse {
     pub ciphers: Vec<CipherItem>,
     pub profile: Profile,
-    pub collections: Vec<Collection>
+    pub collections: Vec<Collection>,
 }
 
 impl From<SyncResponseInternal> for SyncResponse {
@@ -346,7 +346,7 @@ impl From<SyncResponseInternal> for SyncResponse {
         SyncResponse {
             ciphers: sri.ciphers.into_iter().map(|cii| cii.into()).collect(),
             profile: sri.profile,
-            collections: sri.collections
+            collections: sri.collections,
         }
     }
 }
