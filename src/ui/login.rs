@@ -19,8 +19,13 @@ use super::{sync::do_sync, two_factor::two_factor_dialog, util::cursive_ext::Cur
 
 const VIEW_NAME_PASSWORD: &str = "password";
 const VIEW_NAME_EMAIL: &str = "email";
+const VIEW_NAME_PERSONAL_TOKEN: &str = "personal_token";
 
-pub fn login_dialog(profile_name: &str, saved_email: Option<String>) -> Dialog {
+pub fn login_dialog(
+    profile_name: &str,
+    saved_email: Option<String>,
+    with_token_field: bool,
+) -> Dialog {
     let password_field = EditView::new()
         .secret()
         .on_submit(|siv, _| submit_login(siv))
@@ -46,6 +51,15 @@ pub fn login_dialog(profile_name: &str, saved_email: Option<String>) -> Dialog {
         .child(TextView::new("Password"))
         .child(password_field);
 
+    if with_token_field {
+        let token_field = EditView::new()
+            .on_submit(|siv, _| submit_login(siv))
+            .with_name(VIEW_NAME_PERSONAL_TOKEN)
+            .fixed_width(40);
+        layout.add_child(TextView::new("Personal access token"));
+        layout.add_child(token_field);
+    }
+
     if should_focus_password {
         let focus_res = layout.set_focus_index(3);
         if focus_res.is_err() {
@@ -60,15 +74,20 @@ pub fn login_dialog(profile_name: &str, saved_email: Option<String>) -> Dialog {
 
 fn submit_login(c: &mut Cursive) {
     let email = c
-        .call_on_name("email", |view: &mut EditView| view.get_content())
+        .call_on_name(VIEW_NAME_EMAIL, |view: &mut EditView| view.get_content())
         .unwrap();
     let email = Arc::new(String::clone(&email));
     let email2 = email.clone();
 
     let password = c
-        .call_on_name("password", |view: &mut EditView| view.get_content())
+        .call_on_name(VIEW_NAME_PASSWORD, |view: &mut EditView| view.get_content())
         .unwrap()
         .to_string();
+    
+    let personal_token = c
+        .call_on_name(VIEW_NAME_PERSONAL_TOKEN, |view: &mut EditView| view.get_content())
+        .map(|s| s.to_string());
+    let had_token_field = personal_token.is_some();
 
     c.pop_layer();
     c.add_layer(Dialog::text("Signing in..."));
@@ -89,6 +108,7 @@ fn submit_login(c: &mut Cursive) {
                     &email,
                     master_pw_hash.clone(),
                     None,
+                    personal_token.as_deref(),
                     &profile_store,
                 )
                 .await
@@ -96,7 +116,7 @@ fn submit_login(c: &mut Cursive) {
             }
             .await
         },
-        |siv, res| {
+        move|siv, res| {
             match res {
                 Ok((t, master_key, master_pw_hash, em, iterations)) => {
                     siv.get_user_data()
@@ -104,9 +124,9 @@ fn submit_login(c: &mut Cursive) {
                         .unwrap()
                         .into_logging_in(master_key, master_pw_hash, iterations, em.clone());
 
-                    handle_login_response(siv, Ok(t), em);
+                    handle_login_response(siv, Ok(t), em, had_token_field);
                 }
-                Err(e) => handle_login_response(siv, Err(e), email2),
+                Err(e) => handle_login_response(siv, Err(e), email2, had_token_field),
             };
         },
     )
@@ -116,6 +136,7 @@ pub fn handle_login_response(
     cursive: &mut Cursive,
     res: Result<TokenResponse, anyhow::Error>,
     email: Arc<String>,
+    had_token_field: bool
 ) {
     match res {
         Result::Err(e) => {
@@ -135,6 +156,7 @@ pub fn handle_login_response(
                             .global_settings()
                             .profile,
                         Some(String::clone(&email)),
+                        had_token_field,
                     );
                     siv.add_layer(d);
                 },
@@ -157,7 +179,7 @@ pub fn handle_login_response(
 
                     do_sync(cursive, true);
                 }
-                bitwarden::api::TokenResponse::TwoFactorRequired(types) => {
+                bitwarden::api::TokenResponse::TwoFactorRequired(types, captcha_bypass_token) => {
                     cursive.pop_layer();
                     let p = &cursive
                         .get_user_data()
@@ -165,7 +187,29 @@ pub fn handle_login_response(
                         .unwrap()
                         .global_settings()
                         .profile;
-                    let dialog = two_factor_dialog(types, email, p);
+                    let dialog = two_factor_dialog(types, email, p, captcha_bypass_token.map(Arc::new));
+                    cursive.add_layer(dialog);
+                }
+                bitwarden::api::TokenResponse::CaptchaRequired => {
+                    cursive.pop_layer();
+                    let ud = cursive.get_user_data().with_logging_in_state().unwrap();
+                    let email = ud.email();
+                    let profile_name = ud.global_settings().profile.clone();
+                    ud.into_logged_out();
+                    
+                    let dialog = Dialog::text(
+                        "Bitwarden requires additional confirmation. \
+                          Set your personal token (available in Bitwarden \
+                            user settings) in the next dialog.",
+                    )
+                    .button("OK", move |siv| {
+                        siv.clear_layers();
+                        let dialog = login_dialog(
+                            &profile_name,
+                            Some(String::clone(&email)), 
+                            true);
+                        siv.add_layer(dialog);
+                    });
                     cursive.add_layer(dialog);
                 }
             }
@@ -189,6 +233,7 @@ pub async fn do_login(
     email: &str,
     master_pw_hash: Arc<MasterPasswordHash>,
     second_factor: Option<(TwoFactorProviderType, &str)>,
+    personal_api_key: Option<&str>,
     profile_store: &ProfileStore,
 ) -> Result<TokenResponse, anyhow::Error> {
     let mut token_res = if let Some((two_factor_type, two_factor_token)) = second_factor {
@@ -197,6 +242,7 @@ pub async fn do_login(
                 email,
                 &master_pw_hash.base64_encoded(),
                 Some((two_factor_type, two_factor_token, true)),
+                personal_api_key,
             )
             .await?
     } else {
@@ -212,7 +258,11 @@ pub async fn do_login(
             .unwrap_or(None);
 
         client
-            .get_token(email, &master_pw_hash.base64_encoded(), two_factor_param)
+            .get_token(
+                email, 
+                &master_pw_hash.base64_encoded(), 
+                two_factor_param,
+                personal_api_key)
             .await?
     };
 

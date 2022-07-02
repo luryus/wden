@@ -46,7 +46,7 @@ pub fn do_sync(cursive: &mut Cursive, just_refreshed_token: bool) {
                 refresh_res
             },
             move |siv, refresh_res| {
-                login::handle_login_response(siv, refresh_res, email);
+                login::handle_login_response(siv, refresh_res, email, false);
             },
         );
         // Login response handling above calls do_sync again, so nothing to do here

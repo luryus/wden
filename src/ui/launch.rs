@@ -24,7 +24,7 @@ pub fn launch(profile: String, server_url: Option<String>) {
     cursive::logger::init();
     log::set_max_level(log::LevelFilter::Info);
 
-    siv.add_layer(login_dialog(&profile_name, profile_data.saved_email));
+    siv.add_layer(login_dialog(&profile_name, profile_data.saved_email, false));
 
     run(siv);
 }
