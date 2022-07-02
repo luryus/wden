@@ -6,4 +6,5 @@ pub struct GlobalSettings {
     pub autolock_duration: Duration,
     pub device_id: String,
     pub accept_invalid_certs: bool,
+    pub always_refresh_token_on_sync: bool,
 }

@@ -35,7 +35,7 @@ pub fn do_sync(cursive: &mut Cursive, just_refreshed_token: bool) {
         return;
     }
 
-    if should_refresh {
+    if !just_refreshed_token && (should_refresh || global_settings.always_refresh_token_on_sync) {
         let _ = user_data.into_logging_in();
         cursive.async_op(
             async move {

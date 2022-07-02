@@ -40,6 +40,10 @@ struct Opts {
     /// connecting to servers with untrusted certificates.
     #[clap(long)]
     accept_invalid_certs: bool,
+
+    /// Debug option: always do token refresh when syncing.
+    #[clap(long, hide(true))]
+    always_refresh_token_on_sync: bool,
 }
 
 #[tokio::main]
@@ -51,7 +55,12 @@ async fn main() {
         return;
     }
 
-    wden::ui::launch(opts.profile, opts.server_url, opts.accept_invalid_certs);
+    wden::ui::launch(
+        opts.profile,
+        opts.server_url,
+        opts.accept_invalid_certs,
+        opts.always_refresh_token_on_sync,
+    );
 }
 
 fn list_profiles() -> std::io::Result<()> {

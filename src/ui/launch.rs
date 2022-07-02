@@ -8,9 +8,18 @@ use crate::profile::{GlobalSettings, ProfileData, ProfileStore};
 
 use super::{autolock, data::UserData, login::login_dialog};
 
-pub fn launch(profile: String, server_url: Option<String>, accept_invalid_certs: bool) {
-    let (global_settings, profile_data, profile_store) =
-        load_profile(profile, server_url, accept_invalid_certs);
+pub fn launch(
+    profile: String,
+    server_url: Option<String>,
+    accept_invalid_certs: bool,
+    always_refresh_token_on_sync: bool,
+) {
+    let (global_settings, profile_data, profile_store) = load_profile(
+        profile,
+        server_url,
+        accept_invalid_certs,
+        always_refresh_token_on_sync,
+    );
     let profile_name = global_settings.profile.clone();
 
     let mut siv = cursive::default();
@@ -57,6 +66,7 @@ fn load_profile(
     profile_name: String,
     server_url: Option<String>,
     accept_invalid_certs: bool,
+    always_refresh_on_sync: bool,
 ) -> (GlobalSettings, ProfileData, ProfileStore) {
     let profile_store = ProfileStore::new(&profile_name);
     let mut profile_data = profile_store.load().unwrap_or_default();
@@ -67,6 +77,7 @@ fn load_profile(
         autolock_duration: profile_data.autolock_duration,
         device_id: profile_data.device_id.clone(),
         accept_invalid_certs,
+        always_refresh_token_on_sync: always_refresh_on_sync,
     };
 
     // Write new settings
