@@ -100,7 +100,11 @@ fn submit_login(c: &mut Cursive) {
 
     c.async_op(
         async move {
-            let client = ApiClient::new(&global_settings.server_url, &global_settings.device_id);
+            let client = ApiClient::new(
+                &global_settings.server_url,
+                &global_settings.device_id,
+                global_settings.accept_invalid_certs,
+            );
             async {
                 let (master_key, master_pw_hash, iterations) =
                     do_prelogin(&client, &email, &password).await?;

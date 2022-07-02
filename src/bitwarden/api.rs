@@ -37,9 +37,10 @@ pub struct ApiClient {
 }
 
 impl ApiClient {
-    pub fn new(server_url: &str, device_identifier: impl Into<String>) -> Self {
+    pub fn new(server_url: &str, device_identifier: impl Into<String>, accept_invalid_certs: bool) -> Self {
         let http_client = reqwest::Client::builder()
             .user_agent(APP_USER_AGENT)
+            .danger_accept_invalid_certs(accept_invalid_certs)
             .build()
             .unwrap();
         let base_url = Url::parse(server_url).unwrap();
@@ -51,8 +52,8 @@ impl ApiClient {
         }
     }
 
-    pub fn with_token(server_url: &str, device_identifier: impl Into<String>, token: &str) -> Self {
-        let mut c = Self::new(server_url, device_identifier);
+    pub fn with_token(server_url: &str, device_identifier: impl Into<String>, token: &str, accept_invalid_certs: bool) -> Self {
+        let mut c = Self::new(server_url, device_identifier, accept_invalid_certs);
         c.access_token = Some(token.to_string());
         c
     }

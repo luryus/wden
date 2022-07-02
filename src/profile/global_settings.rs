@@ -5,4 +5,5 @@ pub struct GlobalSettings {
     pub profile: String,
     pub autolock_duration: Duration,
     pub device_id: String,
+    pub accept_invalid_certs: bool,
 }
