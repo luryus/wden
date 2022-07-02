@@ -311,6 +311,11 @@ impl<'a> StatefulUserData<'a, LoggingIn> {
         let logging_in_data = get_state_data!(&self.user_data.state_data, AppStateData::LoggingIn);
         logging_in_data.master_password_hash.clone()
     }
+
+    pub fn email(&self) -> Arc<String> {
+        let logging_in_data = get_state_data!(&self.user_data.state_data, AppStateData::LoggingIn);
+        logging_in_data.email.clone()
+    }
 }
 
 impl<'a> StatefulUserData<'a, LoggedIn> {
@@ -437,7 +442,10 @@ impl<'a> StatefulUserData<'a, Unlocked> {
         d.get_keys_for_item(item)
     }
 
-    pub fn get_keys_for_collection(&self, collection: &Collection) -> Option<(EncryptionKey, MacKey)> {
+    pub fn get_keys_for_collection(
+        &self,
+        collection: &Collection,
+    ) -> Option<(EncryptionKey, MacKey)> {
         let d = get_state_data!(&self.user_data.state_data, AppStateData::Unlocked);
         d.get_keys_for_collection(collection)
     }

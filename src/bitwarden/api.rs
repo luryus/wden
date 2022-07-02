@@ -37,9 +37,10 @@ pub struct ApiClient {
 }
 
 impl ApiClient {
-    pub fn new(server_url: &str, device_identifier: impl Into<String>) -> Self {
+    pub fn new(server_url: &str, device_identifier: impl Into<String>, accept_invalid_certs: bool) -> Self {
         let http_client = reqwest::Client::builder()
             .user_agent(APP_USER_AGENT)
+            .danger_accept_invalid_certs(accept_invalid_certs)
             .build()
             .unwrap();
         let base_url = Url::parse(server_url).unwrap();
@@ -51,8 +52,8 @@ impl ApiClient {
         }
     }
 
-    pub fn with_token(server_url: &str, device_identifier: impl Into<String>, token: &str) -> Self {
-        let mut c = Self::new(server_url, device_identifier);
+    pub fn with_token(server_url: &str, device_identifier: impl Into<String>, token: &str, accept_invalid_certs: bool) -> Self {
+        let mut c = Self::new(server_url, device_identifier, accept_invalid_certs);
         c.access_token = Some(token.to_string());
         c
     }
@@ -82,11 +83,22 @@ impl ApiClient {
         Ok(iterations as u32)
     }
 
+    /// Make Bitwarden (OAuth) /identity/token api call for authenticating.
+    ///
+    /// Arguments:
+    /// * `username`: User's username. Most often this is the user email.
+    /// * `password`: User's master password hash. Not the actual password.
+    /// * `two_factor`: Optional tuple describing the second factor type, the second factor token and
+    ///                 whether to token should be "remembered" by the server or not. None if two-factor
+    ///                 is not used.
+    /// * `captcha_token`: Token for skipping the captcha check. Either the user's private api key or a captcha
+    ///                    bypass token sent by the server.
     pub async fn get_token(
         &self,
         username: &str,
         password: &str,
         two_factor: Option<(TwoFactorProviderType, &str, bool)>,
+        captcha_token: Option<&str>,
     ) -> Result<TokenResponse, Error> {
         let device_type = (get_device_type() as i8).to_string();
         let mut body = HashMap::new();
@@ -111,6 +123,10 @@ impl ApiClient {
             }
         }
 
+        if let Some(ct) = captcha_token {
+            body.insert("captchaResponse", ct);
+        }
+
         let url = self.base_url.join("identity/connect/token")?;
 
         let res = self
@@ -128,7 +144,22 @@ impl ApiClient {
 
         if res.status() == 400 {
             let body = res.json::<HashMap<String, serde_json::Value>>().await?;
-            if body.contains_key("TwoFactorProviders") {
+            if matches!(body.get("error_description"), Some(v) if v == &serde_json::json!("invalid_username_or_password"))
+            {
+                // The "invalid_username_or_password" error description can either mean that the username or password
+                // was invalid OR that the two-factor token was invalid...
+                // So let's get the actual error message and show it.
+                let server_error_message = body
+                    .get("ErrorModel")
+                    .and_then(|em| em.as_object())
+                    .and_then(|em| em.get("Message"))
+                    .and_then(|m| m.as_str());
+
+                return match server_error_message {
+                    Some(msg) => Err(anyhow::anyhow!("{}", msg)),
+                    None => Err(anyhow::anyhow!("Error logging in: {:?}", body)),
+                };
+            } else if body.contains_key("TwoFactorProviders") {
                 let providers = body
                     .get("TwoFactorProviders")
                     .and_then(|ps| ps.as_array())
@@ -143,7 +174,14 @@ impl ApiClient {
                     })
                     .ok_or_else(|| anyhow::anyhow!("Error parsing provider types"))?;
 
-                return Ok(TokenResponse::TwoFactorRequired(providers));
+                let captcha_bypass = body
+                    .get("CaptchaBypassToken")
+                    .and_then(|cbt| cbt.as_str())
+                    .map(|s| s.to_string());
+
+                return Ok(TokenResponse::TwoFactorRequired(providers, captcha_bypass));
+            } else if body.contains_key("HCaptcha_SiteKey") {
+                return Ok(TokenResponse::CaptchaRequired);
             } else {
                 return Err(anyhow::anyhow!("Error logging in: {:?}", body));
             }
@@ -207,7 +245,8 @@ impl ApiClient {
 
 pub enum TokenResponse {
     Success(Box<TokenResponseSuccess>),
-    TwoFactorRequired(Vec<TwoFactorProviderType>),
+    TwoFactorRequired(Vec<TwoFactorProviderType>, Option<String>),
+    CaptchaRequired,
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -296,7 +335,7 @@ struct SyncResponseInternal {
     #[serde(alias = "Profile")]
     profile: Profile,
     #[serde(alias = "Collections")]
-    collections: Vec<Collection>
+    collections: Vec<Collection>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -307,17 +346,11 @@ pub struct Collection {
     #[serde(alias = "OrganizationId")]
     pub organization_id: String,
     #[serde(alias = "Name")]
-    pub name: Cipher
+    pub name: Cipher,
 }
 
 #[derive(Deserialize, Debug)]
 pub struct Profile {
-    #[serde(alias = "Email")]
-    pub email: String,
-    #[serde(alias = "Id")]
-    pub id: String,
-    #[serde(alias = "Name")]
-    pub name: String,
     #[serde(alias = "Organizations")]
     pub organizations: Vec<Organization>,
 }
@@ -338,7 +371,7 @@ pub struct Organization {
 pub struct SyncResponse {
     pub ciphers: Vec<CipherItem>,
     pub profile: Profile,
-    pub collections: Vec<Collection>
+    pub collections: Vec<Collection>,
 }
 
 impl From<SyncResponseInternal> for SyncResponse {
@@ -346,7 +379,7 @@ impl From<SyncResponseInternal> for SyncResponse {
         SyncResponse {
             ciphers: sri.ciphers.into_iter().map(|cii| cii.into()).collect(),
             profile: sri.profile,
-            collections: sri.collections
+            collections: sri.collections,
         }
     }
 }

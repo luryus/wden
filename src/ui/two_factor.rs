@@ -19,35 +19,43 @@ pub fn two_factor_dialog(
     types: Vec<TwoFactorProviderType>,
     email: Arc<String>,
     profile_name: &str,
+    captcha_token: Option<Arc<String>>,
 ) -> Dialog {
     if !types.contains(&TwoFactorProviderType::Authenticator) {
         Dialog::info("Account requires two-factor authentication, but active two-factor methods are not supported.")
     } else {
         let email2 = email.clone();
         let email3 = email.clone();
+        let captcha_token2 = captcha_token.clone();
+        let had_captcha_token = captcha_token.is_some();
+
         Dialog::around(
             LinearLayout::vertical()
                 .child(TextView::new("Enter authenticator code:"))
                 .child(
                     EditView::new()
-                        .on_submit(move |siv, _| submit_two_factor(siv, email.clone()))
+                        .on_submit(move |siv, _| {
+                            submit_two_factor(siv, email.clone(), captcha_token.clone())
+                        })
                         .with_name(VIEW_NAME_AUTHENTICATOR_CODE),
                 ),
         )
         .title(format!("Two-factor Login ({})", profile_name))
-        .button("Submit", move |siv| submit_two_factor(siv, email2.clone()))
+        .button("Submit", move |siv| {
+            submit_two_factor(siv, email2.clone(), captcha_token2.clone())
+        })
         .button("Cancel", move |siv| {
             let ud = siv.get_user_data().with_logging_in_state().unwrap();
             let ud = ud.into_logged_out();
             let pn = &ud.global_settings().profile;
-            let d = login_dialog(pn, Some(email3.to_string()));
+            let d = login_dialog(pn, Some(email3.to_string()), had_captcha_token);
             siv.clear_layers();
             siv.add_layer(d);
         })
     }
 }
 
-fn submit_two_factor(c: &mut Cursive, email: Arc<String>) {
+fn submit_two_factor(c: &mut Cursive, email: Arc<String>, personal_api_key: Option<Arc<String>>) {
     let code = c
         .call_on_name(VIEW_NAME_AUTHENTICATOR_CODE, |view: &mut EditView| {
             view.get_content()
@@ -67,16 +75,21 @@ fn submit_two_factor(c: &mut Cursive, email: Arc<String>) {
 
     c.async_op(
         async move {
-            let client = ApiClient::new(&global_settings.server_url, &global_settings.device_id);
+            let client = ApiClient::new(
+                &global_settings.server_url,
+                &global_settings.device_id,
+                global_settings.accept_invalid_certs,
+            );
             do_login(
                 &client,
                 &email,
                 master_pw_hash,
                 Some((TwoFactorProviderType::Authenticator, &code)),
+                personal_api_key.as_deref().map(|s| s.as_str()),
                 &profile_store,
             )
             .await
         },
-        move |siv, res| handle_login_response(siv, res, email2),
+        move |siv, res| handle_login_response(siv, res, email2, false),
     );
 }

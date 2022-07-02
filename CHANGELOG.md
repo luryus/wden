@@ -2,6 +2,11 @@
 
 ## next
 
+- Add `--allow-invalid-certs` option for allowing connections with invalid and untrusted certificates.
+- Add support for bypassing CAPTCHA checks with personal api keys
+- Fix vault loading failing if user name is not set in the profile details
+
+
 ## 0.4.0
 
 - Collection filtering support

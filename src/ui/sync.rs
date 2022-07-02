@@ -40,13 +40,16 @@ pub fn do_sync(cursive: &mut Cursive, just_refreshed_token: bool) {
         cursive.async_op(
             async move {
                 log::info!("Refreshing access token");
-                let client =
-                    ApiClient::new(&global_settings.server_url, &global_settings.device_id);
+                let client = ApiClient::new(
+                    &global_settings.server_url,
+                    &global_settings.device_id,
+                    global_settings.accept_invalid_certs,
+                );
                 let refresh_res = client.refresh_token(&token).await;
                 refresh_res
             },
             move |siv, refresh_res| {
-                login::handle_login_response(siv, refresh_res, email);
+                login::handle_login_response(siv, refresh_res, email, false);
             },
         );
         // Login response handling above calls do_sync again, so nothing to do here
@@ -60,6 +63,7 @@ pub fn do_sync(cursive: &mut Cursive, just_refreshed_token: bool) {
                 &global_settings.server_url,
                 &global_settings.device_id,
                 &token.access_token,
+                global_settings.accept_invalid_certs,
             );
             let sync_res = client.sync().await;
             sync_res

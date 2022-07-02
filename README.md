@@ -63,6 +63,18 @@ All existing profiles can be listed with the `--list-profiles` parameter.
 
 Configuration files, one for each profile, are stored under the user's config directory (by default, `~/.config/wden` on Linux and `%appdata%\wden` on Windows).
 
+
+### Bypassing CAPTCHA requirement
+
+Bitwarden Cloud and self-hosted Bitwarden-compatible servers may require CAPTCHA verification upon login in some situations. Because wden cannot display the CAPTCHA challenge in the terminal, Bitwarden's personal API keys can be used to skip the CAPTCHA requirement.
+
+1. When CAPTCHA is required, wden notices this and displays an additional text field in the login dialog.
+2. Go to Account Settings in your Bitwarden vault. Navigate to Security → Keys.
+3. View your API key.
+4. Copy the `client_secret` value to the Personal API key field in the login dialog.
+
+Bitwarden should not require the CAPTCHA verification again on the same wden profile after it has been completed once. 
+
 ---
 
 ## Features
