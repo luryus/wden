@@ -4,7 +4,7 @@ use wden::profile::ProfileStore;
 fn try_read_profile_name(input: &str) -> Result<String, anyhow::Error> {
     if input
         .chars()
-        .any(|c| !c.is_ascii_lowercase() && !c.is_digit(10) && c != '_' && c != '-')
+        .any(|c| !c.is_ascii_lowercase() && !c.is_ascii_digit() && c != '_' && c != '-')
     {
         Err(anyhow::anyhow!("Invalid profile name. Profile names can only include lowercase alphanumeric characters, dashes (-) and underscores (_)."))
     } else {
