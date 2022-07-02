@@ -350,12 +350,6 @@ pub struct Collection {
 
 #[derive(Deserialize, Debug)]
 pub struct Profile {
-    #[serde(alias = "Email")]
-    pub email: String,
-    #[serde(alias = "Id")]
-    pub id: String,
-    #[serde(alias = "Name")]
-    pub name: String,
     #[serde(alias = "Organizations")]
     pub organizations: Vec<Organization>,
 }
