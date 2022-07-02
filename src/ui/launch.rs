@@ -1,6 +1,8 @@
 use std::sync::Arc;
 
-use cursive::{Cursive, CursiveRunnable, theme::Theme, theme::PaletteColor::*, theme::BaseColor, theme::Color};
+use cursive::{
+    theme::BaseColor, theme::Color, theme::PaletteColor::*, theme::Theme, Cursive, CursiveRunnable,
+};
 
 use crate::profile::{GlobalSettings, ProfileData, ProfileStore};
 

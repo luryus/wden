@@ -19,7 +19,7 @@ pub fn two_factor_dialog(
     types: Vec<TwoFactorProviderType>,
     email: Arc<String>,
     profile_name: &str,
-    captcha_token: Option<Arc<String>>
+    captcha_token: Option<Arc<String>>,
 ) -> Dialog {
     if !types.contains(&TwoFactorProviderType::Authenticator) {
         Dialog::info("Account requires two-factor authentication, but active two-factor methods are not supported.")
@@ -34,12 +34,16 @@ pub fn two_factor_dialog(
                 .child(TextView::new("Enter authenticator code:"))
                 .child(
                     EditView::new()
-                        .on_submit(move |siv, _| submit_two_factor(siv, email.clone(), captcha_token.clone()))
+                        .on_submit(move |siv, _| {
+                            submit_two_factor(siv, email.clone(), captcha_token.clone())
+                        })
                         .with_name(VIEW_NAME_AUTHENTICATOR_CODE),
                 ),
         )
         .title(format!("Two-factor Login ({})", profile_name))
-        .button("Submit", move |siv| submit_two_factor(siv, email2.clone(), captcha_token2.clone()))
+        .button("Submit", move |siv| {
+            submit_two_factor(siv, email2.clone(), captcha_token2.clone())
+        })
         .button("Cancel", move |siv| {
             let ud = siv.get_user_data().with_logging_in_state().unwrap();
             let ud = ud.into_logged_out();

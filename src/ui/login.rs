@@ -83,9 +83,11 @@ fn submit_login(c: &mut Cursive) {
         .call_on_name(VIEW_NAME_PASSWORD, |view: &mut EditView| view.get_content())
         .unwrap()
         .to_string();
-    
+
     let personal_token = c
-        .call_on_name(VIEW_NAME_PERSONAL_TOKEN, |view: &mut EditView| view.get_content())
+        .call_on_name(VIEW_NAME_PERSONAL_TOKEN, |view: &mut EditView| {
+            view.get_content()
+        })
         .map(|s| s.to_string());
     let had_token_field = personal_token.is_some();
 
@@ -116,7 +118,7 @@ fn submit_login(c: &mut Cursive) {
             }
             .await
         },
-        move|siv, res| {
+        move |siv, res| {
             match res {
                 Ok((t, master_key, master_pw_hash, em, iterations)) => {
                     siv.get_user_data()
@@ -136,7 +138,7 @@ pub fn handle_login_response(
     cursive: &mut Cursive,
     res: Result<TokenResponse, anyhow::Error>,
     email: Arc<String>,
-    had_token_field: bool
+    had_token_field: bool,
 ) {
     match res {
         Result::Err(e) => {
@@ -187,7 +189,8 @@ pub fn handle_login_response(
                         .unwrap()
                         .global_settings()
                         .profile;
-                    let dialog = two_factor_dialog(types, email, p, captcha_bypass_token.map(Arc::new));
+                    let dialog =
+                        two_factor_dialog(types, email, p, captcha_bypass_token.map(Arc::new));
                     cursive.add_layer(dialog);
                 }
                 bitwarden::api::TokenResponse::CaptchaRequired => {
@@ -196,7 +199,7 @@ pub fn handle_login_response(
                     let email = ud.email();
                     let profile_name = ud.global_settings().profile.clone();
                     ud.into_logged_out();
-                    
+
                     let dialog = Dialog::text(
                         "Bitwarden requires additional confirmation. \
                           Set your personal token (available in Bitwarden \
@@ -204,10 +207,7 @@ pub fn handle_login_response(
                     )
                     .button("OK", move |siv| {
                         siv.clear_layers();
-                        let dialog = login_dialog(
-                            &profile_name,
-                            Some(String::clone(&email)), 
-                            true);
+                        let dialog = login_dialog(&profile_name, Some(String::clone(&email)), true);
                         siv.add_layer(dialog);
                     });
                     cursive.add_layer(dialog);
@@ -259,10 +259,11 @@ pub async fn do_login(
 
         client
             .get_token(
-                email, 
-                &master_pw_hash.base64_encoded(), 
+                email,
+                &master_pw_hash.base64_encoded(),
                 two_factor_param,
-                personal_api_key)
+                personal_api_key,
+            )
             .await?
     };
 
