@@ -19,7 +19,7 @@ use super::{sync::do_sync, two_factor::two_factor_dialog, util::cursive_ext::Cur
 
 const VIEW_NAME_PASSWORD: &str = "password";
 const VIEW_NAME_EMAIL: &str = "email";
-const VIEW_NAME_PERSONAL_TOKEN: &str = "personal_token";
+const VIEW_NAME_PERSONAL_API_KEY: &str = "personal_api_key";
 
 pub fn login_dialog(
     profile_name: &str,
@@ -54,9 +54,9 @@ pub fn login_dialog(
     if with_token_field {
         let token_field = EditView::new()
             .on_submit(|siv, _| submit_login(siv))
-            .with_name(VIEW_NAME_PERSONAL_TOKEN)
+            .with_name(VIEW_NAME_PERSONAL_API_KEY)
             .fixed_width(40);
-        layout.add_child(TextView::new("Personal access token"));
+        layout.add_child(TextView::new("Personal API key"));
         layout.add_child(token_field);
     }
 
@@ -84,12 +84,12 @@ fn submit_login(c: &mut Cursive) {
         .unwrap()
         .to_string();
 
-    let personal_token = c
-        .call_on_name(VIEW_NAME_PERSONAL_TOKEN, |view: &mut EditView| {
+    let personal_api_key = c
+        .call_on_name(VIEW_NAME_PERSONAL_API_KEY, |view: &mut EditView| {
             view.get_content()
         })
         .map(|s| s.to_string());
-    let had_token_field = personal_token.is_some();
+    let had_token_field = personal_api_key.is_some();
 
     c.pop_layer();
     c.add_layer(Dialog::text("Signing in..."));
@@ -114,7 +114,7 @@ fn submit_login(c: &mut Cursive) {
                     &email,
                     master_pw_hash.clone(),
                     None,
-                    personal_token.as_deref(),
+                    personal_api_key.as_deref(),
                     &profile_store,
                 )
                 .await
@@ -206,7 +206,7 @@ pub fn handle_login_response(
 
                     let dialog = Dialog::text(
                         "Bitwarden requires additional confirmation. \
-                          Set your personal token (available in Bitwarden \
+                          Set your personal API key (available in Bitwarden \
                             user settings) in the next dialog.",
                     )
                     .button("OK", move |siv| {
