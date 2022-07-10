@@ -144,22 +144,7 @@ impl ApiClient {
 
         if res.status() == 400 {
             let body = res.json::<HashMap<String, serde_json::Value>>().await?;
-            if matches!(body.get("error_description"), Some(v) if v == &serde_json::json!("invalid_username_or_password"))
-            {
-                // The "invalid_username_or_password" error description can either mean that the username or password
-                // was invalid OR that the two-factor token was invalid...
-                // So let's get the actual error message and show it.
-                let server_error_message = body
-                    .get("ErrorModel")
-                    .and_then(|em| em.as_object())
-                    .and_then(|em| em.get("Message"))
-                    .and_then(|m| m.as_str());
-
-                return match server_error_message {
-                    Some(msg) => Err(anyhow::anyhow!("{}", msg)),
-                    None => Err(anyhow::anyhow!("Error logging in: {:?}", body)),
-                };
-            } else if body.contains_key("TwoFactorProviders") {
+            if body.contains_key("TwoFactorProviders") {
                 let providers = body
                     .get("TwoFactorProviders")
                     .and_then(|ps| ps.as_array())
@@ -183,7 +168,18 @@ impl ApiClient {
             } else if body.contains_key("HCaptcha_SiteKey") {
                 return Ok(TokenResponse::CaptchaRequired);
             } else {
-                return Err(anyhow::anyhow!("Error logging in: {:?}", body));
+                // The error models often include the error message,
+                // so try to get and show it.
+                let server_error_message = body
+                    .get("ErrorModel")
+                    .and_then(|em| em.as_object())
+                    .and_then(|em| em.get("Message"))
+                    .and_then(|m| m.as_str());
+
+                return match server_error_message {
+                    Some(msg) => Err(anyhow::anyhow!("{}", msg)),
+                    None => Err(anyhow::anyhow!("Error logging in: {:?}", body)),
+                };
             }
         }
 
