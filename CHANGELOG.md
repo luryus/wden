@@ -2,11 +2,12 @@
 
 ## next
 
+## 0.5.0
+
 - Add `--allow-invalid-certs` option for allowing connections with invalid and untrusted certificates.
 - Add support for bypassing CAPTCHA checks with personal api keys
 - Fix vault loading failing if user name is not set in the profile details
 - Add a hidden option `--always-refresh-token-on-sync` for making testing easier
-
 
 ## 0.4.0
 

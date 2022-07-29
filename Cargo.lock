@@ -1905,7 +1905,7 @@ checksum = "6598dd0bd3c7d51095ff6531a5b23e02acdc81804e30d8f07afb77b7215a140a"
 
 [[package]]
 name = "wden"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "aes",
  "anyhow",
