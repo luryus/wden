@@ -455,7 +455,7 @@ impl Cipher {
     }
 }
 
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum EncType {
     AesCbc256B64 = 0,
     AesCbc128HmacSha256B64 = 1,

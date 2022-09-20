@@ -45,8 +45,8 @@ pub fn do_sync(cursive: &mut Cursive, just_refreshed_token: bool) {
                     &global_settings.device_id,
                     global_settings.accept_invalid_certs,
                 );
-                let refresh_res = client.refresh_token(&token).await;
-                refresh_res
+
+                client.refresh_token(&token).await
             },
             move |siv, refresh_res| {
                 login::handle_login_response(siv, refresh_res, email, false);
@@ -65,8 +65,8 @@ pub fn do_sync(cursive: &mut Cursive, just_refreshed_token: bool) {
                 &token.access_token,
                 global_settings.accept_invalid_certs,
             );
-            let sync_res = client.sync().await;
-            sync_res
+
+            client.sync().await
         },
         |c, sync_res| match sync_res {
             Ok(sync_res) => {
