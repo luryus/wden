@@ -33,7 +33,7 @@ cursive = { version = "0.20", default_features = false, features = ["crossterm-b
 cursive_table_view = { git = "https://github.com/luryus/cursive_table_view", version = "0.14.0-alpha.1" }
 log = "0.4"
 lazy_static = "1.4"
-clap = { version="3.2", features = ["derive"] }
+clap = { version="4.0", features = ["derive"] }
 directories-next = "2.0"
 thiserror = "1.0"
 anyhow = "1.0"
