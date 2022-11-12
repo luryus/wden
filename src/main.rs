@@ -1,36 +1,38 @@
-use clap::Parser;
+use clap::{
+    builder::{StringValueParser, TypedValueParser}, Parser,
+};
 use wden::profile::ProfileStore;
 
-fn try_read_profile_name(input: &str) -> Result<String, anyhow::Error> {
-    if input
+fn validate_profile_name(value: String) -> Result<String, &'static str> {
+    if value
         .chars()
         .any(|c| !c.is_ascii_lowercase() && !c.is_ascii_digit() && c != '_' && c != '-')
     {
-        Err(anyhow::anyhow!("Invalid profile name. Profile names can only include lowercase alphanumeric characters, dashes (-) and underscores (_)."))
+        Err("Invalid profile name. Profile names can only include lowercase alphanumeric characters, dashes (-) and underscores (_).")
     } else {
-        Ok(input.to_string())
+        Ok(value)
     }
 }
 
 #[derive(Parser)]
-#[clap(version)]
+#[command(version)]
 struct Opts {
     /// Sets the profile that will be used. Profile names can only
     /// include lowercase alphanumeric characters, dashes (-) and
     /// underscores (_).
-    #[clap(short, long, default_value = "default", parse(try_from_str = try_read_profile_name))]
+    #[arg(short, long, default_value = "default", value_parser=StringValueParser::new().try_map(validate_profile_name) )]
     profile: String,
 
     /// Sets the Bitwarden server url.
     /// If not set, the url stored in the profile
     /// will be used. If a new profile is created without
     /// a server url set, https://vault.bitwarden.com will be used.
-    #[clap(short, long)]
+    #[arg(short, long)]
     server_url: Option<String>,
 
     /// Instead of starting the application,
     /// list all stored profiles
-    #[clap(long)]
+    #[arg(long)]
     list_profiles: bool,
 
     /// Accept invalid and untrusted (e.g. self-signed) certificates
@@ -38,11 +40,11 @@ struct Opts {
     /// insecure, so avoid using it. Note: this option is not stored
     /// in the profile settings. It must be specified every time when
     /// connecting to servers with untrusted certificates.
-    #[clap(long)]
+    #[arg(long)]
     accept_invalid_certs: bool,
 
     /// Debug option: always do token refresh when syncing.
-    #[clap(long, hide(true))]
+    #[arg(long, hide(true))]
     always_refresh_token_on_sync: bool,
 }
 

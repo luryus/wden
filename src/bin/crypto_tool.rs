@@ -6,28 +6,28 @@ use wden::bitwarden::cipher::Cipher;
 
 #[derive(Parser)]
 struct Opts {
-    #[clap(long)]
+    #[arg(long)]
     username: String,
 
-    #[clap(long)]
+    #[arg(long)]
     password: String,
 
-    #[clap(long)]
+    #[arg(long)]
     symmetric_key_cipher: String,
 
-    #[clap(long)]
+    #[arg(long)]
     private_key_cipher: Option<String>,
 
-    #[clap(long)]
+    #[arg(long)]
     cipher: Option<String>,
 
-    #[clap(long, default_value = "100000")]
+    #[arg(long, default_value = "100000")]
     hash_iterations: u32,
 
-    #[clap(long)]
+    #[arg(long)]
     to_string: bool,
 
-    #[clap(long)]
+    #[arg(long)]
     encrypt: bool,
 }
 
