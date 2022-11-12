@@ -440,11 +440,11 @@ impl Cipher {
                 ct,
                 mac,
             } => {
-                let b64_ct = base64::encode(&ct);
+                let b64_ct = base64::encode(ct);
                 match (enc_type.has_mac(), enc_type.has_iv()) {
                     (true, true) => {
-                        let b64_iv = base64::encode(&iv);
-                        let b64_mac = base64::encode(&mac);
+                        let b64_iv = base64::encode(iv);
+                        let b64_mac = base64::encode(mac);
                         format!("{}.{}|{}|{}", *enc_type as u8, b64_iv, b64_ct, b64_mac)
                     }
                     (false, false) => format!("{}.{}", *enc_type as u8, b64_ct),
