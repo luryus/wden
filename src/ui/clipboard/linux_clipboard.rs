@@ -3,14 +3,9 @@ use std::{collections::HashMap, sync::MutexGuard, time::Duration};
 use super::{PlatformClipboard, PlatformClipboardResult};
 use anyhow::Context;
 use lazy_static::lazy_static;
+use x11rb::{connection::Connection, protocol::xproto::ConnectionExt};
 use std::sync::Mutex;
-use x11_clipboard::{
-    xcb::{
-        x::{Atom, InternAtom},
-        Connection,
-    },
-    Clipboard,
-};
+use x11_clipboard::{Clipboard, Atom};
 
 lazy_static! {
     static ref CLIPBOARD: Mutex<Option<Clipboard>> = Mutex::new(None);
@@ -63,11 +58,7 @@ fn get_cb() -> Result<MutexGuard<'static, Option<Clipboard>>, anyhow::Error> {
     Ok(cb_opt)
 }
 
-fn get_kde_password_hint_atom(connection: &Connection) -> PlatformClipboardResult<Atom> {
-    let cookie = connection.send_request(&InternAtom {
-        name: b"x-kde-passwordManagerHint",
-        only_if_exists: false,
-    });
-
-    Ok(connection.wait_for_reply(cookie)?.atom())
+fn get_kde_password_hint_atom(connection: &impl Connection) -> PlatformClipboardResult<Atom> {
+    let cookie = connection.intern_atom(false, b"x-kde-passwordManagerHint")?;
+    Ok(cookie.reply()?.atom)
 }

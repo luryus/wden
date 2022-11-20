@@ -44,4 +44,5 @@ simsearch = "0.2"
 clipboard-win = { version = "4.4", features = ["std"] }
 
 [target.'cfg(target_os="linux")'.dependencies]
-x11-clipboard = { git = "https://github.com/luryus/x11-clipboard", tag = "v0.6.1+multitarget.1", version = "0.6.1" }
+x11-clipboard = { git = "https://github.com/luryus/x11-clipboard", tag = "v0.7.0+multitarget.1", version = "0.7.0" }
+x11rb = "0.10"
