@@ -908,6 +908,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "nix"
+version = "0.25.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e322c04a9e3440c327fca7b6c8a63e6890a32fa2ad689db972425f07e0d22abb"
+dependencies = [
+ "autocfg",
+ "bitflags",
+ "cfg-if",
+ "libc",
+ "memoffset",
+]
+
+[[package]]
 name = "num"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1958,7 +1971,7 @@ dependencies = [
  "tokio",
  "uuid",
  "x11-clipboard",
- "x11rb",
+ "x11rb 0.11.0",
  "zeroize",
 ]
 
@@ -2126,7 +2139,7 @@ name = "x11-clipboard"
 version = "0.7.0+multitarget.1"
 source = "git+https://github.com/luryus/x11-clipboard?tag=v0.7.0+multitarget.1#919b5d36c14ee431cbc62620b62cf97f408e310d"
 dependencies = [
- "x11rb",
+ "x11rb 0.10.1",
 ]
 
 [[package]]
@@ -2136,10 +2149,23 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "592b4883219f345e712b3209c62654ebda0bb50887f330cbd018d0f654bfd507"
 dependencies = [
  "gethostname",
- "nix",
+ "nix 0.24.2",
  "winapi",
  "winapi-wsapoll",
- "x11rb-protocol",
+ "x11rb-protocol 0.10.0",
+]
+
+[[package]]
+name = "x11rb"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6e8eeaf70413b8c4d3971203500cc3b505b5ef3b2f4d3d392aa7f712f850e6f9"
+dependencies = [
+ "gethostname",
+ "nix 0.25.0",
+ "winapi",
+ "winapi-wsapoll",
+ "x11rb-protocol 0.11.0",
 ]
 
 [[package]]
@@ -2148,7 +2174,16 @@ version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "56b245751c0ac9db0e006dc812031482784e434630205a93c73cfefcaabeac67"
 dependencies = [
- "nix",
+ "nix 0.24.2",
+]
+
+[[package]]
+name = "x11rb-protocol"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d11c3c1f17cc0f3752a60366ea0892716168ab993c064feda43746ffe3128492"
+dependencies = [
+ "nix 0.25.0",
 ]
 
 [[package]]
