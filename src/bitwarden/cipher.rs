@@ -30,7 +30,7 @@ impl MasterKey {
     #[cfg(test)]
     fn from_base64(b64_data: &str) -> Result<Self, base64::DecodeError> {
         let mut key = Self::new();
-        let len = base64::decode_config_slice(b64_data, base64::STANDARD, key.0.as_mut_slice())?;
+        let len = base64::decode_engine_slice(b64_data, key.0.as_mut_slice(), &base64::engine::DEFAULT_ENGINE)?;
         if len == key.0.len() {
             Ok(key)
         } else {
