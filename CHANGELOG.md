@@ -2,6 +2,11 @@
 
 ## next
 
+## 0.6.0
+
+- Dependency crate updates
+- Search field is now cleared when it's focused with `/`
+
 ## 0.5.0
 
 - Add `--allow-invalid-certs` option for allowing connections with invalid and untrusted certificates.
