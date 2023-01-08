@@ -213,8 +213,10 @@ fn vault_view(
 
     OnEventView::new(ll)
         .on_event('/', |siv| {
-            siv.focus_name("search_edit")
-                .expect("Focusing search failed");
+            if let Some(mut edit) = siv.find_name::<EditView>("search_edit") {
+                edit.set_content("");
+            }
+            siv.focus_name("search_edit").unwrap();
         })
         .on_event('q', |siv| {
             let dialog = Dialog::text("Quit?")
