@@ -1,7 +1,6 @@
 use super::cipher::Cipher;
 use anyhow::Error;
-use base64::alphabet::URL_SAFE;
-use base64::engine::fast_portable::{FastPortable, PAD};
+use base64::prelude::*;
 use reqwest;
 use reqwest::Url;
 use serde::Deserialize;
@@ -13,8 +12,6 @@ use std::{collections::HashMap, convert::TryFrom};
 const APP_USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"),);
 
 pub const DEFAULT_SERVER_URL: &str = "https://vault.bitwarden.com/";
-
-const URL_SAFE_ENGINE: FastPortable = FastPortable::from(&URL_SAFE, PAD);
 
 #[allow(clippy::enum_variant_names)]
 enum DeviceType {
@@ -150,7 +147,7 @@ impl ApiClient {
             // for some security reason
             .header(
                 "auth-email",
-                base64::encode_engine(username, &URL_SAFE_ENGINE),
+                BASE64_URL_SAFE.encode(username),
             )
             .send()
             .await?;

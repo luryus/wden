@@ -1,5 +1,6 @@
 use std::io::Read;
 
+use base64::prelude::*;
 use clap::Parser;
 use wden::bitwarden::cipher;
 use wden::bitwarden::cipher::Cipher;
@@ -64,7 +65,7 @@ fn main() -> Result<(), anyhow::Error> {
             cipher.decrypt(&enc_key, &mac_key)?
         };
 
-        println!("Decrypted cipher:\n{}", base64::encode(&decrypted_cipher));
+        println!("Decrypted cipher:\n{}", BASE64_STANDARD.encode(&decrypted_cipher));
 
         if opts.to_string {
             let cipher_str = String::from_utf8(decrypted_cipher).unwrap_or_default();

@@ -1,7 +1,7 @@
 use aes::cipher::block_padding::{Pkcs7, UnpadError};
 use aes::Aes256;
 use anyhow::Context;
-use base64;
+use base64::prelude::*;
 use cbc::cipher::{BlockDecryptMut, BlockEncryptMut, KeyIvInit};
 use hkdf::Hkdf;
 use hmac::digest::{InvalidLength, MacError};
@@ -28,13 +28,16 @@ impl MasterKey {
     }
 
     #[cfg(test)]
-    fn from_base64(b64_data: &str) -> Result<Self, base64::DecodeError> {
+    fn from_base64(b64_data: &str) -> Result<Self, base64::DecodeSliceError> {
         let mut key = Self::new();
-        let len = base64::decode_engine_slice(b64_data, key.0.as_mut_slice(), &base64::engine::DEFAULT_ENGINE)?;
+
+        let len = BASE64_STANDARD.decode_slice(b64_data, key.0.as_mut_slice())?;
         if len == key.0.len() {
             Ok(key)
         } else {
-            Err(base64::DecodeError::InvalidLength)
+            Err(base64::DecodeSliceError::DecodeError(
+                base64::DecodeError::InvalidLength,
+            ))
         }
     }
 }
@@ -48,7 +51,7 @@ impl MasterPasswordHash {
     }
 
     pub fn base64_encoded(&self) -> Zeroizing<String> {
-        base64::encode(self.0.as_slice()).into()
+        BASE64_STANDARD.encode(self.0.as_slice()).into()
     }
 }
 
@@ -236,12 +239,15 @@ impl FromStr for Cipher {
                     return Err(CipherError::InvalidCipherStringFormat);
                 }
 
-                let iv =
-                    base64::decode(b64_parts[0]).or(Err(CipherError::InvalidCipherStringFormat))?;
-                let ct =
-                    base64::decode(b64_parts[1]).or(Err(CipherError::InvalidCipherStringFormat))?;
-                let mac =
-                    base64::decode(b64_parts[2]).or(Err(CipherError::InvalidCipherStringFormat))?;
+                let iv = BASE64_STANDARD
+                    .decode(b64_parts[0])
+                    .or(Err(CipherError::InvalidCipherStringFormat))?;
+                let ct = BASE64_STANDARD
+                    .decode(b64_parts[1])
+                    .or(Err(CipherError::InvalidCipherStringFormat))?;
+                let mac = BASE64_STANDARD
+                    .decode(b64_parts[2])
+                    .or(Err(CipherError::InvalidCipherStringFormat))?;
 
                 Ok(Cipher::Value {
                     enc_type,
@@ -253,7 +259,8 @@ impl FromStr for Cipher {
             (false, false) => {
                 let iv = vec![];
                 let mac = vec![];
-                let ct = base64::decode(rest).or(Err(CipherError::InvalidCipherStringFormat))?;
+                let ct = BASE64_STANDARD.decode(rest)
+                    .or(Err(CipherError::InvalidCipherStringFormat))?;
                 Ok(Cipher::Value {
                     enc_type,
                     iv,
@@ -440,11 +447,11 @@ impl Cipher {
                 ct,
                 mac,
             } => {
-                let b64_ct = base64::encode(ct);
+                let b64_ct = BASE64_STANDARD.encode(ct);
                 match (enc_type.has_mac(), enc_type.has_iv()) {
                     (true, true) => {
-                        let b64_iv = base64::encode(iv);
-                        let b64_mac = base64::encode(mac);
+                        let b64_iv = BASE64_STANDARD.encode(iv);
+                        let b64_mac = BASE64_STANDARD.encode(mac);
                         format!("{}.{}|{}|{}", *enc_type as u8, b64_iv, b64_ct, b64_mac)
                     }
                     (false, false) => format!("{}.{}", *enc_type as u8, b64_ct),
@@ -561,7 +568,7 @@ mod tests {
             .expect("Master key decoding failed");
         let pass_hash = create_master_password_hash(&master_key, testdata::USER_PASSWORD);
         assert_eq!(
-            base64::encode(pass_hash.0.as_slice()),
+            BASE64_STANDARD.encode(pass_hash.0.as_slice()),
             testdata::USER_MASTER_PASSWORD_HASH_B64
         );
     }
@@ -574,7 +581,7 @@ mod tests {
             testdata::USER_HASH_ITERATIONS,
         );
         assert_eq!(
-            base64::encode(key.0.as_slice()),
+            BASE64_STANDARD.encode(key.0.as_slice()),
             testdata::USER_MASTER_KEY_B64
         );
     }

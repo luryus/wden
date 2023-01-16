@@ -50,6 +50,6 @@ impl View for SecretTextView {
             },
             self.style,
         );
-        printer.print_styled((0, 0), (&styled).into());
+        printer.print_styled((0, 0), &styled);
     }
 }
