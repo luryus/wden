@@ -6,7 +6,8 @@ use cbc::cipher::{BlockDecryptMut, BlockEncryptMut, KeyIvInit};
 use hkdf::Hkdf;
 use hmac::digest::{InvalidLength, MacError};
 use hmac::{Hmac, Mac};
-use rsa::{pkcs8::DecodePrivateKey, PaddingScheme, RsaPrivateKey};
+use rsa::Oaep;
+use rsa::{pkcs8::DecodePrivateKey, RsaPrivateKey};
 use serde::de;
 use serde::{Deserialize, Deserializer};
 use sha2::Sha256;
@@ -418,7 +419,7 @@ impl Cipher {
             let rsa_key = RsaPrivateKey::from_pkcs8_der(&private_key.0)
                 .context("Reading RSA private key failed")?;
 
-            let padding = PaddingScheme::new_oaep::<sha1::Sha1>();
+            let padding = Oaep::new::<sha1::Sha1>();
             let res = rsa_key
                 .decrypt(padding, ct.as_slice())
                 .context("RSA decryption failed")?;
