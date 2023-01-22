@@ -82,6 +82,9 @@ fn submit_login(c: &mut Cursive) {
 
     let password = c
         .call_on_name(VIEW_NAME_PASSWORD, |view: &mut SecretEditView| {
+            // SecretEditView only gives the content out as a reference
+            // to prevent (accidentally) leaking the data in memory.
+            // Copy it to another zeroizing string.
             let content = view.get_content();
             let mut buf = Zeroizing::new(String::with_capacity(content.as_bytes().len() + 1));
             buf.push_str(content);

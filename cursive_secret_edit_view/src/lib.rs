@@ -250,12 +250,12 @@ impl SecretEditView {
         let content = content.into();
         let len = content.len();
 
-        if len > self.content.0.capacity() {
+        if len > self.content.capacity() {
             return Callback::dummy();
         }
 
-        self.content.0.clear();
-        self.content.0.push_str(&content);
+        self.content.clear();
+        self.content.push_str(&content);
 
         self.offset = 0;
         self.set_cursor(len);
@@ -265,7 +265,7 @@ impl SecretEditView {
 
     /// Get the current text.
     pub fn get_content(&self) -> &str {
-        &self.content.0
+        &self.content
     }
 
     /// Sets the current content to the given value.
@@ -281,7 +281,7 @@ impl SecretEditView {
 
     /// Sets the cursor position.
     pub fn set_cursor(&mut self, cursor: usize) {
-        assert!(cursor <= self.content.0.len());
+        assert!(cursor <= self.content.len());
         self.cursor = cursor;
 
         self.keep_cursor_in_view();
@@ -294,7 +294,7 @@ impl SecretEditView {
     /// You should run this callback with a `&mut Cursive`.
     pub fn insert(&mut self, ch: char) -> Callback {
         // First, make sure we can actually insert anything.
-        if ch.len_utf8() > self.content.0.remaining_capacity() {
+        if ch.len_utf8() > self.content.remaining_capacity() {
             return Callback::dummy();
         }
 
@@ -312,7 +312,7 @@ impl SecretEditView {
     ///
     /// You should run this callback with a `&mut Cursive`.
     pub fn remove(&mut self) -> Callback {
-        self.content.0.remove(self.cursor);
+        self.content.remove(self.cursor);
 
         self.keep_cursor_in_view();
 
@@ -355,7 +355,7 @@ impl SecretEditView {
             // Then sum the byte lengths.
 
             let suffix_length =
-                simple_suffix(&self.content.0[self.offset..self.cursor], available).length;
+                simple_suffix(&self.content[self.offset..self.cursor], available).length;
 
             assert!(suffix_length <= self.cursor);
             self.offset = self.cursor - suffix_length;
@@ -364,12 +364,12 @@ impl SecretEditView {
         }
 
         // If we have too much space
-        if self.content.0.len() - self.offset < self.last_length {
+        if self.content.len() - self.offset < self.last_length {
             assert!(self.last_length >= 1);
-            let suffix_length = simple_suffix(&self.content.0, self.last_length - 1).length;
+            let suffix_length = simple_suffix(&self.content, self.last_length - 1).length;
 
-            assert!(self.content.0.len() >= suffix_length);
-            self.offset = self.content.0.len() - suffix_length;
+            assert!(self.content.len() >= suffix_length);
+            self.offset = self.content.len() - suffix_length;
         }
     }
 }
@@ -382,7 +382,7 @@ impl View for SecretEditView {
             self.last_length, printer.size.x
         );
 
-        let width = self.content.0.graphemes(true).count();
+        let width = self.content.graphemes(true).count();
         printer.with_style(self.style, |printer| {
             let effect = if self.enabled && printer.enabled {
                 Effect::Reverse
@@ -397,7 +397,7 @@ impl View for SecretEditView {
                     let filler_len = printer.size.x - width;
                     printer.print_hline((width, 0), filler_len, self.filler.as_str());
                 } else {
-                    let width = self.content.0[self.offset..].graphemes(true).count()
+                    let width = self.content[self.offset..].graphemes(true).count()
                         .min(self.last_length);
                     printer.print_hline((0usize, 0), width, "*");
                     
@@ -414,12 +414,12 @@ impl View for SecretEditView {
 
             // Now print cursor
             if printer.focused {
-                let c: &str = if self.cursor == self.content.0.len() {
+                let c: &str = if self.cursor == self.content.len() {
                     &self.filler
                 } else {
                     "*"
                 };
-                let offset = self.content.0[self.offset..self.cursor]
+                let offset = self.content[self.offset..self.cursor]
                     .graphemes(true)
                     .count();
                 printer.print((offset, 0), c);
@@ -447,11 +447,11 @@ impl View for SecretEditView {
             Event::Key(Key::Home) => self.set_cursor(0),
             Event::Key(Key::End) => {
                 // When possible, NLL to the rescue!
-                let len = self.content.0.len();
+                let len = self.content.len();
                 self.set_cursor(len);
             }
             Event::Key(Key::Left) if self.cursor > 0 => {
-                let len = self.content.0[..self.cursor]
+                let len = self.content[..self.cursor]
                     .graphemes(true)
                     .last()
                     .unwrap()
@@ -459,8 +459,8 @@ impl View for SecretEditView {
                 let cursor = self.cursor - len;
                 self.set_cursor(cursor);
             }
-            Event::Key(Key::Right) if self.cursor < self.content.0.len() => {
-                let len = self.content.0[self.cursor..]
+            Event::Key(Key::Right) if self.cursor < self.content.len() => {
+                let len = self.content[self.cursor..]
                     .graphemes(true)
                     .next()
                     .unwrap()
@@ -469,7 +469,7 @@ impl View for SecretEditView {
                 self.set_cursor(cursor);
             }
             Event::Key(Key::Backspace) if self.cursor > 0 => {
-                let len = self.content.0[..self.cursor]
+                let len = self.content[..self.cursor]
                     .graphemes(true)
                     .last()
                     .unwrap()
@@ -477,7 +477,7 @@ impl View for SecretEditView {
                 self.cursor -= len;
                 return EventResult::Consumed(Some(self.remove()));
             }
-            Event::Key(Key::Del) if self.cursor < self.content.0.len() => {
+            Event::Key(Key::Del) if self.cursor < self.content.len() => {
                 return EventResult::Consumed(Some(self.remove()));
             }
             Event::Key(Key::Enter) if self.on_submit.is_some() => {
@@ -493,7 +493,7 @@ impl View for SecretEditView {
             } if position.fits_in_rect(offset, (self.last_length, 1)) => {
                 if let Some(position) = position.checked_sub(offset) {
                     self.cursor = self.offset
-                        + simple_prefix(&self.content.0[self.offset..], position.x).length;
+                        + simple_prefix(&self.content[self.offset..], position.x).length;
                 }
             }
             _ => return EventResult::Ignored,
