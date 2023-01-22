@@ -2,6 +2,9 @@
 
 ## next
 
+- Zeroize password after login form submit (wipe it from memory)
+
+
 ## 0.6.0
 
 - Dependency crate updates
