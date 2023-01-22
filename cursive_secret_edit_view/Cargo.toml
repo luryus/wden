@@ -1,0 +1,13 @@
+[package]
+name = "cursive_secret_edit_view"
+edition = "2021"
+version = "0.1.0"
+
+[dependencies]
+cursive_core = { version = "0.3" }
+zeroize = { version = "1.5" }
+arrayvec = "0.7"
+unicode-segmentation = "1.10.0"
+
+[dev-dependencies]
+cursive = { version = "0.20" }

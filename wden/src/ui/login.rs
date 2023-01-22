@@ -5,6 +5,8 @@ use cursive::{
     views::{Dialog, EditView, LinearLayout, TextView},
     Cursive,
 };
+use cursive_secret_edit_view::SecretEditView;
+use zeroize::Zeroizing;
 
 use crate::{
     bitwarden::{
@@ -26,9 +28,8 @@ pub fn login_dialog(
     saved_email: Option<String>,
     with_token_field: bool,
 ) -> Dialog {
-    let password_field = EditView::new()
-        .secret()
-        .on_submit(|siv, _| submit_login(siv))
+    let password_field = SecretEditView::new()
+        .on_submit(submit_login)
         .with_name(VIEW_NAME_PASSWORD)
         .fixed_width(40);
 
@@ -80,9 +81,16 @@ fn submit_login(c: &mut Cursive) {
     let email2 = email.clone();
 
     let password = c
-        .call_on_name(VIEW_NAME_PASSWORD, |view: &mut EditView| view.get_content())
-        .unwrap()
-        .to_string();
+        .call_on_name(VIEW_NAME_PASSWORD, |view: &mut SecretEditView| {
+            // SecretEditView only gives the content out as a reference
+            // to prevent (accidentally) leaking the data in memory.
+            // Copy it to another zeroizing string.
+            let content = view.get_content();
+            let mut buf = Zeroizing::new(String::with_capacity(content.as_bytes().len() + 1));
+            buf.push_str(content);
+            buf
+        })
+        .unwrap();
 
     let personal_api_key = c
         .call_on_name(VIEW_NAME_PERSONAL_API_KEY, |view: &mut EditView| {
