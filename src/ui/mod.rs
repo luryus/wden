@@ -1,7 +1,7 @@
 mod autolock;
 mod clipboard;
 mod collections;
-mod components;
+pub mod components;
 mod data;
 mod item_details;
 mod launch;
