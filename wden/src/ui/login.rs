@@ -5,6 +5,7 @@ use cursive::{
     views::{Dialog, EditView, LinearLayout, TextView},
     Cursive,
 };
+use cursive_secret_edit_view::SecretEditView;
 use zeroize::Zeroizing;
 
 use crate::{
@@ -16,7 +17,7 @@ use crate::{
     profile::ProfileStore,
 };
 
-use super::{sync::do_sync, two_factor::two_factor_dialog, util::cursive_ext::CursiveExt, components::secret_edit_view::SecretEditView};
+use super::{sync::do_sync, two_factor::two_factor_dialog, util::cursive_ext::CursiveExt};
 
 const VIEW_NAME_PASSWORD: &str = "password";
 const VIEW_NAME_EMAIL: &str = "email";

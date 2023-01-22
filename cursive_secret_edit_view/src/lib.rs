@@ -20,14 +20,16 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR TH
 OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-use cursive::{
+mod zeroized_array_string;
+
+use cursive_core::{
     direction::Direction,
     event::{Callback, Event, EventResult, Key, MouseEvent},
     immut2, impl_enabled,
     theme::{Effect, PaletteStyle, StyleType},
     utils::lines::simple::{simple_prefix, simple_suffix},
-    view::{CannotFocus, View},
-    Cursive, Printer, Rect, Vec2, With,
+    view::CannotFocus,
+    Cursive, Printer, Rect, Vec2, View, With,
 };
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -36,39 +38,6 @@ use zeroize::Zeroizing;
 
 use self::zeroized_array_string::ZeroizedArrayString;
 
-mod zeroized_array_string {
-    use std::cmp::Ordering;
-
-    use arrayvec::ArrayString;
-    use zeroize::Zeroize;
-
-    pub struct ZeroizedArrayString<const N: usize>(pub ArrayString<N>);
-    impl<const N: usize> Zeroize for ZeroizedArrayString<N> {
-        fn zeroize(&mut self) {
-            unsafe {
-                self.0.set_len(N);
-                self.0.as_bytes_mut()
-            }
-            .zeroize()
-        }
-    }
-
-    impl<const N: usize> ZeroizedArrayString<N> {
-        pub const fn new() -> Self {
-            Self(ArrayString::new_const())
-        }
-
-        /// Insert a character in a byte position. Panics if the character won't fit.
-        pub fn insert(&mut self, i: usize, c: char) {
-            let mut temp = Self(ArrayString::new());
-            // Copy the end
-            temp.0.push_str(self.0.split_at(i).1);
-            self.0.truncate(i);
-            self.0.push(c);
-            self.0.push_str(&temp.0);
-        }
-    }
-}
 
 /// Closure type for callbacks when the content is modified.
 ///
@@ -133,18 +102,6 @@ impl SecretEditView {
             enabled: true,
             style: PaletteStyle::Secondary.into(),
         }
-    }
-
-    /// Sets the character to fill in blank space.
-    ///
-    /// Defaults to "_".
-    pub fn set_filler<S: Into<String>>(&mut self, filler: S) {
-        self.filler = filler.into();
-    }
-
-    #[must_use]
-    pub fn filler<S: Into<String>>(self, filler: S) -> Self {
-        self.with(|s| s.set_filler(filler))
     }
 
     /// Sets the style used for this view.
@@ -303,7 +260,7 @@ impl SecretEditView {
         self.offset = 0;
         self.set_cursor(len);
 
-        Callback::dummy()
+        self.make_edit_cb().unwrap_or_else(Callback::dummy)
     }
 
     /// Get the current text.
@@ -346,7 +303,7 @@ impl SecretEditView {
 
         self.keep_cursor_in_view();
 
-        Callback::dummy()
+        self.make_edit_cb().unwrap_or_else(Callback::dummy)
     }
 
     /// Remove the character at the current cursor position.
@@ -359,7 +316,18 @@ impl SecretEditView {
 
         self.keep_cursor_in_view();
 
-        Callback::dummy()
+        self.make_edit_cb().unwrap_or_else(Callback::dummy)
+    }
+
+    fn make_edit_cb(&self) -> Option<Callback> {
+        self.on_edit.clone().map(|cb| {
+            // Get a new Rc on the content
+            let cursor = self.cursor;
+
+            Callback::from_fn(move |s| {
+                cb(s, cursor);
+            })
+        })
     }
 
     fn keep_cursor_in_view(&mut self) {
@@ -429,8 +397,18 @@ impl View for SecretEditView {
                     let filler_len = printer.size.x - width;
                     printer.print_hline((width, 0), filler_len, self.filler.as_str());
                 } else {
-                    let width = self.last_length;
-                    printer.print_hline((0, 0), width, "*");
+                    let width = self.content.0[self.offset..].graphemes(true).count()
+                        .min(self.last_length);
+                    printer.print_hline((0usize, 0), width, "*");
+                    
+                    if width < self.last_length {
+                        let filler_len = self.last_length - width;
+                        printer.print_hline(
+                            (width, 0),
+                            filler_len,
+                            self.filler.as_str(),
+                        );
+                    }
                 }
             });
 
@@ -441,7 +419,9 @@ impl View for SecretEditView {
                 } else {
                     "*"
                 };
-                let offset = self.content.0[self.offset..self.cursor].graphemes(true).count();
+                let offset = self.content.0[self.offset..self.cursor]
+                    .graphemes(true)
+                    .count();
                 printer.print((offset, 0), c);
             }
         });
