@@ -10,4 +10,4 @@ arrayvec = "0.7"
 unicode-segmentation = "1.10.0"
 
 [dev-dependencies]
-cursive = { version = "0.20" }
+cursive = { version = "0.20", default_features = false, features = ["crossterm-backend"] }
