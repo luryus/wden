@@ -17,7 +17,7 @@ pub struct ProfileStore {
 impl ProfileStore {
     pub fn new(profile_name: &str) -> ProfileStore {
         let config_dir = get_config_dir();
-        let profile_config_file = config_dir.join(format!("{}.json", profile_name));
+        let profile_config_file = config_dir.join(format!("{profile_name}.json"));
 
         ProfileStore {
             config_dir,

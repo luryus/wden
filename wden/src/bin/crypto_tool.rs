@@ -69,7 +69,7 @@ fn main() -> Result<(), anyhow::Error> {
 
         if opts.to_string {
             let cipher_str = String::from_utf8(decrypted_cipher).unwrap_or_default();
-            println!("As string:\n{}", cipher_str);
+            println!("As string:\n{cipher_str}");
         }
     }
 

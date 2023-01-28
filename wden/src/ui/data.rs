@@ -70,7 +70,7 @@ impl Unlocked {
         let organization = &self
             .organizations
             .get(organization_id)
-            .with_context(|| format!("Org not found with id {}", organization_id))?;
+            .with_context(|| format!("Org not found with id {organization_id}"))?;
 
         // Organization.key is encrypted with the user private (RSA) key,
         // get that first

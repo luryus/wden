@@ -40,7 +40,7 @@ pub fn two_factor_dialog(
                         .with_name(VIEW_NAME_AUTHENTICATOR_CODE),
                 ),
         )
-        .title(format!("Two-factor Login ({})", profile_name))
+        .title(format!("Two-factor Login ({profile_name})"))
         .button("Submit", move |siv| {
             submit_two_factor(siv, email2.clone(), captcha_token2.clone())
         })

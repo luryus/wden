@@ -137,7 +137,7 @@ fn card_dialog_contents(
 
     let exp_month = card.exp_month.decrypt_to_string(enc_key, mac_key);
     let exp_year = card.exp_year.decrypt_to_string(enc_key, mac_key);
-    let expiry = format!("{} / {}", exp_month, exp_year);
+    let expiry = format!("{exp_month} / {exp_year}");
 
     let mut ll = LinearLayout::vertical();
     add_label_value_text(&mut ll, "Name", &item.name, enc_key, mac_key);

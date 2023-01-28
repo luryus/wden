@@ -69,7 +69,7 @@ pub fn login_dialog(
     }
 
     Dialog::around(layout)
-        .title(format!("Log in ({})", profile_name))
+        .title(format!("Log in ({profile_name})"))
         .button("Submit", submit_login)
 }
 
@@ -154,7 +154,7 @@ pub fn handle_login_response(
 ) {
     match res {
         Result::Err(e) => {
-            let err_msg = format!("Error: {:?}", e);
+            let err_msg = format!("Error: {e:?}");
             if let Some(ud) = cursive.get_user_data().with_logging_in_state() {
                 ud.into_logged_out();
             }

@@ -51,11 +51,11 @@ fn unlock_dialog(profile_name: &str, email: &str) -> Dialog {
             ))
             .child(PaddedView::new(Margins::tb(1, 1), pw_editview))
             .child(
-                TextView::new(format!("Signed in user: {}", email))
+                TextView::new(format!("Signed in user: {email}"))
                     .style(Color::Light(BaseColor::Black)),
             ),
     )
-    .title(format!("Vault locked ({})", profile_name))
+    .title(format!("Vault locked ({profile_name})"))
     .button("Unlock", submit_unlock)
 }
 
@@ -86,7 +86,7 @@ fn submit_unlock(c: &mut Cursive) {
                 CipherError::MacVerificationFailed(_) => {
                     "Unlocking failed: invalid password".to_owned()
                 }
-                e => format!("Unlocking failed: {}", e),
+                e => format!("Unlocking failed: {e}"),
             };
 
             let dialog = Dialog::text(err_msg).button("OK", move |siv| {
