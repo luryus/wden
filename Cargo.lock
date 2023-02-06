@@ -1561,9 +1561,9 @@ dependencies = [
 
 [[package]]
 name = "simsearch"
-version = "0.2.3"
+version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ec7c616f4afa8be07117e344990cc90651fbaad06055655f3d8cc4a668675398"
+checksum = "1649c86f6ff4bec1c5a96b834f1e0da09eff92d85e3963286a61f41afca65de5"
 dependencies = [
  "strsim",
  "triple_accel",
