@@ -70,15 +70,19 @@ fn submit_unlock(c: &mut Cursive) {
     // Get stuff from user data
     let user_data = c.get_user_data().with_locked_state().unwrap();
     let global_settings = user_data.global_settings();
-    let iters = user_data.password_hash_iterations();
+    let pbkdf = user_data.pbkdf();
     let email = user_data.email();
     let token_key = &user_data.token().key;
 
-    let master_key = Arc::new(cipher::create_master_key(&email, &password, iters));
-    let master_pw_hash = Arc::new(cipher::create_master_password_hash(&master_key, &password));
+    let keys_res = (|| -> Result<(Arc<cipher::MasterKey>, Arc<cipher::MasterPasswordHash>), CipherError> {
+        let master_key = Arc::new(pbkdf.create_master_key(&email, &password)?);
+        let master_pw_hash = Arc::new(cipher::create_master_password_hash(&master_key, &password));
+        // Verify that the password was correct by checking if token key can be decrypted
+        let _ = cipher::decrypt_symmetric_keys(token_key, &master_key)?;
+        Ok((master_key, master_pw_hash))
+    })();
 
-    // Verify that the password was correct by checking if token key can be decrypted
-    match cipher::decrypt_symmetric_keys(token_key, &master_key) {
+    match keys_res {
         Err(e) => {
             log::warn!("Unlocking failed: {}", e);
 
@@ -97,7 +101,7 @@ fn submit_unlock(c: &mut Cursive) {
             c.pop_layer();
             c.add_layer(dialog);
         }
-        Ok(_) => {
+        Ok((master_key, master_pw_hash)) => {
             // Success, store keys, restore other data and continue
             let user_data = user_data.into_unlocking(master_key, master_pw_hash);
 

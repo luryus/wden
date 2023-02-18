@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use anyhow::Context;
 use cursive::{
     traits::{Nameable, Resizable},
     views::{Dialog, EditView, LinearLayout, TextView},
@@ -114,7 +115,7 @@ fn submit_login(c: &mut Cursive) {
                 global_settings.accept_invalid_certs,
             );
             async {
-                let (master_key, master_pw_hash, iterations) =
+                let (master_key, master_pw_hash, pbkdf) =
                     do_prelogin(&client, &email, &password).await?;
 
                 do_login(
@@ -126,17 +127,17 @@ fn submit_login(c: &mut Cursive) {
                     &profile_store,
                 )
                 .await
-                .map(|t| (t, master_key, master_pw_hash, email, iterations))
+                .map(|t| (t, master_key, master_pw_hash, email, pbkdf))
             }
             .await
         },
         move |siv, res| {
             match res {
-                Ok((t, master_key, master_pw_hash, em, iterations)) => {
+                Ok((t, master_key, master_pw_hash, em, pbkdf)) => {
                     siv.get_user_data()
                         .with_logged_out_state()
                         .unwrap()
-                        .into_logging_in(master_key, master_pw_hash, iterations, em.clone());
+                        .into_logging_in(master_key, master_pw_hash, pbkdf, em.clone());
 
                     handle_login_response(siv, Ok(t), em, had_token_field);
                 }
@@ -233,11 +234,12 @@ async fn do_prelogin(
     client: &ApiClient,
     email: &str,
     password: &str,
-) -> Result<(Arc<MasterKey>, Arc<MasterPasswordHash>, u32), anyhow::Error> {
-    let iterations = client.prelogin(email).await?;
-    let master_key = cipher::create_master_key(email, password, iterations);
+) -> Result<(Arc<MasterKey>, Arc<MasterPasswordHash>, Arc<dyn cipher::Pbkdf + Send + Sync>), anyhow::Error> {
+    let prelogin_res = client.prelogin(email).await?;
+    let pbkdf = cipher::get_pbkdf(&prelogin_res).context("Could not build Pbkdf")?;
+    let master_key = pbkdf.create_master_key(email, password)?;
     let master_pw_hash = cipher::create_master_password_hash(&master_key, password);
-    Ok((Arc::new(master_key), Arc::new(master_pw_hash), iterations))
+    Ok((Arc::new(master_key), Arc::new(master_pw_hash), pbkdf))
 }
 
 pub async fn do_login(

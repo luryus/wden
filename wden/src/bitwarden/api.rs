@@ -4,7 +4,7 @@ use base64::prelude::*;
 use reqwest;
 use reqwest::Url;
 use serde::Deserialize;
-use serde_json::Value;
+use serde_repr::Deserialize_repr;
 use std::convert::TryInto;
 use std::time::{Duration, Instant};
 use std::{collections::HashMap, convert::TryFrom};
@@ -68,7 +68,7 @@ impl ApiClient {
         c
     }
 
-    pub async fn prelogin(&self, user_email: &str) -> Result<u32, Error> {
+    pub async fn prelogin(&self, user_email: &str) -> Result<PreloginResponse, Error> {
         let mut body = HashMap::new();
         body.insert("email", user_email);
 
@@ -82,15 +82,8 @@ impl ApiClient {
             .await?
             .error_for_status()?;
 
-        let res: Value = res.json().await?;
-
-        let iterations = res
-            .as_object()
-            .and_then(|o| o.get("kdfIterations").or_else(|| o.get("KdfIterations")))
-            .and_then(|v| v.as_u64())
-            .ok_or_else(|| anyhow::anyhow!("Parsing response failed"))?;
-
-        Ok(iterations as u32)
+        let res: PreloginResponse = res.json().await?;
+        Ok(res)
     }
 
     /// Make Bitwarden (OAuth) /identity/token api call for authenticating.
@@ -332,6 +325,25 @@ impl TryFrom<&str> for TwoFactorProviderType {
             _ => Err(()),
         }
     }
+}
+
+#[derive(Deserialize_repr, Debug, Clone)]
+#[repr(u8)]
+pub enum KdfFunction {
+    Pbkdf2 = 0,
+    Argon2id = 1,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct PreloginResponse {
+    #[serde(alias="kdf")]
+    pub kdf: KdfFunction,
+    #[serde(alias="kdfIterations")]
+    pub kdf_iterations: u32,
+    #[serde(alias="kdfMemory")]
+    pub kdf_memory_mib: Option<u32>,
+    #[serde(alias="kdfParallelism")]
+    pub kdf_parallelism: Option<u32>,
 }
 
 #[derive(Deserialize, Debug)]
