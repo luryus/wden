@@ -2,8 +2,11 @@
 
 ## next
 
-- Zeroize password after login form submit (wipe it from memory)
+## 0.7.0
 
+- Zeroize password after login form submit (wipe it from memory)
+- Add support for Argon2 KDF (#147)
+- Dependency crate updates
 
 ## 0.6.0
 
