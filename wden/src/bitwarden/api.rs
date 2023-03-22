@@ -327,22 +327,27 @@ impl TryFrom<&str> for TwoFactorProviderType {
     }
 }
 
-#[derive(Deserialize_repr, Debug, Clone)]
+#[derive(Deserialize_repr, Debug, Clone, Default)]
 #[repr(u8)]
 pub enum KdfFunction {
+    #[default]
     Pbkdf2 = 0,
     Argon2id = 1,
 }
 
 #[derive(Deserialize, Debug)]
 pub struct PreloginResponse {
-    #[serde(alias="kdf")]
+    #[serde(alias="kdf", default)]
+    #[serde(alias="Kdf")]
     pub kdf: KdfFunction,
     #[serde(alias="kdfIterations")]
+    #[serde(alias="KdfIterations")]
     pub kdf_iterations: u32,
     #[serde(alias="kdfMemory")]
+    #[serde(alias="KdfMemory")]
     pub kdf_memory_mib: Option<u32>,
-    #[serde(alias="kdfParallelism")]
+    #[serde(alias="kdfMemory")]
+    #[serde(alias="KdfParallelism")]
     pub kdf_parallelism: Option<u32>,
 }
 
