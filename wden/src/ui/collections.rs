@@ -7,17 +7,12 @@ use serde::{Deserialize, Serialize};
 
 use super::util::cursive_ext::CursiveExt;
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, Default)]
 pub enum CollectionSelection {
+    #[default]
     All,
     Unassigned,
     Collection(String),
-}
-
-impl Default for CollectionSelection {
-    fn default() -> Self {
-        CollectionSelection::All
-    }
 }
 
 struct CollectionFilterDialog {

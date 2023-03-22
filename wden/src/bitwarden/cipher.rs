@@ -146,7 +146,7 @@ pub fn create_master_password_hash(
     user_password: &str,
 ) -> MasterPasswordHash {
     let mut res = MasterPasswordHash::new();
-    pbkdf2::pbkdf2::<Hmac<Sha256>>(
+    pbkdf2::pbkdf2_hmac::<Sha256>(
         master_key.0.as_slice(),
         user_password.as_bytes(),
         1,
@@ -166,7 +166,7 @@ impl Pbkdf for Pbkdf2 {
         user_password: &str,
     ) -> Result<MasterKey, CipherError> {
         let mut res = MasterKey::new();
-        pbkdf2::pbkdf2::<Hmac<Sha256>>(
+        pbkdf2::pbkdf2_hmac::<Sha256>(
             user_password.as_bytes(),
             // Email is always lowercased
             user_email.to_lowercase().as_bytes(),
@@ -201,13 +201,12 @@ impl Pbkdf for Argon2id {
     ) -> Result<MasterKey, CipherError> {
         let salt = Self::hashed_salt(user_email.to_lowercase().as_bytes());
 
-        let mut params = argon2::ParamsBuilder::new();
-        params
+        let params = argon2::ParamsBuilder::new()
             .m_cost(self.memory_kib)
-            .and_then(|b| b.p_cost(self.parallelism))
-            .and_then(|b| b.t_cost(self.iterations))
+            .p_cost(self.parallelism)
+            .t_cost(self.iterations)
+            .build()
             .map_err(CipherError::InvalidKdfParameters)?;
-        let params = params.params().map_err(CipherError::InvalidKdfParameters)?;
 
         let kdf = argon2::Argon2::new(argon2::Algorithm::Argon2id, argon2::Version::V0x13, params);
 
@@ -259,8 +258,9 @@ fn expand_master_key(master_key: &MasterKey) -> (EncryptionKey, MacKey) {
     (enc_key, mac_key)
 }
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub enum Cipher {
+    #[default]
     Empty,
     Value {
         enc_type: EncType,
@@ -268,12 +268,6 @@ pub enum Cipher {
         ct: Vec<u8>,
         mac: Vec<u8>,
     },
-}
-
-impl std::default::Default for Cipher {
-    fn default() -> Self {
-        Cipher::Empty
-    }
 }
 
 impl fmt::Display for Cipher {
