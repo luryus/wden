@@ -2,6 +2,11 @@
 
 ## next
 
+## 0.7.1
+
+- Fix prelogin failing with Vaultwarden
+- Dependency crate updates for security fixes
+
 ## 0.7.0
 
 - Zeroize password after login form submit (wipe it from memory)
