@@ -5,7 +5,7 @@ version = "0.1.0"
 
 [dependencies]
 cursive_core = { version = "0.3" }
-zeroize = { version = "1.5" }
+zeroize = { version = "1.6" }
 arrayvec = "0.7"
 unicode-segmentation = "1.10.1"
 

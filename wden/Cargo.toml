@@ -39,7 +39,7 @@ clap = { version="4", features = ["derive"] }
 directories-next = "2.0"
 thiserror = "1.0"
 anyhow = "1.0"
-zeroize = { version = "1.5", features = ["zeroize_derive"] }
+zeroize = { version = "1.6", features = ["zeroize_derive"] }
 arrayvec = "0.7"
 simsearch = "0.2"
 
