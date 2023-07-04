@@ -138,10 +138,7 @@ impl ApiClient {
             .form(&body)
             // As of October 2021, Bitwarden (prod) wants the email as base64-encoded in a header
             // for some security reason
-            .header(
-                "auth-email",
-                BASE64_URL_SAFE.encode(username),
-            )
+            .header("auth-email", BASE64_URL_SAFE.encode(username))
             .send()
             .await?;
 
@@ -337,17 +334,17 @@ pub enum KdfFunction {
 
 #[derive(Deserialize, Debug)]
 pub struct PreloginResponse {
-    #[serde(alias="kdf", default)]
-    #[serde(alias="Kdf")]
+    #[serde(alias = "kdf", default)]
+    #[serde(alias = "Kdf")]
     pub kdf: KdfFunction,
-    #[serde(alias="kdfIterations")]
-    #[serde(alias="KdfIterations")]
+    #[serde(alias = "kdfIterations")]
+    #[serde(alias = "KdfIterations")]
     pub kdf_iterations: u32,
-    #[serde(alias="kdfMemory")]
-    #[serde(alias="KdfMemory")]
+    #[serde(alias = "kdfMemory")]
+    #[serde(alias = "KdfMemory")]
     pub kdf_memory_mib: Option<u32>,
-    #[serde(alias="kdfMemory")]
-    #[serde(alias="KdfParallelism")]
+    #[serde(alias = "kdfMemory")]
+    #[serde(alias = "KdfParallelism")]
     pub kdf_parallelism: Option<u32>,
 }
 

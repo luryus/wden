@@ -74,13 +74,15 @@ fn submit_unlock(c: &mut Cursive) {
     let email = user_data.email();
     let token_key = &user_data.token().key;
 
-    let keys_res = (|| -> Result<(Arc<cipher::MasterKey>, Arc<cipher::MasterPasswordHash>), CipherError> {
-        let master_key = Arc::new(pbkdf.create_master_key(&email, &password)?);
-        let master_pw_hash = Arc::new(cipher::create_master_password_hash(&master_key, &password));
-        // Verify that the password was correct by checking if token key can be decrypted
-        let _ = cipher::decrypt_symmetric_keys(token_key, &master_key)?;
-        Ok((master_key, master_pw_hash))
-    })();
+    let keys_res =
+        (|| -> Result<(Arc<cipher::MasterKey>, Arc<cipher::MasterPasswordHash>), CipherError> {
+            let master_key = Arc::new(pbkdf.create_master_key(&email, &password)?);
+            let master_pw_hash =
+                Arc::new(cipher::create_master_password_hash(&master_key, &password));
+            // Verify that the password was correct by checking if token key can be decrypted
+            let _ = cipher::decrypt_symmetric_keys(token_key, &master_key)?;
+            Ok((master_key, master_pw_hash))
+        })();
 
     match keys_res {
         Err(e) => {

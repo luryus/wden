@@ -38,7 +38,6 @@ use zeroize::Zeroizing;
 
 use self::zeroized_array_string::ZeroizedArrayString;
 
-
 /// Closure type for callbacks when the content is modified.
 ///
 /// Arguments are the `Cursive`, and current cursor position
@@ -397,17 +396,15 @@ impl View for SecretEditView {
                     let filler_len = printer.size.x - width;
                     printer.print_hline((width, 0), filler_len, self.filler.as_str());
                 } else {
-                    let width = self.content[self.offset..].graphemes(true).count()
+                    let width = self.content[self.offset..]
+                        .graphemes(true)
+                        .count()
                         .min(self.last_length);
                     printer.print_hline((0usize, 0), width, "*");
-                    
+
                     if width < self.last_length {
                         let filler_len = self.last_length - width;
-                        printer.print_hline(
-                            (width, 0),
-                            filler_len,
-                            self.filler.as_str(),
-                        );
+                        printer.print_hline((width, 0), filler_len, self.filler.as_str());
                     }
                 }
             });

@@ -3,9 +3,9 @@ use std::{collections::HashMap, sync::MutexGuard, time::Duration};
 use super::{PlatformClipboard, PlatformClipboardResult};
 use anyhow::Context;
 use lazy_static::lazy_static;
-use x11rb::{connection::Connection, protocol::xproto::ConnectionExt};
 use std::sync::Mutex;
-use x11_clipboard::{Clipboard, Atom};
+use x11_clipboard::{Atom, Clipboard};
+use x11rb::{connection::Connection, protocol::xproto::ConnectionExt};
 
 lazy_static! {
     static ref CLIPBOARD: Mutex<Option<Clipboard>> = Mutex::new(None);

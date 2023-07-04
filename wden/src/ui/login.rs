@@ -234,7 +234,14 @@ async fn do_prelogin(
     client: &ApiClient,
     email: &str,
     password: &str,
-) -> Result<(Arc<MasterKey>, Arc<MasterPasswordHash>, Arc<dyn cipher::Pbkdf + Send + Sync>), anyhow::Error> {
+) -> Result<
+    (
+        Arc<MasterKey>,
+        Arc<MasterPasswordHash>,
+        Arc<dyn cipher::Pbkdf + Send + Sync>,
+    ),
+    anyhow::Error,
+> {
     let prelogin_res = client.prelogin(email).await?;
     let pbkdf = cipher::get_pbkdf(&prelogin_res).context("Could not build Pbkdf")?;
     let master_key = pbkdf.create_master_key(email, password)?;

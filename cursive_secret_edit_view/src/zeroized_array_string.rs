@@ -1,4 +1,7 @@
-use std::{pin::Pin, ops::{DerefMut, Deref}};
+use std::{
+    ops::{Deref, DerefMut},
+    pin::Pin,
+};
 
 use arrayvec::ArrayString;
 use zeroize::Zeroize;
@@ -55,7 +58,6 @@ mod test {
     use zeroize::Zeroize;
 
     use super::ZeroizedArrayString;
-
 
     #[test]
     fn test_content_zeroized() {

@@ -498,7 +498,9 @@ impl<'a> StatefulUserData<'a, Locked> {
     }
 
     pub fn pbkdf(&self) -> Arc<dyn Pbkdf> {
-        get_state_data!(&self.user_data.state_data, AppStateData::Locked).pbkdf.clone()
+        get_state_data!(&self.user_data.state_data, AppStateData::Locked)
+            .pbkdf
+            .clone()
     }
 
     pub fn into_unlocking(

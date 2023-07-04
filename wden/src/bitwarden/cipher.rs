@@ -600,7 +600,8 @@ mod tests {
         pub const USER_ARGON2ID_PARALLELISM: u32 = 4;
 
         pub const USER_MASTER_KEY_PBKDF2_B64: &str = "WKBariwK2lofMJ27IZhzWlXvrriiH6Tht66VjxcRF7c=";
-        pub const USER_MASTER_KEY_ARGON2ID_B64: &str = "gQc7HNh/OOacqSP5fk3rza6sRUgIChVXF6xdzX8+7OM=";
+        pub const USER_MASTER_KEY_ARGON2ID_B64: &str =
+            "gQc7HNh/OOacqSP5fk3rza6sRUgIChVXF6xdzX8+7OM=";
         pub const USER_MASTER_PASSWORD_HASH_B64: &str =
             "7jACo78yJ4rlybclGvCGjcE1bqPBXO3Gjvvg9mkFnl8=";
 

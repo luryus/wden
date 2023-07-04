@@ -1,5 +1,6 @@
 use clap::{
-    builder::{StringValueParser, TypedValueParser}, Parser,
+    builder::{StringValueParser, TypedValueParser},
+    Parser,
 };
 use wden::profile::ProfileStore;
 
