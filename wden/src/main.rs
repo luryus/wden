@@ -1,6 +1,6 @@
 use clap::{
     builder::{StringValueParser, TypedValueParser},
-    Parser,
+    Parser, ValueEnum,
 };
 use wden::profile::ProfileStore;
 
@@ -15,21 +15,64 @@ fn validate_profile_name(value: String) -> Result<String, &'static str> {
     }
 }
 
+#[derive(Clone, Copy, ValueEnum)]
+enum BitwardenCloudRegion {
+    Us, Eu
+}
+
 #[derive(Parser)]
 #[command(version)]
 struct Opts {
     /// Sets the profile that will be used. Profile names can only
     /// include lowercase alphanumeric characters, dashes (-) and
     /// underscores (_).
-    #[arg(short, long, default_value = "default", value_parser=StringValueParser::new().try_map(validate_profile_name) )]
+    #[arg(
+        short, long, 
+        default_value = "default", 
+        value_parser=StringValueParser::new().try_map(validate_profile_name))]
     profile: String,
 
-    /// Sets the Bitwarden server url.
-    /// If not set, the url stored in the profile
-    /// will be used. If a new profile is created without
-    /// a server url set, https://vault.bitwarden.com will be used.
-    #[arg(short, long)]
+    /// Sets the current profile to use the given Bitwarden
+    /// cloud server region.
+    /// 
+    /// Example: --bitwarden-cloud-region eu
+    #[arg(
+        long,
+        conflicts_with_all=["server_url", "api_server_url", "identity_server_url"],
+        help_heading=Some("Server options"))]
+    bitwarden_cloud_region: Option<BitwardenCloudRegion>,
+
+    /// Sets the current profile to use the given server url
+    /// (single host).
+    ///
+    /// Example: --server-url https://bitwarden.example.com.
+    #[arg(
+        short, long, 
+        conflicts_with_all=["bitwarden_cloud_region", "api_server_url", "identity_server_url"],
+        help_heading=Some("Server options"))]
     server_url: Option<String>,
+
+    /// Sets the current profile to use the given API server
+    /// url. This needs to be set with --identity-server-url.
+    /// 
+    /// Example: --api-server-url https://api.example.com --identity-server-url https://identity.example.com
+    #[arg(
+        long,
+        requires="identity_server_url",
+        conflicts_with_all=["bitwarden_cloud_region", "server_url"],
+        help_heading=Some("Server options"))]
+    api_server_url: Option<String>,
+
+    /// Sets the current profile to use the given identity server
+    /// url. This needs to be set with --api-server-url.
+    /// 
+    /// Example: --api-server-url https://api.example.com --identity-server-url https://identity.example.com
+    #[arg(
+        long,
+        requires="api_server_url",
+        conflicts_with_all=["bitwarden_cloud_region", "server_url"],
+        help_heading=Some("Server options"))]
+    identity_server_url: Option<String>,
 
     /// Instead of starting the application,
     /// list all stored profiles
@@ -38,10 +81,12 @@ struct Opts {
 
     /// Accept invalid and untrusted (e.g. self-signed) certificates
     /// when connecting to the server. This option makes connections
-    /// insecure, so avoid using it. Note: this option is not stored
-    /// in the profile settings. It must be specified every time when
+    /// insecure, so avoid using it.
+    /// 
+    /// Note: this option is not stored in the profile settings.
+    /// It must be specified every time when
     /// connecting to servers with untrusted certificates.
-    #[arg(long)]
+    #[arg(long, help_heading=Some("Advanced options"))]
     accept_invalid_certs: bool,
 
     /// Debug option: always do token refresh when syncing.
