@@ -4,6 +4,7 @@ use std::{
     str::FromStr,
 };
 
+use anyhow::Context;
 use directories_next::ProjectDirs;
 
 use super::data::ProfileData;
@@ -48,15 +49,17 @@ impl ProfileStore {
         Ok(profiles)
     }
 
-    pub fn load(&self) -> std::io::Result<ProfileData> {
+    pub fn load(&self) -> Result<ProfileData, anyhow::Error> {
         Self::load_file(&self.profile_config_file)
     }
 
-    fn load_file(path: &Path) -> std::io::Result<ProfileData> {
+    fn load_file(path: &Path) -> Result<ProfileData, anyhow::Error> {
         let contents = std::fs::read(path)?;
-        let parsed = serde_json::from_slice(&contents)?;
+        let parsed: ProfileData = serde_json::from_slice(&contents)?;
 
-        Ok(parsed)
+        let migrated = parsed.run_migrations()?;
+
+        Ok(migrated)
     }
 
     pub fn store(&self, data: &ProfileData) -> std::io::Result<()> {
@@ -66,7 +69,7 @@ impl ProfileStore {
         std::fs::write(&self.profile_config_file, serialized)
     }
 
-    pub fn edit<F>(&self, editor: F) -> std::io::Result<()>
+    pub fn edit<F>(&self, editor: F) -> Result<(), anyhow::Error>
     where
         F: FnOnce(&mut ProfileData),
     {
@@ -75,7 +78,7 @@ impl ProfileStore {
         // Make changes
         editor(&mut data);
         // Store the edited data
-        self.store(&data)
+        self.store(&data).context("Rewriting profile file failed")
     }
 }
 
