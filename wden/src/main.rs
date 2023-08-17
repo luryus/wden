@@ -3,6 +3,7 @@ use clap::{
     Parser,
 };
 use reqwest::Url;
+use tabled::{Table, Tabled, settings::Style};
 use wden::{
     bitwarden::server::{BitwardenCloudRegion, ServerConfiguration},
     profile::ProfileStore,
@@ -121,20 +122,35 @@ async fn main() {
     );
 }
 
+#[derive(Tabled)]
+struct ProfileListRow<'a> {
+    #[tabled(rename="NAME")]
+    name: &'a str,
+    #[tabled(rename="SERVER")]
+    server_config: &'a ServerConfiguration,
+    #[tabled(rename="SAVED EMAIL")]
+    saved_email: &'a str
+}
+
 fn list_profiles() -> std::io::Result<()> {
     let profiles = ProfileStore::get_all_profiles()?;
 
     if profiles.is_empty() {
         println!("No profiles found.")
     } else {
-        for (name, profile) in profiles {
-            println!(
-                "- {}: Server \"{}\", saved email \"{}\"",
-                name,
-                profile.server_configuration,
-                profile.saved_email.unwrap_or_else(|| "None".to_string())
-            );
-        }
+        let rows = profiles.iter()
+            .map(|(name, profile)| {
+                ProfileListRow {
+                    name,
+                    server_config: &profile.server_configuration,
+                    saved_email: profile.saved_email.as_deref().unwrap_or("None") 
+                }
+            });
+
+        let mut table = Table::new(rows);
+        table.with(Style::blank());
+        
+        println!("{table}");
     }
 
     Ok(())
