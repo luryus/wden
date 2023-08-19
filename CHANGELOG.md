@@ -2,6 +2,17 @@
 
 ## next
 
+#### Server configuration changes
+Wden now supports easier Bitwarden cloud server configuration. The new flag `--bitwarden-cloud-region <region>` should now be used instead of the `vault.bitwarden.com` server URL.
+
+#### All changes
+
+- Add support for configuring separate API and identity server urls (#221)
+- Make selecting Bitwarden US/EU region servers easier (#221)
+- Pretty-print profile list as a table using [tabled](https://crates.io/crates/tabled/) (#221)
+- Change configuration file format (support the separate API/identity URLs), automatically migrate files into the new format (#221)
+- Dependency crate updates
+
 ## 0.7.1
 
 - Fix prelogin failing with Vaultwarden
