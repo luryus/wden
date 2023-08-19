@@ -3,7 +3,7 @@ use clap::{
     Parser,
 };
 use reqwest::Url;
-use tabled::{Table, Tabled, settings::Style};
+use tabled::{settings::Style, Table, Tabled};
 use wden::{
     bitwarden::server::{BitwardenCloudRegion, ServerConfiguration},
     profile::ProfileStore,
@@ -124,12 +124,12 @@ async fn main() {
 
 #[derive(Tabled)]
 struct ProfileListRow<'a> {
-    #[tabled(rename="NAME")]
+    #[tabled(rename = "NAME")]
     name: &'a str,
-    #[tabled(rename="SERVER")]
+    #[tabled(rename = "SERVER")]
     server_config: &'a ServerConfiguration,
-    #[tabled(rename="SAVED EMAIL")]
-    saved_email: &'a str
+    #[tabled(rename = "SAVED EMAIL")]
+    saved_email: &'a str,
 }
 
 fn list_profiles() -> std::io::Result<()> {
@@ -138,18 +138,15 @@ fn list_profiles() -> std::io::Result<()> {
     if profiles.is_empty() {
         println!("No profiles found.")
     } else {
-        let rows = profiles.iter()
-            .map(|(name, profile)| {
-                ProfileListRow {
-                    name,
-                    server_config: &profile.server_configuration,
-                    saved_email: profile.saved_email.as_deref().unwrap_or("None") 
-                }
-            });
+        let rows = profiles.iter().map(|(name, profile)| ProfileListRow {
+            name,
+            server_config: &profile.server_configuration,
+            saved_email: profile.saved_email.as_deref().unwrap_or("None"),
+        });
 
         let mut table = Table::new(rows);
         table.with(Style::blank());
-        
+
         println!("{table}");
     }
 
