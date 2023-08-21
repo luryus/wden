@@ -2,6 +2,8 @@
 
 ## next
 
+## 0.8.0
+
 #### Server configuration changes
 Wden now supports easier Bitwarden cloud server configuration. The new flag `--bitwarden-cloud-region <region>` should now be used instead of the `vault.bitwarden.com` server URL.
 
