@@ -1,5 +1,5 @@
 use cursive::{
-    view::ViewWrapper,
+    view::{Scrollable, ViewWrapper},
     views::{Dialog, SelectView},
     wrap_impl, Cursive,
 };
@@ -43,7 +43,7 @@ impl CollectionFilterDialog {
             cb2(siv, sel.clone());
         });
 
-        let dialog = Dialog::around(sel)
+        let dialog = Dialog::around(sel.scrollable())
             .title("Collections")
             .dismiss_button("Cancel")
             .button("Reset", move |siv| {
