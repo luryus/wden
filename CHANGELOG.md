@@ -2,6 +2,10 @@
 
 ## next
 
+## 0.8.1
+
+- Fixed collection list not being scrollable (#224)
+
 ## 0.8.0
 
 #### Server configuration changes
