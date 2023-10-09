@@ -1,7 +1,9 @@
 use std::time::Duration;
 
+use crate::bitwarden::server::ServerConfiguration;
+
 pub struct GlobalSettings {
-    pub server_url: String,
+    pub server_configuration: ServerConfiguration,
     pub profile: String,
     pub autolock_duration: Duration,
     pub device_id: String,

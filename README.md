@@ -4,6 +4,8 @@ A read-only TUI for accessing Bitwarden vault contents from the terminal.
 
 **WARNING: This application is experimental and has not been audited. Use at your own risk.**
 
+This project is not associated with the Bitwarden project nor Bitwarden Inc.
+
 ![Screenshot](doc/vault_screenshot.png)
 
 ---
@@ -11,21 +13,26 @@ A read-only TUI for accessing Bitwarden vault contents from the terminal.
 ## Usage
 
 ```
-./wden --help
-wden 
+Usage: wden [OPTIONS]
 
-USAGE:
-    wden [OPTIONS]
+Options:
+  -p, --profile <PROFILE>  Sets the profile that will be used. Profile names can only include lowercase alphanumeric characters, dashes (-) and underscores (_) [default: default]
+      --list-profiles      Instead of starting the application, list all stored profiles
+  -h, --help               Print help (see more with '--help')
+  -V, --version            Print version
 
-OPTIONS:
-    -h, --help                       Print help information
-        --list-profiles              Instead of starting the application, list all stored profiles
-    -p, --profile <PROFILE>          Sets the profile that will be used. Profile names can only
-                                     include lowercase alphanumeric characters, dashes (-) and
-                                     underscores (_) [default: default]
-    -s, --server-url <SERVER_URL>    Sets the Bitwarden server url. If not set, the url stored in
-                                     the profile will be used. If a new profile is created without a
-                                     server url set, https://vault.bitwarden.com will be used
+Server options:
+      --bitwarden-cloud-region <BITWARDEN_CLOUD_REGION>
+          Sets the current profile to use the given Bitwarden cloud server region [possible values: us, eu]
+  -s, --server-url <SERVER_URL>
+          Sets the current profile to use the given server url (single host)
+      --api-server-url <API_SERVER_URL>
+          Sets the current profile to use the given API server url. This needs to be set with --identity-server-url
+      --identity-server-url <IDENTITY_SERVER_URL>
+          Sets the current profile to use the given identity server url. This needs to be set with --api-server-url
+
+Advanced options:
+      --accept-invalid-certs  Accept invalid and untrusted (e.g. self-signed) certificates when connecting to the server. This option makes connections insecure, so avoid using it
 ```
 
 ### With Bitwarden Cloud
@@ -35,7 +42,9 @@ Just run the wden binary.
 ./wden
 ```
 
-Wden will create a new profile (named `default`), with the Bitwarden Cloud configured as the server.
+Wden will create a new profile (named `default`), with the Bitwarden Cloud US region configured as the server.
+
+To use the EU region, launch wden with the `--bitwarden-cloud-region eu` option.
 
 ### With a self-hosted Bitwarden-compatible server
 
@@ -66,14 +75,14 @@ Configuration files, one for each profile, are stored under the user's config di
 
 ### Bypassing CAPTCHA requirement
 
-Bitwarden Cloud and self-hosted Bitwarden-compatible servers may require CAPTCHA verification upon login in some situations. Because wden cannot display the CAPTCHA challenge in the terminal, Bitwarden's personal API keys can be used to skip the CAPTCHA requirement.
+Bitwarden cloud and self-hosted Bitwarden-compatible servers may require CAPTCHA verification upon login in some situations. Because wden cannot display the CAPTCHA challenge in the terminal, Personal API keys generated in the Bitwarden web vault can be used to skip the CAPTCHA requirement.
 
 1. When CAPTCHA is required, wden notices this and displays an additional text field in the login dialog.
-2. Go to Account Settings in your Bitwarden vault. Navigate to Security → Keys.
+2. Go to Account Settings in your Bitwarden web vault. Navigate to Security → Keys.
 3. View your API key.
 4. Copy the `client_secret` value to the Personal API key field in the login dialog.
 
-Bitwarden should not require the CAPTCHA verification again on the same wden profile after it has been completed once. 
+CAPTCHA verification should not be required again on the same wden profile after it has been completed once. 
 
 ---
 
@@ -85,13 +94,12 @@ Bitwarden should not require the CAPTCHA verification again on the same wden pro
 - View organization items
 - Fuzzy search
 - 2FA login (only authenticator code apps supported)
-- Connect to self-hosted Bitwarden instances (configurable URLs)
+- Connect to self-hosted Bitwarden-compatible instances (configurable URLs)
 - Automatic vault locking after a configurable period
 - Multiple profiles (configurations)
 
 ## Todo
 
-- Collection support
 - Folder support
 - Additional 2FA methods
 - Local vault caching / offline support?

@@ -1,9 +1,16 @@
 use std::io::Read;
 
 use base64::prelude::*;
-use clap::Parser;
-use wden::bitwarden::cipher;
+use clap::{Parser, ValueEnum};
 use wden::bitwarden::cipher::Cipher;
+use wden::bitwarden::cipher::{self, Pbkdf};
+
+#[derive(ValueEnum, Clone)]
+#[clap(rename_all = "lower")]
+enum Kdf {
+    Pbkdf2,
+    Argon2id,
+}
 
 #[derive(Parser)]
 struct Opts {
@@ -22,8 +29,17 @@ struct Opts {
     #[arg(long)]
     cipher: Option<String>,
 
-    #[arg(long, default_value = "100000")]
-    hash_iterations: u32,
+    #[arg(long, value_enum)]
+    kdf: Kdf,
+
+    #[arg(long)]
+    kdf_iterations: u32,
+
+    #[arg(long, required_if_eq("kdf", "argon2id"))]
+    kdf_memory: Option<u32>,
+
+    #[arg(long, required_if_eq("kdf", "argon2id"))]
+    kdf_parallelism: Option<u32>,
 
     #[arg(long)]
     to_string: bool,
@@ -35,8 +51,18 @@ struct Opts {
 fn main() -> Result<(), anyhow::Error> {
     let opts = Opts::parse();
 
-    let master_key =
-        cipher::create_master_key(&opts.username, &opts.password, opts.hash_iterations);
+    let kdf: Box<dyn Pbkdf> = match opts.kdf {
+        Kdf::Pbkdf2 => Box::new(cipher::Pbkdf2 {
+            hash_iterations: opts.kdf_iterations,
+        }),
+        Kdf::Argon2id => Box::new(cipher::Argon2id {
+            iterations: opts.kdf_iterations,
+            memory_kib: opts.kdf_memory.unwrap() * 1024,
+            parallelism: opts.kdf_parallelism.unwrap(),
+        }),
+    };
+
+    let master_key = kdf.create_master_key(&opts.username, &opts.password)?;
 
     let symmetric_key_cipher = opts.symmetric_key_cipher.parse()?;
     let (enc_key, mac_key) = cipher::decrypt_symmetric_keys(&symmetric_key_cipher, &master_key)?;
@@ -65,7 +91,10 @@ fn main() -> Result<(), anyhow::Error> {
             cipher.decrypt(&enc_key, &mac_key)?
         };
 
-        println!("Decrypted cipher:\n{}", BASE64_STANDARD.encode(&decrypted_cipher));
+        println!(
+            "Decrypted cipher:\n{}",
+            BASE64_STANDARD.encode(&decrypted_cipher)
+        );
 
         if opts.to_string {
             let cipher_str = String::from_utf8(decrypted_cipher).unwrap_or_default();

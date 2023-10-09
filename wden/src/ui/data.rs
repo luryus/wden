@@ -2,7 +2,7 @@ use crate::{
     bitwarden::{
         api::{self, CipherItem, Collection, Organization, TokenResponseSuccess},
         cipher::{
-            self, extract_enc_mac_keys, EncryptionKey, MacKey, MasterKey, MasterPasswordHash,
+            self, extract_enc_mac_keys, EncryptionKey, MacKey, MasterKey, MasterPasswordHash, Pbkdf,
         },
     },
     profile::{GlobalSettings, ProfileStore},
@@ -37,7 +37,7 @@ pub struct LoggedOut;
 
 pub struct LoggingIn {
     email: Arc<String>,
-    password_hash_iterations: u32,
+    pbkdf: Arc<dyn Pbkdf>,
     master_key: Arc<cipher::MasterKey>,
     master_password_hash: Arc<cipher::MasterPasswordHash>,
 }
@@ -132,7 +132,7 @@ impl Unlocked {
 
 pub struct Locked {
     email: Arc<String>,
-    password_hash_iterations: u32,
+    pbkdf: Arc<dyn Pbkdf>,
     token: Arc<TokenResponseSuccess>,
     vault_data: Arc<HashMap<String, CipherItem>>,
     organizations: Arc<HashMap<String, Organization>>,
@@ -266,12 +266,12 @@ impl<'a> StatefulUserData<'a, LoggedOut> {
         self,
         master_key: Arc<MasterKey>,
         master_password_hash: Arc<MasterPasswordHash>,
-        password_hash_iterations: u32,
+        pbkdf: Arc<dyn cipher::Pbkdf>,
         email: Arc<String>,
     ) -> StatefulUserData<'a, LoggingIn> {
         self.user_data.state_data = AppStateData::LoggingIn(LoggingIn {
             email,
-            password_hash_iterations,
+            pbkdf,
             master_key,
             master_password_hash,
         });
@@ -391,10 +391,7 @@ impl<'a> StatefulUserData<'a, Unlocked> {
 
         let locked_data = Locked {
             email: unlocked_data.logged_in_data.logging_in_data.email,
-            password_hash_iterations: unlocked_data
-                .logged_in_data
-                .logging_in_data
-                .password_hash_iterations,
+            pbkdf: unlocked_data.logged_in_data.logging_in_data.pbkdf,
             token: unlocked_data.logged_in_data.token,
             vault_data: unlocked_data.vault_data,
             organizations: unlocked_data.organizations,
@@ -500,8 +497,10 @@ impl<'a> StatefulUserData<'a, Locked> {
             .clone()
     }
 
-    pub fn password_hash_iterations(&self) -> u32 {
-        get_state_data!(&self.user_data.state_data, AppStateData::Locked).password_hash_iterations
+    pub fn pbkdf(&self) -> Arc<dyn Pbkdf> {
+        get_state_data!(&self.user_data.state_data, AppStateData::Locked)
+            .pbkdf
+            .clone()
     }
 
     pub fn into_unlocking(
@@ -517,7 +516,7 @@ impl<'a> StatefulUserData<'a, Locked> {
             logged_in_data: LoggedIn {
                 logging_in_data: LoggingIn {
                     email: locked_data.email,
-                    password_hash_iterations: locked_data.password_hash_iterations,
+                    pbkdf: locked_data.pbkdf,
                     master_key,
                     master_password_hash,
                 },

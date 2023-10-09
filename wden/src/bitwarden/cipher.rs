@@ -1,4 +1,5 @@
 use aes::cipher::block_padding::{Pkcs7, UnpadError};
+use aes::cipher::generic_array::GenericArray;
 use aes::Aes256;
 use anyhow::Context;
 use base64::prelude::*;
@@ -10,13 +11,16 @@ use rsa::Oaep;
 use rsa::{pkcs8::DecodePrivateKey, RsaPrivateKey};
 use serde::de;
 use serde::{Deserialize, Deserializer};
-use sha2::Sha256;
+use sha2::{digest::OutputSizeUser, Digest, Sha256};
 use std::fmt;
 
 use std::pin::Pin;
 use std::str::FromStr;
+use std::sync::Arc;
 use thiserror::Error;
 use zeroize::{Zeroize, Zeroizing};
+
+use super::api::{KdfFunction, PreloginResponse};
 
 const CREDENTIAL_LEN: usize = 256 / 8;
 
@@ -105,18 +109,36 @@ pub enum CipherError {
     InvalidKeyOrIvLength(InvalidLength),
     #[error("Invalid padding while decrypting")]
     InvalidPadding(UnpadError),
+    #[error("Invalid KDF parameters")]
+    InvalidKdfParameters(argon2::Error),
+    #[error("Error with KDF")]
+    KdfError(argon2::Error),
 }
 
-pub fn create_master_key(user_email: &str, user_password: &str, hash_iterations: u32) -> MasterKey {
-    let mut res = MasterKey::new();
-    pbkdf2::pbkdf2::<Hmac<Sha256>>(
-        user_password.as_bytes(),
-        // Email is always lowercased
-        user_email.to_lowercase().as_bytes(),
-        hash_iterations,
-        res.0.as_mut_slice(),
-    );
-    res
+pub trait Pbkdf {
+    fn create_master_key(
+        &self,
+        user_email: &str,
+        user_password: &str,
+    ) -> Result<MasterKey, CipherError>;
+}
+
+pub fn get_pbkdf(prelogin_res: &PreloginResponse) -> Option<Arc<dyn Pbkdf + Send + Sync>> {
+    match prelogin_res.kdf {
+        KdfFunction::Pbkdf2 => Some(Arc::new(Pbkdf2 {
+            hash_iterations: prelogin_res.kdf_iterations,
+        })),
+        KdfFunction::Argon2id => prelogin_res
+            .kdf_memory_mib
+            .zip(prelogin_res.kdf_parallelism)
+            .map(|(mem, par)| -> Arc<(dyn Pbkdf + Send + Sync)> {
+                Arc::new(Argon2id {
+                    iterations: prelogin_res.kdf_iterations,
+                    memory_kib: mem * 1024,
+                    parallelism: par,
+                })
+            }),
+    }
 }
 
 pub fn create_master_password_hash(
@@ -124,13 +146,75 @@ pub fn create_master_password_hash(
     user_password: &str,
 ) -> MasterPasswordHash {
     let mut res = MasterPasswordHash::new();
-    pbkdf2::pbkdf2::<Hmac<Sha256>>(
+    pbkdf2::pbkdf2_hmac::<Sha256>(
         master_key.0.as_slice(),
         user_password.as_bytes(),
         1,
         res.0.as_mut_slice(),
     );
     res
+}
+
+pub struct Pbkdf2 {
+    pub hash_iterations: u32,
+}
+
+impl Pbkdf for Pbkdf2 {
+    fn create_master_key(
+        &self,
+        user_email: &str,
+        user_password: &str,
+    ) -> Result<MasterKey, CipherError> {
+        let mut res = MasterKey::new();
+        pbkdf2::pbkdf2_hmac::<Sha256>(
+            user_password.as_bytes(),
+            // Email is always lowercased
+            user_email.to_lowercase().as_bytes(),
+            self.hash_iterations,
+            res.0.as_mut_slice(),
+        );
+        Ok(res)
+    }
+}
+
+pub struct Argon2id {
+    pub iterations: u32,
+    pub memory_kib: u32,
+    pub parallelism: u32,
+}
+
+impl Argon2id {
+    fn hashed_salt(salt: &[u8]) -> GenericArray<u8, <Sha256 as OutputSizeUser>::OutputSize> {
+        // With Argon2id, bitwarden first hashes the salt (here email) with SHA-256
+        // to ensure the salt is long enough for Argon2
+        let mut sha = Sha256::new();
+        sha.update(salt);
+        sha.finalize()
+    }
+}
+
+impl Pbkdf for Argon2id {
+    fn create_master_key(
+        &self,
+        user_email: &str,
+        user_password: &str,
+    ) -> Result<MasterKey, CipherError> {
+        let salt = Self::hashed_salt(user_email.to_lowercase().as_bytes());
+
+        let params = argon2::ParamsBuilder::new()
+            .m_cost(self.memory_kib)
+            .p_cost(self.parallelism)
+            .t_cost(self.iterations)
+            .build()
+            .map_err(CipherError::InvalidKdfParameters)?;
+
+        let kdf = argon2::Argon2::new(argon2::Algorithm::Argon2id, argon2::Version::V0x13, params);
+
+        let mut res = MasterKey::new();
+        kdf.hash_password_into(user_password.as_bytes(), &salt, res.0.as_mut_slice())
+            .map_err(CipherError::KdfError)?;
+        Ok(res)
+    }
 }
 
 pub fn decrypt_symmetric_keys(
@@ -174,8 +258,9 @@ fn expand_master_key(master_key: &MasterKey) -> (EncryptionKey, MacKey) {
     (enc_key, mac_key)
 }
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub enum Cipher {
+    #[default]
     Empty,
     Value {
         enc_type: EncType,
@@ -183,12 +268,6 @@ pub enum Cipher {
         ct: Vec<u8>,
         mac: Vec<u8>,
     },
-}
-
-impl std::default::Default for Cipher {
-    fn default() -> Self {
-        Cipher::Empty
-    }
 }
 
 impl fmt::Display for Cipher {
@@ -263,7 +342,8 @@ impl FromStr for Cipher {
             (false, false) => {
                 let iv = vec![];
                 let mac = vec![];
-                let ct = BASE64_STANDARD.decode(rest)
+                let ct = BASE64_STANDARD
+                    .decode(rest)
                     .or(Err(CipherError::InvalidCipherStringFormat))?;
                 Ok(Cipher::Value {
                     enc_type,
@@ -514,9 +594,14 @@ mod tests {
     mod testdata {
         pub const USER_EMAIL: &str = "foobar@example.com";
         pub const USER_PASSWORD: &str = "asdasdasd";
-        pub const USER_HASH_ITERATIONS: u32 = 100_000;
+        pub const USER_PBKDF2_ITERATIONS: u32 = 100_000;
+        pub const USER_ARGON2ID_ITERATIONS: u32 = 3;
+        pub const USER_ARGON2ID_MEMORY_MB: u32 = 64;
+        pub const USER_ARGON2ID_PARALLELISM: u32 = 4;
 
-        pub const USER_MASTER_KEY_B64: &str = "WKBariwK2lofMJ27IZhzWlXvrriiH6Tht66VjxcRF7c=";
+        pub const USER_MASTER_KEY_PBKDF2_B64: &str = "WKBariwK2lofMJ27IZhzWlXvrriiH6Tht66VjxcRF7c=";
+        pub const USER_MASTER_KEY_ARGON2ID_B64: &str =
+            "gQc7HNh/OOacqSP5fk3rza6sRUgIChVXF6xdzX8+7OM=";
         pub const USER_MASTER_PASSWORD_HASH_B64: &str =
             "7jACo78yJ4rlybclGvCGjcE1bqPBXO3Gjvvg9mkFnl8=";
 
@@ -568,7 +653,7 @@ mod tests {
 
     #[test]
     fn test_create_master_password_hash() {
-        let master_key = MasterKey::from_base64(testdata::USER_MASTER_KEY_B64)
+        let master_key = MasterKey::from_base64(testdata::USER_MASTER_KEY_PBKDF2_B64)
             .expect("Master key decoding failed");
         let pass_hash = create_master_password_hash(&master_key, testdata::USER_PASSWORD);
         assert_eq!(
@@ -578,15 +663,32 @@ mod tests {
     }
 
     #[test]
-    fn test_create_master_key() {
-        let key = create_master_key(
-            testdata::USER_EMAIL,
-            testdata::USER_PASSWORD,
-            testdata::USER_HASH_ITERATIONS,
-        );
+    fn test_pbkdf2_create_master_key() {
+        let pbkdf2 = Pbkdf2 {
+            hash_iterations: testdata::USER_PBKDF2_ITERATIONS,
+        };
+        let key = pbkdf2
+            .create_master_key(testdata::USER_EMAIL, testdata::USER_PASSWORD)
+            .expect("Hashing failed");
         assert_eq!(
             BASE64_STANDARD.encode(key.0.as_slice()),
-            testdata::USER_MASTER_KEY_B64
+            testdata::USER_MASTER_KEY_PBKDF2_B64
+        );
+    }
+
+    #[test]
+    fn test_argon2id_create_master_key() {
+        let argon2id = Argon2id {
+            iterations: testdata::USER_ARGON2ID_ITERATIONS,
+            memory_kib: testdata::USER_ARGON2ID_MEMORY_MB * 1024,
+            parallelism: testdata::USER_ARGON2ID_PARALLELISM,
+        };
+        let key = argon2id
+            .create_master_key(testdata::USER_EMAIL, testdata::USER_PASSWORD)
+            .expect("Hashing failed");
+        assert_eq!(
+            BASE64_STANDARD.encode(key.0.as_slice()),
+            testdata::USER_MASTER_KEY_ARGON2ID_B64
         );
     }
 
@@ -603,7 +705,7 @@ mod tests {
     fn test_decrypt_cipher_with_user_symmetric_key() {
         let cipher = Cipher::from_str(testdata::TEST_CIPHER_STRING).unwrap();
 
-        let master_key = MasterKey::from_base64(testdata::USER_MASTER_KEY_B64)
+        let master_key = MasterKey::from_base64(testdata::USER_MASTER_KEY_PBKDF2_B64)
             .expect("Master key decoding failed");
         let enc_key = testdata::USER_SYMMETRIC_KEY_CIPHER_STRING
             .parse()
@@ -620,7 +722,7 @@ mod tests {
 
     #[test]
     fn test_decrypt_cipher_with_private_key() {
-        let master_key = MasterKey::from_base64(testdata::USER_MASTER_KEY_B64)
+        let master_key = MasterKey::from_base64(testdata::USER_MASTER_KEY_PBKDF2_B64)
             .expect("Master key decoding failed");
         let enc_key = testdata::USER_SYMMETRIC_KEY_CIPHER_STRING
             .parse()

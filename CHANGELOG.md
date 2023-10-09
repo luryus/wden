@@ -2,8 +2,33 @@
 
 ## next
 
-- Zeroize password after login form submit (wipe it from memory)
+## 0.8.1
 
+- Fixed collection list not being scrollable (#224)
+
+## 0.8.0
+
+#### Server configuration changes
+Wden now supports easier Bitwarden cloud server configuration. The new flag `--bitwarden-cloud-region <region>` should now be used instead of the `vault.bitwarden.com` server URL.
+
+#### All changes
+
+- Add support for configuring separate API and identity server urls (#221)
+- Make selecting Bitwarden US/EU region servers easier (#221)
+- Pretty-print profile list as a table using [tabled](https://crates.io/crates/tabled/) (#221)
+- Change configuration file format (support the separate API/identity URLs), automatically migrate files into the new format (#221)
+- Dependency crate updates
+
+## 0.7.1
+
+- Fix prelogin failing with Vaultwarden
+- Dependency crate updates for security fixes
+
+## 0.7.0
+
+- Zeroize password after login form submit (wipe it from memory)
+- Add support for Argon2 KDF (#147)
+- Dependency crate updates
 
 ## 0.6.0
 

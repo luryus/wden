@@ -1,4 +1,5 @@
 use super::{PlatformClipboard, PlatformClipboardResult};
+
 pub struct LinuxClipboard;
 
 impl PlatformClipboard for LinuxClipboard {

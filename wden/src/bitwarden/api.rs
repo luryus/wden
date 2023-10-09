@@ -1,17 +1,16 @@
 use super::cipher::Cipher;
+use super::server::ServerConfiguration;
 use anyhow::Error;
 use base64::prelude::*;
 use reqwest;
 use reqwest::Url;
 use serde::Deserialize;
-use serde_json::Value;
+use serde_repr::Deserialize_repr;
 use std::convert::TryInto;
 use std::time::{Duration, Instant};
 use std::{collections::HashMap, convert::TryFrom};
 
 const APP_USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"),);
-
-pub const DEFAULT_SERVER_URL: &str = "https://vault.bitwarden.com/";
 
 #[allow(clippy::enum_variant_names)]
 enum DeviceType {
@@ -32,14 +31,15 @@ const fn get_device_type() -> DeviceType {
 
 pub struct ApiClient {
     http_client: reqwest::Client,
-    base_url: Url,
+    api_base_url: Url,
+    identity_base_url: Url,
     device_identifier: String,
     access_token: Option<String>,
 }
 
 impl ApiClient {
     pub fn new(
-        server_url: &str,
+        server_config: &ServerConfiguration,
         device_identifier: impl Into<String>,
         accept_invalid_certs: bool,
     ) -> Self {
@@ -48,31 +48,31 @@ impl ApiClient {
             .danger_accept_invalid_certs(accept_invalid_certs)
             .build()
             .unwrap();
-        let base_url = Url::parse(server_url).unwrap();
         ApiClient {
             http_client,
-            base_url,
+            api_base_url: server_config.api_base_url(),
+            identity_base_url: server_config.identity_base_url(),
             device_identifier: device_identifier.into(),
             access_token: None,
         }
     }
 
     pub fn with_token(
-        server_url: &str,
+        server_config: &ServerConfiguration,
         device_identifier: impl Into<String>,
         token: &str,
         accept_invalid_certs: bool,
     ) -> Self {
-        let mut c = Self::new(server_url, device_identifier, accept_invalid_certs);
+        let mut c = Self::new(server_config, device_identifier, accept_invalid_certs);
         c.access_token = Some(token.to_string());
         c
     }
 
-    pub async fn prelogin(&self, user_email: &str) -> Result<u32, Error> {
+    pub async fn prelogin(&self, user_email: &str) -> Result<PreloginResponse, Error> {
         let mut body = HashMap::new();
         body.insert("email", user_email);
 
-        let url = self.base_url.join("api/accounts/prelogin")?;
+        let url = self.api_base_url.join("accounts/prelogin")?;
 
         let res = self
             .http_client
@@ -82,15 +82,8 @@ impl ApiClient {
             .await?
             .error_for_status()?;
 
-        let res: Value = res.json().await?;
-
-        let iterations = res
-            .as_object()
-            .and_then(|o| o.get("kdfIterations").or_else(|| o.get("KdfIterations")))
-            .and_then(|v| v.as_u64())
-            .ok_or_else(|| anyhow::anyhow!("Parsing response failed"))?;
-
-        Ok(iterations as u32)
+        let res: PreloginResponse = res.json().await?;
+        Ok(res)
     }
 
     /// Make Bitwarden (OAuth) /identity/token api call for authenticating.
@@ -137,7 +130,7 @@ impl ApiClient {
             body.insert("captchaResponse", ct);
         }
 
-        let url = self.base_url.join("identity/connect/token")?;
+        let url = self.identity_base_url.join("connect/token")?;
 
         let res = self
             .http_client
@@ -145,10 +138,7 @@ impl ApiClient {
             .form(&body)
             // As of October 2021, Bitwarden (prod) wants the email as base64-encoded in a header
             // for some security reason
-            .header(
-                "auth-email",
-                BASE64_URL_SAFE.encode(username),
-            )
+            .header("auth-email", BASE64_URL_SAFE.encode(username))
             .send()
             .await?;
 
@@ -210,7 +200,7 @@ impl ApiClient {
         body.insert("refresh_token", &token.refresh_token);
         body.insert("client_id", "cli");
 
-        let url = self.base_url.join("identity/connect/token")?;
+        let url = self.identity_base_url.join("connect/token")?;
 
         let res = self.http_client.post(url).form(&body).send().await?;
 
@@ -232,7 +222,7 @@ impl ApiClient {
 
     pub async fn sync(&self) -> Result<SyncResponse, Error> {
         assert!(self.access_token.is_some());
-        let mut url = self.base_url.join("api/sync")?;
+        let mut url = self.api_base_url.join("sync")?;
         url.set_query(Some("excludeDomains=true"));
         let res = self
             .http_client
@@ -332,6 +322,30 @@ impl TryFrom<&str> for TwoFactorProviderType {
             _ => Err(()),
         }
     }
+}
+
+#[derive(Deserialize_repr, Debug, Clone, Default)]
+#[repr(u8)]
+pub enum KdfFunction {
+    #[default]
+    Pbkdf2 = 0,
+    Argon2id = 1,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct PreloginResponse {
+    #[serde(alias = "kdf", default)]
+    #[serde(alias = "Kdf")]
+    pub kdf: KdfFunction,
+    #[serde(alias = "kdfIterations")]
+    #[serde(alias = "KdfIterations")]
+    pub kdf_iterations: u32,
+    #[serde(alias = "kdfMemory")]
+    #[serde(alias = "KdfMemory")]
+    pub kdf_memory_mib: Option<u32>,
+    #[serde(alias = "kdfMemory")]
+    #[serde(alias = "KdfParallelism")]
+    pub kdf_parallelism: Option<u32>,
 }
 
 #[derive(Deserialize, Debug)]

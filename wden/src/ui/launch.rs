@@ -4,19 +4,22 @@ use cursive::{
     theme::BaseColor, theme::Color, theme::PaletteColor::*, theme::Theme, Cursive, CursiveRunnable,
 };
 
-use crate::profile::{GlobalSettings, ProfileData, ProfileStore};
+use crate::{
+    bitwarden::server::ServerConfiguration,
+    profile::{GlobalSettings, ProfileData, ProfileStore},
+};
 
 use super::{autolock, data::UserData, login::login_dialog};
 
 pub fn launch(
     profile: String,
-    server_url: Option<String>,
+    server_config: Option<ServerConfiguration>,
     accept_invalid_certs: bool,
     always_refresh_token_on_sync: bool,
 ) {
     let (global_settings, profile_data, profile_store) = load_profile(
         profile,
-        server_url,
+        server_config,
         accept_invalid_certs,
         always_refresh_token_on_sync,
     );
@@ -64,7 +67,7 @@ fn run(mut cursive: CursiveRunnable) {
 
 fn load_profile(
     profile_name: String,
-    server_url: Option<String>,
+    server_configuration: Option<ServerConfiguration>,
     accept_invalid_certs: bool,
     always_refresh_on_sync: bool,
 ) -> (GlobalSettings, ProfileData, ProfileStore) {
@@ -73,7 +76,7 @@ fn load_profile(
 
     let global_settings = GlobalSettings {
         profile: profile_name,
-        server_url: server_url.unwrap_or(profile_data.server_url),
+        server_configuration: server_configuration.unwrap_or(profile_data.server_configuration),
         autolock_duration: profile_data.autolock_duration,
         device_id: profile_data.device_id.clone(),
         accept_invalid_certs,
@@ -81,7 +84,7 @@ fn load_profile(
     };
 
     // Write new settings
-    profile_data.server_url = global_settings.server_url.clone();
+    profile_data.server_configuration = global_settings.server_configuration.clone();
     profile_store
         .store(&profile_data)
         .expect("Failed to write profile settings");
