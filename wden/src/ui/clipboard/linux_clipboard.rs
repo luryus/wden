@@ -1,10 +1,28 @@
+use std::sync::OnceLock;
+
 use super::{PlatformClipboard, PlatformClipboardResult};
 
+#[derive(PartialEq, Eq)]
+enum LinuxClipboardPlatform {
+    X11,
+    Wayland,
+}
 pub struct LinuxClipboard;
+
+fn get_cb_impl() -> &'static LinuxClipboardPlatform {
+    static LINUX_CB_IMPL: OnceLock<LinuxClipboardPlatform> = OnceLock::new();
+    LINUX_CB_IMPL.get_or_init(|| {
+        if wayland::is_available() {
+            LinuxClipboardPlatform::Wayland
+        } else {
+            LinuxClipboardPlatform::X11
+        }
+    })
+}
 
 impl PlatformClipboard for LinuxClipboard {
     fn clip_string(s: String) -> PlatformClipboardResult<()> {
-        if !wayland::is_available() {
+        if get_cb_impl() == &LinuxClipboardPlatform::X11 {
             log::info!("Clipping using x11");
             x11::clip_string(s)
         } else {
@@ -14,7 +32,7 @@ impl PlatformClipboard for LinuxClipboard {
     }
 
     fn get_string_contents() -> PlatformClipboardResult<String> {
-        if !wayland::is_available() {
+        if get_cb_impl() == &LinuxClipboardPlatform::X11 {
             x11::get_string_contents()
         } else {
             wayland::get_string_contents()
@@ -22,7 +40,7 @@ impl PlatformClipboard for LinuxClipboard {
     }
 
     fn clear() -> PlatformClipboardResult<()> {
-        if !wayland::is_available() {
+        if get_cb_impl() == &LinuxClipboardPlatform::X11 {
             x11::clip_string(String::new())
         } else {
             wayland::clear()
@@ -47,7 +65,7 @@ mod x11 {
         static ref CLIPBOARD: Mutex<Option<Clipboard>> = Mutex::new(None);
     }
 
-    pub fn is_available() -> bool {
+    pub fn _is_available() -> bool {
         get_cb().is_ok()
     }
 
