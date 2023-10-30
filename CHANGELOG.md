@@ -2,6 +2,11 @@
 
 ## next
 
+## 0.9.0
+
+- Added Wayland clipboard support on Linux (#38)
+- Dependency crate updates
+
 ## 0.8.1
 
 - Fixed collection list not being scrollable (#224)
