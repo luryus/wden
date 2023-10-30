@@ -7,7 +7,7 @@ runs:
   - name: Install dependency libraries
     shell: bash
     if: ${{ runner.os == 'Linux' }}
-    run: sudo apt-get install -y libxcb1-dev libxcb-shape0-dev libxcb-xfixes0-dev
+    run: sudo apt-get install -y libxcb1-dev libxcb-shape0-dev libxcb-xfixes0-dev libwayland-dev
 
   - uses: actions-rs/toolchain@v1
     with:
