@@ -53,7 +53,7 @@ jobs:
     - name: Build
       run: cargo build --verbose --release
 
-    - uses: actions/upload-artifact@v3
+    - uses: actions/upload-artifact@v4
       with:
         name: ${{ matrix.os }} wden binary
         path: |
