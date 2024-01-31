@@ -2,6 +2,10 @@
 
 ## next
 
+## 0.9.1
+
+- Dependency crate updates
+
 ## 0.9.0
 
 - Added Wayland clipboard support on Linux (#38)
