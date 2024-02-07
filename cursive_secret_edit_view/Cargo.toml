@@ -7,7 +7,7 @@ version = "0.1.0"
 cursive_core = { version = "0.3" }
 zeroize = { version = "1.7" }
 arrayvec = "0.7"
-unicode-segmentation = "1.10.1"
+unicode-segmentation = "1.11.0"
 
 [dev-dependencies]
 cursive = { version = "0.20", default_features = false, features = ["crossterm-backend"] }
