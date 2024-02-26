@@ -2,6 +2,12 @@
 
 ## next
 
+## 0.10.0
+
+- Enabled LTO and debug symbol stripping in release builds
+- Changed CI to build Linux binaries on Ubuntu 22.04. The prebuilt Linux binaries are now linked against OpenSSL 3. They should now work on recent versions of most Linux distros.
+- Dependency crate updates
+
 ## 0.9.1
 
 - Dependency crate updates
