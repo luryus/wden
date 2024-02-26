@@ -1,3 +1,7 @@
 [workspace]
 members = ["wden", "cursive_secret_edit_view"]
 resolver = "2"
+
+[profile.release]
+strip = true
+lto = "thin"
