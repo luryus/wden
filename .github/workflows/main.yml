@@ -61,7 +61,7 @@ jobs:
         if [ "${{ matrix.os }}" = "windows-2022" ]; then
           cp target/release/wden.exe "out/wden-${target_triple}.exe"
         elif [ "${{ matrix.os }}" = "ubuntu-22.04" ]; then
-          cp target/release/wden "ou/wden-${target_triple}.exe"
+          cp target/release/wden "out/wden-${target_triple}.exe"
         fi
 
     - uses: actions/upload-artifact@v4
