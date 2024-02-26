@@ -13,7 +13,7 @@ env:
 jobs:
   create_release:
     name: Create release
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     if: startsWith(github.ref, 'refs/tags/')
 
     steps:
@@ -38,7 +38,7 @@ jobs:
   build:
     strategy:
       matrix:
-        os: [ubuntu-20.04, windows-2022]
+        os: [ubuntu-22.04, windows-2022]
     name: Build and test on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
 
@@ -52,28 +52,28 @@ jobs:
       run: cargo test --verbose --release
     - name: Build
       run: cargo build --verbose --release
+    
+    - name: Copy binaries to out dir with target name
+      shell: bash
+      run: |
+        mkdir -p out/
+        target_triple="$(rustc -vV | sed -n 's|host: ||p')"
+        if [ "${{ matrix.os }}" = "windows-2022" ]; then
+          cp target/release/wden.exe "./wden-${target_triple}.exe"
+        elif [ "${{ matrix.os }}" = "ubuntu-22.04" ]; then
+          cp target/release/wden "./wden-${target_triple}.exe"
+        fi
 
     - uses: actions/upload-artifact@v4
       with:
         name: ${{ matrix.os }} wden binary
-        path: |
-          target/release/wden
-          target/release/wden.exe
+        path: out/
 
-    # For tags, copy and zip the binaries to files, and create a release
-    - name: Rename binaries
-      shell: bash
-      if: startsWith(github.ref, 'refs/tags/')
-      run: |
-        if [ "${{ matrix.os }}" = "windows-2022" ]; then
-          cp target/release/wden.exe ./wden-windows-x86_64.exe
-        elif [ "${{ matrix.os }}" = "ubuntu-20.04" ]; then
-          cp target/release/wden ./wden-linux-x86_64
-        fi
+    # For tags, create a release
     - name: Release
       uses: softprops/action-gh-release@v1
       if: startsWith(github.ref, 'refs/tags/')
       with:
         files: |
           LICENSE
-          wden-*
+          out/wden-*

@@ -11,7 +11,7 @@ jobs:
   build:
     strategy:
       matrix:
-        os: [ubuntu-20.04, windows-2022]
+        os: [ubuntu-22.04, windows-2022]
     name: Build and test on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
 
