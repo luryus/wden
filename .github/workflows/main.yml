@@ -30,7 +30,7 @@ jobs:
         export VERSION="$GITHUB_REF_NAME"
         parse-changelog CHANGELOG.md "$VERSION" > release-changelog.md
     - name: Release
-      uses: softprops/action-gh-release@v1
+      uses: softprops/action-gh-release@v2
       with:
         body_path: release-changelog.md
         body: ''  # Empty string as fallback
@@ -71,7 +71,7 @@ jobs:
 
     # For tags, create a release
     - name: Release
-      uses: softprops/action-gh-release@v1
+      uses: softprops/action-gh-release@v2
       if: startsWith(github.ref, 'refs/tags/')
       with:
         files: |
