@@ -36,15 +36,13 @@ impl MasterKey {
     fn from_base64(b64_data: &str) -> Result<Self, base64::DecodeSliceError> {
         let mut key = Self::new();
 
-        // Have to use unchecked here because the base64 library currently
-        // does not always handle precise-sized slices correctly
-        // https://github.com/marshallpierce/rust-base64/issues/212
-        let len = BASE64_STANDARD.decode_slice_unchecked(b64_data, key.0.as_mut_slice())?;
+        let len = BASE64_STANDARD.decode_slice(b64_data, key.0.as_mut_slice())?;
         if len == key.0.len() {
             Ok(key)
         } else {
-            Err(base64::DecodeSliceError::DecodeError(
-                base64::DecodeError::InvalidLength,
+            Err(
+                base64::DecodeSliceError::DecodeError(
+                base64::DecodeError::InvalidLength(len.abs_diff(key.0.len())),
             ))
         }
     }
