@@ -2,6 +2,10 @@
 
 ## next
 
+## 0.10.1
+
+- Dependency crate updates, including some security fixes
+
 ## 0.10.0
 
 - Enabled LTO and debug symbol stripping in release builds
