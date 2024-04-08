@@ -343,7 +343,7 @@ pub struct PreloginResponse {
     #[serde(alias = "kdfMemory")]
     #[serde(alias = "KdfMemory")]
     pub kdf_memory_mib: Option<u32>,
-    #[serde(alias = "kdfMemory")]
+    #[serde(alias = "kdfParallelism")]
     #[serde(alias = "KdfParallelism")]
     pub kdf_parallelism: Option<u32>,
 }

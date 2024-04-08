@@ -2,6 +2,8 @@
 
 ## next
 
+- Fixed Argon2 not working with Bitwarden servers
+
 ## 0.10.1
 
 - Dependency crate updates, including some security fixes
