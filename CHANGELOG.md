@@ -2,6 +2,8 @@
 
 ## next
 
+## 0.10.3
+
 - Fix logins to Bitwarden Cloud (bot detection once again seemed to be unhappy)
 
 ## 0.10.2
