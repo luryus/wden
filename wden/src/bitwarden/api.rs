@@ -14,18 +14,28 @@ const APP_USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PK
 
 #[allow(clippy::enum_variant_names)]
 enum DeviceType {
-    WindowsDesktop = 6,
-    MacOsDesktop = 7,
-    LinuxDesktop = 8,
+    WindowsCLI = 23,
+    MacOsCLI = 24,
+    LinuxCLI = 25,
 }
 
 const fn get_device_type() -> DeviceType {
     if cfg!(windows) {
-        DeviceType::WindowsDesktop
+        DeviceType::WindowsCLI
     } else if cfg!(macos) {
-        DeviceType::MacOsDesktop
+        DeviceType::MacOsCLI
     } else {
-        DeviceType::LinuxDesktop
+        DeviceType::LinuxCLI
+    }
+}
+
+const fn get_device_name() -> &'static str {
+    if cfg!(windows) {
+        "windows"
+    } else if cfg!(macos) {
+        "macos"
+    } else {
+        "linux"
     }
 }
 
@@ -110,7 +120,7 @@ impl ApiClient {
         body.insert("password", password);
         body.insert("scope", "api offline_access");
         body.insert("client_id", "cli");
-        body.insert("deviceName", "wden");
+        body.insert("deviceName", get_device_name());
         body.insert("deviceIdentifier", &self.device_identifier);
         body.insert("deviceType", &device_type);
 
@@ -139,6 +149,10 @@ impl ApiClient {
             // As of October 2021, Bitwarden (prod) wants the email as base64-encoded in a header
             // for some security reason
             .header("auth-email", BASE64_URL_SAFE.encode(username))
+            .header("device-type", &device_type)
+            // As of May 2024, Bitwarden wants these Bitwarden-Client- headers as well
+            .header("Bitwarden-Client-Name", "wden")
+            .header("Bitwarden-Client-Version", env!("CARGO_PKG_VERSION"))
             .send()
             .await?;
 

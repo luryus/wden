@@ -2,6 +2,8 @@
 
 ## next
 
+- Fix logins to Bitwarden Cloud (bot detection once again seemed to be unhappy)
+
 ## 0.10.2
 
 - Fixed Argon2 not working with Bitwarden servers
