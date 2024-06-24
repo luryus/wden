@@ -34,7 +34,7 @@ cursive = { version = "0.20", default_features = false, features = ["crossterm-b
 cursive_table_view = { git = "https://github.com/luryus/cursive_table_view", version = "0.14.0-alpha.1" }
 cursive_secret_edit_view = { path = "../cursive_secret_edit_view" }
 log = "0.4"
-lazy_static = "1.4"
+lazy_static = "1.5"
 clap = { version="4", features = ["derive"] }
 directories-next = "2.0"
 thiserror = "1.0"
