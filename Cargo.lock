@@ -256,12 +256,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 
 [[package]]
-name = "cfg_aliases"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fd16c4719339c4530435d38e511904438d07cce7950afa3718a84ac36c10e89e"
-
-[[package]]
 name = "cipher"
 version = "0.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -527,17 +521,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b42b6fa04a440b495c8b04d0e71b707c585f83cb9cb28cf8cd0d976c315e31b4"
 dependencies = [
  "powerfmt",
-]
-
-[[package]]
-name = "derive-new"
-version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d150dea618e920167e5973d70ae6ece4385b7164e0d799fe7c122dd0a5d912ad"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.68",
 ]
 
 [[package]]
@@ -1160,18 +1143,6 @@ dependencies = [
  "security-framework",
  "security-framework-sys",
  "tempfile",
-]
-
-[[package]]
-name = "nix"
-version = "0.28.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ab2156c4fce2f8df6c499cc1c763e4394b7482525bf2a9701c9d79d215f519e4"
-dependencies = [
- "bitflags 2.6.0",
- "cfg-if",
- "cfg_aliases",
- "libc",
 ]
 
 [[package]]
@@ -2479,9 +2450,9 @@ dependencies = [
 
 [[package]]
 name = "wayland-protocols"
-version = "0.31.2"
+version = "0.32.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8f81f365b8b4a97f422ac0e8737c438024b5951734506b0e1d775c73030561f4"
+checksum = "83d0f1056570486e26a3773ec633885124d79ae03827de05ba6c85f79904026c"
 dependencies = [
  "bitflags 2.6.0",
  "wayland-backend",
@@ -2491,9 +2462,9 @@ dependencies = [
 
 [[package]]
 name = "wayland-protocols-wlr"
-version = "0.2.0"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ad1f61b76b6c2d8742e10f9ba5c3737f6530b4c243132c2a2ccc8aa96fe25cd6"
+checksum = "a7dab47671043d9f5397035975fe1cac639e5bca5cc0b3c32d09f01612e34d24"
 dependencies = [
  "bitflags 2.6.0",
  "wayland-backend",
@@ -2749,15 +2720,14 @@ dependencies = [
 
 [[package]]
 name = "wl-clipboard-rs"
-version = "0.8.1"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "12b41773911497b18ca8553c3daaf8ec9fe9819caf93d451d3055f69de028adb"
+checksum = "4de22eebb1d1e2bad2d970086e96da0e12cde0b411321e5b0f7b2a1f876aa26f"
 dependencies = [
- "derive-new",
  "libc",
  "log",
- "nix",
  "os_pipe",
+ "rustix",
  "tempfile",
  "thiserror",
  "tree_magic_mini",
