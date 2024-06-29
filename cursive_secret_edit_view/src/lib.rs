@@ -20,8 +20,9 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR TH
 OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-mod zeroized_array_string;
+mod array_string_ext;
 
+use arrayvec::ArrayString;
 use cursive_core::{
     direction::Direction,
     event::{Callback, Event, EventResult, Key, MouseEvent},
@@ -36,7 +37,7 @@ use std::rc::Rc;
 use unicode_segmentation::UnicodeSegmentation;
 use zeroize::Zeroizing;
 
-use self::zeroized_array_string::ZeroizedArrayString;
+use array_string_ext::ArrayStringExt;
 
 /// Closure type for callbacks when the content is modified.
 ///
@@ -50,7 +51,7 @@ pub type OnSubmit = dyn Fn(&mut Cursive);
 
 pub struct SecretEditView {
     /// Current content.
-    content: Zeroizing<ZeroizedArrayString<256>>,
+    content: Zeroizing<ArrayString<256>>,
 
     /// Cursor position in the content, in bytes.
     cursor: usize,
@@ -91,7 +92,7 @@ impl SecretEditView {
     /// Creates a new, empty edit view.
     pub fn new() -> Self {
         SecretEditView {
-            content: Zeroizing::new(ZeroizedArrayString::new()),
+            content: Zeroizing::new(ArrayString::new()),
             cursor: 0,
             offset: 0,
             last_length: 0, // scrollable: false,
@@ -292,12 +293,10 @@ impl SecretEditView {
     ///
     /// You should run this callback with a `&mut Cursive`.
     pub fn insert(&mut self, ch: char) -> Callback {
-        // First, make sure we can actually insert anything.
-        if ch.len_utf8() > self.content.remaining_capacity() {
+        if self.content.try_insert(self.cursor, ch).is_err() {
+            // Backing string is full, cannot insert anything.
             return Callback::dummy();
         }
-
-        self.content.insert(self.cursor, ch);
         self.cursor += ch.len_utf8();
 
         self.keep_cursor_in_view();
