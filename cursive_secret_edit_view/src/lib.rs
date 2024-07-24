@@ -32,7 +32,7 @@ use cursive_core::{
     view::CannotFocus,
     Cursive, Printer, Rect, Vec2, View, With,
 };
-use std::cell::RefCell;
+use std::{cell::RefCell, pin::Pin};
 use std::rc::Rc;
 use unicode_segmentation::UnicodeSegmentation;
 use zeroize::Zeroizing;
@@ -51,7 +51,7 @@ pub type OnSubmit = dyn Fn(&mut Cursive);
 
 pub struct SecretEditView {
     /// Current content.
-    content: Zeroizing<ArrayString<256>>,
+    content: Pin<Box<Zeroizing<ArrayString<256>>>>,
 
     /// Cursor position in the content, in bytes.
     cursor: usize,
@@ -92,7 +92,7 @@ impl SecretEditView {
     /// Creates a new, empty edit view.
     pub fn new() -> Self {
         SecretEditView {
-            content: Zeroizing::new(ArrayString::new()),
+            content: Box::pin(Zeroizing::new(ArrayString::new())),
             cursor: 0,
             offset: 0,
             last_length: 0, // scrollable: false,
