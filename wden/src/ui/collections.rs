@@ -24,7 +24,7 @@ impl ViewWrapper for CollectionFilterDialog {
 }
 
 impl CollectionFilterDialog {
-    fn new<S: Fn(&mut Cursive, CollectionSelection) + 'static + Clone>(
+    fn new<S: Fn(&mut Cursive, CollectionSelection) + 'static + Clone + Send + Sync>(
         collections: Vec<(String, String)>,
         selection_callback: S,
     ) -> Self {
@@ -57,7 +57,7 @@ impl CollectionFilterDialog {
 
 pub fn show_collection_filter<S>(cursive: &mut Cursive, selection_callback: S)
 where
-    S: Fn(&mut Cursive, CollectionSelection) + Clone + 'static,
+    S: Fn(&mut Cursive, CollectionSelection) + Clone + 'static + Send + Sync,
 {
     let ud = cursive.get_user_data().with_unlocked_state().unwrap();
 

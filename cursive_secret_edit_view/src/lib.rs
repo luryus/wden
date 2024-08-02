@@ -32,8 +32,8 @@ use cursive_core::{
     view::CannotFocus,
     Cursive, Printer, Rect, Vec2, View, With,
 };
-use std::{cell::RefCell, pin::Pin};
-use std::rc::Rc;
+use std::pin::Pin;
+use std::sync::{Arc, Mutex};
 use unicode_segmentation::UnicodeSegmentation;
 use zeroize::Zeroizing;
 
@@ -42,12 +42,12 @@ use array_string_ext::ArrayStringExt;
 /// Closure type for callbacks when the content is modified.
 ///
 /// Arguments are the `Cursive`, and current cursor position
-pub type OnEdit = dyn Fn(&mut Cursive, usize);
+pub type OnEdit = dyn Fn(&mut Cursive, usize) + Send + Sync;
 
 /// Closure type for callbacks when Enter is pressed.
 ///
 /// Arguments are the `Cursive`.
-pub type OnSubmit = dyn Fn(&mut Cursive);
+pub type OnSubmit = dyn Fn(&mut Cursive) + Send + Sync;
 
 pub struct SecretEditView {
     /// Current content.
@@ -67,10 +67,10 @@ pub struct SecretEditView {
     /// Callback when the content is modified.
     ///
     /// Will be called with the current content and the cursor position.
-    on_edit: Option<Rc<OnEdit>>,
+    on_edit: Option<Arc<OnEdit>>,
 
     /// Callback when `<Enter>` is pressed.
-    on_submit: Option<Rc<OnSubmit>>,
+    on_submit: Option<Arc<OnSubmit>>,
 
     /// Character to fill empty space
     filler: String,
@@ -135,7 +135,7 @@ impl SecretEditView {
     /// recursive calls, see [`set_on_edit`](#method.set_on_edit).
     pub fn set_on_edit_mut<F>(&mut self, callback: F)
     where
-        F: FnMut(&mut Cursive, usize) + 'static,
+        F: FnMut(&mut Cursive, usize) + 'static + Send + Sync,
     {
         self.set_on_edit(immut2!(callback));
     }
@@ -152,9 +152,9 @@ impl SecretEditView {
     /// aspect, see [`set_on_edit_mut`](#method.set_on_edit_mut).
     pub fn set_on_edit<F>(&mut self, callback: F)
     where
-        F: Fn(&mut Cursive, usize) + 'static,
+        F: Fn(&mut Cursive, usize) + 'static + Send + Sync,
     {
-        self.on_edit = Some(Rc::new(callback));
+        self.on_edit = Some(Arc::new(callback));
     }
 
     /// Sets a mutable callback to be called whenever the content is modified.
@@ -163,7 +163,7 @@ impl SecretEditView {
     #[must_use]
     pub fn on_edit_mut<F>(self, callback: F) -> Self
     where
-        F: FnMut(&mut Cursive, usize) + 'static,
+        F: FnMut(&mut Cursive, usize) + 'static + Send + Sync,
     {
         self.with(|v| v.set_on_edit_mut(callback))
     }
@@ -174,7 +174,7 @@ impl SecretEditView {
     #[must_use]
     pub fn on_edit<F>(self, callback: F) -> Self
     where
-        F: Fn(&mut Cursive, usize) + 'static,
+        F: Fn(&mut Cursive, usize) + 'static + Send + Sync,
     {
         self.with(|v| v.set_on_edit(callback))
     }
@@ -190,14 +190,14 @@ impl SecretEditView {
     /// recursive calls, see [`set_on_submit`](#method.set_on_submit).
     pub fn set_on_submit_mut<F>(&mut self, callback: F)
     where
-        F: FnMut(&mut Cursive) + 'static,
+        F: FnMut(&mut Cursive) + 'static + Send + Sync,
     {
         // TODO: don't duplicate all those methods.
         // Instead, have some generic function immutify()
         // or something that wraps a FnMut closure.
-        let callback = RefCell::new(callback);
+        let callback = Mutex::new(callback);
         self.set_on_submit(move |s| {
-            if let Ok(mut f) = callback.try_borrow_mut() {
+            if let Ok(mut f) = callback.try_lock() {
                 (*f)(s);
             }
         });
@@ -214,9 +214,9 @@ impl SecretEditView {
     /// aspect, see [`set_on_submit_mut`](#method.set_on_submit_mut).
     pub fn set_on_submit<F>(&mut self, callback: F)
     where
-        F: Fn(&mut Cursive) + 'static,
+        F: Fn(&mut Cursive) + 'static + Send + Sync,
     {
-        self.on_submit = Some(Rc::new(callback));
+        self.on_submit = Some(Arc::new(callback));
     }
 
     /// Sets a mutable callback to be called when `<Enter>` is pressed.
@@ -225,7 +225,7 @@ impl SecretEditView {
     #[must_use]
     pub fn on_submit_mut<F>(self, callback: F) -> Self
     where
-        F: FnMut(&mut Cursive) + 'static,
+        F: FnMut(&mut Cursive) + 'static + Send + Sync,
     {
         self.with(|v| v.set_on_submit_mut(callback))
     }
@@ -236,7 +236,7 @@ impl SecretEditView {
     #[must_use]
     pub fn on_submit<F>(self, callback: F) -> Self
     where
-        F: Fn(&mut Cursive) + 'static,
+        F: Fn(&mut Cursive) + 'static + Send + Sync,
     {
         self.with(|v| v.set_on_submit(callback))
     }
