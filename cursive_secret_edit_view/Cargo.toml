@@ -4,7 +4,7 @@ edition = "2021"
 version = "0.1.0"
 
 [dependencies]
-cursive_core = { version = "0.3" }
+cursive_core = { version = "0.4" }
 zeroize = { version = "1.7" }
 arrayvec = { version = "0.7", features = [ "zeroize" ] }
 unicode-segmentation = "1.10.1"
