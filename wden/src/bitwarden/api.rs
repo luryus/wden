@@ -22,7 +22,7 @@ enum DeviceType {
 const fn get_device_type() -> DeviceType {
     if cfg!(windows) {
         DeviceType::WindowsCLI
-    } else if cfg!(macos) {
+    } else if cfg!(target_os = "macos") {
         DeviceType::MacOsCLI
     } else {
         DeviceType::LinuxCLI
@@ -32,7 +32,7 @@ const fn get_device_type() -> DeviceType {
 const fn get_device_name() -> &'static str {
     if cfg!(windows) {
         "windows"
-    } else if cfg!(macos) {
+    } else if cfg!(target_os = "macos") {
         "macos"
     } else {
         "linux"
