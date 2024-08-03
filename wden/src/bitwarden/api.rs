@@ -82,7 +82,7 @@ impl ApiClient {
         let mut body = HashMap::new();
         body.insert("email", user_email);
 
-        let url = self.api_base_url.join("accounts/prelogin")?;
+        let url = self.identity_base_url.join("accounts/prelogin")?;
 
         let res = self
             .http_client
