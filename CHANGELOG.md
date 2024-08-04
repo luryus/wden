@@ -2,6 +2,13 @@
 
 ## next
 
+## 0.11.0
+
+- Fix logins to Bitwarden Cloud, once again. This time the issue was caused by Bitwarden removing a deprecated prelogin API that wden still used.
+- Update cursive to a new version. This is a major update that should improve UI performance.
+- Improvements to secret memory handling
+- Miscellaneous dependency crate updates
+
 ## 0.10.3
 
 - Fix logins to Bitwarden Cloud (bot detection once again seemed to be unhappy)
