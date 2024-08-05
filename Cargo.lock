@@ -464,9 +464,9 @@ dependencies = [
 
 [[package]]
 name = "cursive_core"
-version = "0.4.0"
+version = "0.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3511201898b6e2ed37524b82a1e4f1124c1cbdd91cc23bf75c53c298d37acde5"
+checksum = "f12ec234e1b1fac6ff61aad2073a78c8b2bcf64fb0c4e7069e37c2b6693a9dbe"
 dependencies = [
  "ahash",
  "compact_str",
