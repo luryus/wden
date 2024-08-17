@@ -31,7 +31,7 @@ serde_repr = "0.1"
 tokio = { version = "1.37", features = ["full"] }
 reqwest = { version = "0.12", features = ["json", "gzip"] }
 cursive = "0.21"
-cursive_table_view = { git = "https://github.com/luryus/cursive_table_view", version = "0.14.0-alpha.2" }
+cursive_table_view = { git = "https://github.com/luryus/cursive_table_view", version = "0.15.0", tag = "v0.15.0+disablesort.1" }
 cursive_secret_edit_view = { path = "../cursive_secret_edit_view" }
 log = "0.4"
 lazy_static = "1.4"
@@ -42,7 +42,7 @@ anyhow = "1.0"
 zeroize = { version = "1.7", features = ["zeroize_derive"] }
 arrayvec = "0.7"
 simsearch = "0.2"
-tabled = "0.15"
+tabled = "0.16"
 
 [target.'cfg(windows)'.dependencies]
 clipboard-win = { version = "5.4", features = ["std"] }
