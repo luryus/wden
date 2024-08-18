@@ -1,10 +1,10 @@
 use crate::{
     bitwarden::{
         api::{self, CipherItem, Collection, Organization, TokenResponseSuccess},
-        cipher::{self, extract_enc_mac_keys, EncMacKeys, MasterKey, MasterPasswordHash, Pbkdf},
+        cipher::{self, EncMacKeys, MasterKey, MasterPasswordHash, Pbkdf},
     },
     profile::{GlobalSettings, ProfileStore},
-};
+};  
 use anyhow::Context;
 use cipher::decrypt_symmetric_keys;
 use maybe_owned::MaybeOwned;
@@ -78,11 +78,8 @@ impl Unlocked {
         let decrypted_private_key = user_private_key.decrypt(user_keys)?.into();
 
         // Then use the private key to decrypt the organization key
-        let full_org_key = organization
-            .key
-            .decrypt_with_private_key(&decrypted_private_key)?;
-
-        Ok(extract_enc_mac_keys(&full_org_key)?)
+        let org_key = cipher::decrypt_org_keys(&decrypted_private_key, &organization.key)?;
+        Ok(org_key)
     }
 
     fn get_keys_for_item(&self, item: &api::CipherItem) -> Option<EncMacKeys> {

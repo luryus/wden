@@ -18,14 +18,13 @@ use std::pin::Pin;
 use std::str::FromStr;
 use std::sync::Arc;
 use thiserror::Error;
-use zeroize::{Zeroize, Zeroizing};
+use zeroize::{ZeroizeOnDrop, Zeroizing};
 
 use super::api::{KdfFunction, PreloginResponse};
 
 const CREDENTIAL_LEN: usize = 256 / 8;
 
-#[derive(Zeroize)]
-#[zeroize(drop)]
+#[derive(ZeroizeOnDrop)]
 pub struct MasterKey(Pin<Box<[u8; CREDENTIAL_LEN]>>);
 impl MasterKey {
     fn new() -> Self {
@@ -47,8 +46,7 @@ impl MasterKey {
     }
 }
 
-#[derive(Clone, Zeroize)]
-#[zeroize(drop)]
+#[derive(Clone, ZeroizeOnDrop)]
 pub struct MasterPasswordHash(Pin<Box<[u8; CREDENTIAL_LEN]>>);
 impl MasterPasswordHash {
     fn new() -> Self {
@@ -60,8 +58,7 @@ impl MasterPasswordHash {
     }
 }
 
-#[derive(Zeroize)]
-#[zeroize(drop)]
+#[derive(ZeroizeOnDrop)]
 pub struct EncryptionKey(Pin<Box<[u8; CREDENTIAL_LEN]>>);
 impl EncryptionKey {
     fn new() -> Self {
@@ -69,8 +66,7 @@ impl EncryptionKey {
     }
 }
 
-#[derive(Zeroize)]
-#[zeroize(drop)]
+#[derive(ZeroizeOnDrop)]
 pub struct MacKey(Pin<Box<[u8; CREDENTIAL_LEN]>>);
 impl MacKey {
     fn new() -> Self {
@@ -92,8 +88,7 @@ impl EncMacKeys {
 }
 
 // Private key is in DER format
-#[derive(Zeroize)]
-#[zeroize(drop)]
+#[derive(ZeroizeOnDrop)]
 pub struct DerPrivateKey(Vec<u8>);
 impl From<Vec<u8>> for DerPrivateKey {
     fn from(data: Vec<u8>) -> Self {
@@ -232,22 +227,35 @@ pub fn decrypt_symmetric_keys(
     master_key: &MasterKey,
 ) -> Result<EncMacKeys, CipherError> {
     let keys = expand_master_key(master_key);
-    let dec_cipher = key_cipher.decrypt(&keys)?;
 
-    extract_enc_mac_keys(&dec_cipher)
+    let len = key_cipher.ct_len();
+    let mut buf = Zeroizing::new(vec![0u8; len].into_boxed_slice());
+    let dec_cipher = key_cipher.decrypt_to(&keys, &mut buf)?;
+
+    extract_enc_mac_keys(dec_cipher)
 }
 
 pub fn decrypt_item_keys(
     keys: &EncMacKeys,
     item_key_cipher: &Cipher,
 ) -> Result<EncMacKeys, CipherError> {
-    let dec_cipher = item_key_cipher.decrypt(keys)?;
+    let len = item_key_cipher.ct_len();
+    let mut buf = Zeroizing::new(vec![0u8; len].into_boxed_slice());
+    let dec_cipher = item_key_cipher.decrypt_to(keys, &mut buf)?;
+    extract_enc_mac_keys(dec_cipher)
+}
+
+pub fn decrypt_org_keys(
+    private_key: &DerPrivateKey,
+    org_key_cipher: &Cipher,
+) -> Result<EncMacKeys, CipherError> {
+    let dec_cipher = org_key_cipher.decrypt_with_private_key(private_key)?;
     extract_enc_mac_keys(&dec_cipher)
 }
 
 pub fn extract_enc_mac_keys(full_key: &[u8]) -> Result<EncMacKeys, CipherError> {
-    // Enc key and mac key should both be 32 byets
-    if full_key.len() != 2 * 32 {
+    // Enc key and mac key should both be 32 bytes
+    if full_key.len() != 2 * CREDENTIAL_LEN {
         return Err(CipherError::InvalidKeyLength);
     }
 
@@ -393,6 +401,27 @@ impl Cipher {
         }
     }
 
+    pub fn decrypt_to<'a>(
+        &self,
+        keys: &EncMacKeys,
+        buf: &'a mut [u8],
+    ) -> Result<&'a [u8], CipherError> {
+        match self {
+            Self::Empty => Ok(&[]),
+            Self::Value { enc_type, .. } => match enc_type {
+                EncType::AesCbc256B64 => self.decrypt_aescbc256_to(keys, buf),
+                EncType::AesCbc128HmacSha256B64 => self.decrypt_aescbc128_hmac_sha256_to(keys, buf),
+                EncType::AesCbc256HmacSha256B64 => self.decrypt_aescbc256_hmac_sha256_to(keys, buf),
+                EncType::Rsa2048OaepSha256B64 => Err(CipherError::InvalidKeyTypeForCipher),
+                EncType::Rsa2048OaepSha1B64 => Err(CipherError::InvalidKeyTypeForCipher),
+                EncType::Rsa2048OaepSha256HmacSha256B64 => {
+                    Err(CipherError::InvalidKeyTypeForCipher)
+                }
+                EncType::Rsa2048OaepSha1HmacSha256B64 => Err(CipherError::InvalidKeyTypeForCipher),
+            },
+        }
+    }
+
     pub fn encrypt(content: &[u8], keys: &EncMacKeys) -> Result<Self, CipherError> {
         // Only support AesCbc256HmacSHa256B64 because why not
         type Aes256CbcEnc = cbc::Encryptor<Aes256>;
@@ -455,7 +484,50 @@ impl Cipher {
     fn decrypt_aescbc128_hmac_sha256(&self, _keys: &EncMacKeys) -> Result<Vec<u8>, CipherError> {
         unimplemented!()
     }
+    fn decrypt_aescbc256_to<'a>(
+        &self,
+        _keys: &EncMacKeys,
+        _buf: &'a mut [u8],
+    ) -> Result<&'a [u8], CipherError> {
+        unimplemented!()
+    }
+    fn decrypt_aescbc128_hmac_sha256_to<'a>(
+        &self,
+        _keys: &EncMacKeys,
+        _buf: &'a mut [u8],
+    ) -> Result<&'a [u8], CipherError> {
+        unimplemented!()
+    }
     fn decrypt_aescbc256_hmac_sha256(&self, keys: &EncMacKeys) -> Result<Vec<u8>, CipherError> {
+        if let Self::Value { iv, ct, mac, .. } = self {
+            type Aes256CbcDec = cbc::Decryptor<Aes256>;
+            type HmacSha256 = Hmac<Sha256>;
+
+            let mut hmac = HmacSha256::new_from_slice(keys.mac().0.as_slice()).unwrap();
+
+            hmac.update(iv);
+            hmac.update(ct);
+            hmac.verify_slice(mac)
+                .map_err(CipherError::MacVerificationFailed)?;
+
+            let aes = Aes256CbcDec::new_from_slices(keys.enc().0.as_slice(), iv.as_slice())
+                .context("Initializing AES failed")?;
+
+            let decrypted = aes
+                .decrypt_padded_vec_mut::<Pkcs7>(ct.as_slice())
+                .map_err(CipherError::InvalidPadding)?;
+
+            Ok(decrypted)
+        } else {
+            panic!("Tried to decrypt empty cipher")
+        }
+    }
+
+    fn decrypt_aescbc256_hmac_sha256_to<'a>(
+        &self,
+        keys: &EncMacKeys,
+        buf: &'a mut [u8],
+    ) -> Result<&'a [u8], CipherError> {
         if let Self::Value { iv, ct, mac, .. } = self {
             type Aes256CbcDec = cbc::Decryptor<Aes256>;
             type HmacSha256 = Hmac<Sha256>;
@@ -471,7 +543,7 @@ impl Cipher {
                 .context("Initializing AES failed")?;
 
             let decrypted = aes
-                .decrypt_padded_vec_mut::<Pkcs7>(ct.as_slice())
+                .decrypt_padded_b2b_mut::<Pkcs7>(ct.as_slice(), buf)
                 .map_err(CipherError::InvalidPadding)?;
 
             Ok(decrypted)
@@ -537,6 +609,13 @@ impl Cipher {
                     _ => unimplemented!(),
                 }
             }
+        }
+    }
+
+    fn ct_len(&self) -> usize {
+        match self {
+            Cipher::Empty => 0,
+            Cipher::Value { ct, .. } => ct.len(),
         }
     }
 }
