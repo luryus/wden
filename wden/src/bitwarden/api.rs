@@ -445,6 +445,8 @@ struct CipherItemInternal {
     #[serde(alias = "organizationId")]
     #[serde(alias = "OrganizationId")]
     organization_id: Option<String>,
+    #[serde(alias = "Key")]
+    key: Option<Cipher>,
 }
 
 #[derive(Debug)]
@@ -460,6 +462,7 @@ impl From<CipherItemInternal> for CipherItem {
     fn from(cii: CipherItemInternal) -> Self {
         CipherItem {
             id: cii.id,
+            key: cii.key,
             name: cii.name,
             notes: cii.notes,
             favorite: cii.favorite,
@@ -481,6 +484,7 @@ pub struct CipherItem {
     pub id: String,
     pub name: Cipher,
     pub notes: Cipher,
+    pub key: Option<Cipher>,
     pub data: CipherData,
     pub favorite: bool,
     pub collection_ids: Vec<String>,

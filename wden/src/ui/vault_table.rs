@@ -3,7 +3,8 @@ use std::time::Duration;
 use crate::bitwarden::{
     self,
     api::CipherItem,
-    cipher::{Cipher, EncryptionKey, MacKey},
+    cipher::{Cipher, EncMacKeys},
+    keys::resolve_item_keys,
 };
 use bitwarden::api::CipherData;
 use cursive::{
@@ -51,11 +52,11 @@ impl VaultView {
         collection_selection: CollectionSelection,
         search_term: String,
     ) -> VaultView {
-        let (enc_key, mac_key) = user_data.decrypt_keys().unwrap();
+        let user_keys = user_data.decrypt_keys().unwrap();
         // Generate row items (with some decrypted data for all cipher items)
         // These are stored in user_data. Only the filter results are stored
         // as the table's rows.
-        let rows = create_rows(user_data, &enc_key, &mac_key);
+        let rows = create_rows(user_data, user_keys);
         let simsearch = search::get_search_index(user_data);
         let view = vault_view(&search_term, &collection_selection, user_data);
 
@@ -271,11 +272,8 @@ fn copy_current_item_field(siv: &mut Cursive, field: Copyable) {
             ),
             Copyable::Password,
         ) => {
-            let (enc_key, mac_key) = ud.get_keys_for_item(ci).unwrap();
-            super::clipboard::clip_expiring_string(
-                li.password.decrypt_to_string(&enc_key, &mac_key),
-                30,
-            );
+            let item_keys = ud.get_keys_for_item(ci).unwrap();
+            super::clipboard::clip_expiring_string(li.password.decrypt_to_string(&item_keys), 30);
             show_copy_notification(siv, "Password copied");
         }
         (
@@ -287,8 +285,8 @@ fn copy_current_item_field(siv: &mut Cursive, field: Copyable) {
             ),
             Copyable::Username,
         ) => {
-            let (enc_key, mac_key) = ud.get_keys_for_item(ci).unwrap();
-            super::clipboard::clip_string(li.username.decrypt_to_string(&enc_key, &mac_key));
+            let item_keys = ud.get_keys_for_item(ci).unwrap();
+            super::clipboard::clip_string(li.username.decrypt_to_string(&item_keys));
             show_copy_notification(siv, "Username copied");
         }
         _ => (),
@@ -342,7 +340,7 @@ fn active_collection_filter_label_text(
                 .collections()
                 .get(collection_id)
                 .and_then(|coll| Some((coll, user_data.get_keys_for_collection(coll)?)))
-                .map(|(coll, (enc, mac))| coll.name.decrypt_to_string(&enc, &mac))
+                .map(|(coll, keys)| coll.name.decrypt_to_string(&keys))
                 .unwrap_or_else(|| "<unknown>".to_string());
             format!("Collection: {collection_name}")
         }
@@ -370,33 +368,25 @@ fn vault_table_view() -> impl View {
     tv.with_name("vault_table").full_height()
 }
 
-fn create_rows(
-    user_data: &StatefulUserData<Unlocked>,
-    enc_key: &EncryptionKey,
-    mac_key: &MacKey,
-) -> Vec<Row> {
+fn create_rows(user_data: &StatefulUserData<Unlocked>, user_keys: EncMacKeys) -> Vec<Row> {
     // Find all organization keys we will need
     let org_keys = user_data.get_org_keys_for_vault();
-
     let vault_data = user_data.vault_data();
 
     let mut rows: Vec<Row> = vault_data
         .iter()
         .filter_map(|(id, ci)| {
-            let (ec, mc) = if let Some(oid) = &ci.organization_id {
-                let keys = org_keys.get(oid)?;
-                (&keys.0, &keys.1)
-            } else {
-                (enc_key, mac_key)
-            };
+            let item_keys = resolve_item_keys(ci, (&user_keys).into(), |oid, _uk| {
+                org_keys.get(oid).map(|k| k.into())
+            })?;
             Some(Row {
                 id: id.clone(),
-                name: ci.name.decrypt_to_string(ec, mc),
+                name: ci.name.decrypt_to_string(&item_keys),
                 username: match &ci.data {
                     CipherData::Login(l) => &l.username,
                     _ => &Cipher::Empty,
                 }
-                .decrypt_to_string(ec, mc),
+                .decrypt_to_string(&item_keys),
                 item_type: match ci.data {
                     CipherData::Login(_) => "L",
                     CipherData::Card(_) => "C",

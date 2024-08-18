@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use simsearch::SimSearch;
 
-use crate::bitwarden::api::CipherData;
+use crate::bitwarden::{self, api::CipherData};
 
 use super::data::{StatefulUserData, Unlocked};
 
@@ -33,26 +33,23 @@ pub fn get_search_index(ud: &StatefulUserData<Unlocked>) -> SimSearch<String> {
 fn get_tokenized_rows(ud: &StatefulUserData<Unlocked>) -> Option<HashMap<String, Vec<String>>> {
     let vd = ud.vault_data();
     let org_keys = ud.get_org_keys_for_vault();
-    let (user_enc_key, user_mac_key) = ud.decrypt_keys()?;
+    let user_keys = ud.decrypt_keys()?;
 
     let res = vd
         .iter()
         .filter_map(|(k, v)| {
             // Get appropriate keys for this item
-            let (ec, mc) = match &v.organization_id {
-                Some(oid) => match org_keys.get(oid) {
-                    Some(keys) => (&keys.0, &keys.1),
-                    None => return None,
-                },
-                _ => (&user_enc_key, &user_mac_key),
-            };
+            let item_keys =
+                bitwarden::keys::resolve_item_keys(v, (&user_keys).into(), |oid, _uk| {
+                    org_keys.get(oid).map(|k| k.into())
+                })?;
 
             // All items: name
-            let mut tokens = vec![v.name.decrypt_to_string(ec, mc)];
+            let mut tokens = vec![v.name.decrypt_to_string(&item_keys)];
             // Login items: url and username
             if let CipherData::Login(l) = &v.data {
-                tokens.push(l.username.decrypt_to_string(ec, mc));
-                tokens.push(l.uri.decrypt_to_string(ec, mc));
+                tokens.push(l.username.decrypt_to_string(&item_keys));
+                tokens.push(l.uri.decrypt_to_string(&item_keys));
             };
 
             Some((k.clone(), tokens))

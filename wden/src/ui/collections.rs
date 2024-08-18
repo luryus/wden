@@ -69,7 +69,7 @@ where
         .filter_map(|c| {
             org_keys
                 .get(&c.organization_id)
-                .map(|(enc, mac)| (c.name.decrypt_to_string(enc, mac), c.id.clone()))
+                .map(|keys| (c.name.decrypt_to_string(keys), c.id.clone()))
         })
         .collect();
     collection_items.sort_unstable_by(|a, b| a.0.cmp(&b.0));

@@ -5,7 +5,7 @@ use super::{
 use crate::{
     bitwarden::{
         api::{CipherData, CipherItem},
-        cipher::{Cipher, EncryptionKey, MacKey},
+        cipher::{Cipher, EncMacKeys},
     },
     ui::components::secret_text_view::SecretTextView,
 };
@@ -35,13 +35,15 @@ pub fn item_detail_dialog(ud: &StatefulUserData<Unlocked>, item_id: &str) -> Opt
     if keys.is_none() {
         warn!("Error getting keys for item");
     }
-    let (enc_key, mac_key) = keys?;
+    let keys = keys?;
+
+    log::info!("Item: {:?}", &item);
 
     let dialog_contents = match item.data {
-        CipherData::Login(..) => login_dialog_contents(item, &enc_key, &mac_key),
-        CipherData::SecureNote => note_dialog_contents(item, &enc_key, &mac_key),
-        CipherData::Card(..) => card_dialog_contents(item, &enc_key, &mac_key),
-        CipherData::Identity(..) => identity_dialog_contents(item, &enc_key, &mac_key),
+        CipherData::Login(..) => login_dialog_contents(item, &keys),
+        CipherData::SecureNote => note_dialog_contents(item, &keys),
+        CipherData::Card(..) => card_dialog_contents(item, &keys),
+        CipherData::Identity(..) => identity_dialog_contents(item, &keys),
         _ => LinearLayout::vertical(),
     };
 
@@ -70,13 +72,13 @@ pub fn item_detail_dialog(ud: &StatefulUserData<Unlocked>, item_id: &str) -> Opt
     let mut ev = OnEventView::new(dialog);
 
     if let CipherData::Login(li) = &item.data {
-        let password = li.password.decrypt_to_string(&enc_key, &mac_key);
+        let password = li.password.decrypt_to_string(&keys);
         ev.set_on_event('p', move |siv| {
             super::clipboard::clip_expiring_string(password.clone(), 30);
             show_copy_notification(siv, "Password copied");
         });
 
-        let username = li.username.decrypt_to_string(&enc_key, &mac_key);
+        let username = li.username.decrypt_to_string(&keys);
         ev.set_on_event('u', move |siv| {
             super::clipboard::clip_string(username.clone());
             show_copy_notification(siv, "Username copied");
@@ -92,79 +94,55 @@ pub fn item_detail_dialog(ud: &StatefulUserData<Unlocked>, item_id: &str) -> Opt
     Some(ev)
 }
 
-fn login_dialog_contents(
-    item: &CipherItem,
-    enc_key: &EncryptionKey,
-    mac_key: &MacKey,
-) -> LinearLayout {
+fn login_dialog_contents(item: &CipherItem, keys: &EncMacKeys) -> LinearLayout {
     let login = match &item.data {
         CipherData::Login(l) => l,
         _ => unreachable!(),
     };
     let mut ll = LinearLayout::vertical();
-    add_label_value_text(&mut ll, "Name", &item.name, enc_key, mac_key);
-    add_label_value_text(&mut ll, "Username", &login.username, enc_key, mac_key);
+    add_label_value_text(&mut ll, "Name", &item.name, keys);
+    add_label_value_text(&mut ll, "Username", &login.username, keys);
     ll.add_child(TextView::new("Password"));
-    ll.add_child(
-        value_secret_textview(&login.password, enc_key, mac_key).with_name("password_textview"),
-    );
-    add_label_value_text(&mut ll, "Uri", &login.uri, enc_key, mac_key);
-    add_label_value_text(&mut ll, "Notes", &item.notes, enc_key, mac_key);
+    ll.add_child(value_secret_textview(&login.password, keys).with_name("password_textview"));
+    add_label_value_text(&mut ll, "Uri", &login.uri, keys);
+    add_label_value_text(&mut ll, "Notes", &item.notes, keys);
 
     ll
 }
 
-fn note_dialog_contents(
-    item: &CipherItem,
-    enc_key: &EncryptionKey,
-    mac_key: &MacKey,
-) -> LinearLayout {
+fn note_dialog_contents(item: &CipherItem, keys: &EncMacKeys) -> LinearLayout {
     let mut ll = LinearLayout::vertical();
-    add_label_value_text(&mut ll, "Name", &item.name, enc_key, mac_key);
-    add_label_value_text(&mut ll, "Notes", &item.notes, enc_key, mac_key);
+    add_label_value_text(&mut ll, "Name", &item.name, keys);
+    add_label_value_text(&mut ll, "Notes", &item.notes, keys);
     ll
 }
 
-fn card_dialog_contents(
-    item: &CipherItem,
-    enc_key: &EncryptionKey,
-    mac_key: &MacKey,
-) -> LinearLayout {
+fn card_dialog_contents(item: &CipherItem, keys: &EncMacKeys) -> LinearLayout {
     let card = match &item.data {
         CipherData::Card(c) => c,
         _ => unreachable!(),
     };
 
-    let exp_month = card.exp_month.decrypt_to_string(enc_key, mac_key);
-    let exp_year = card.exp_year.decrypt_to_string(enc_key, mac_key);
+    let exp_month = card.exp_month.decrypt_to_string(keys);
+    let exp_year = card.exp_year.decrypt_to_string(keys);
     let expiry = format!("{exp_month} / {exp_year}");
 
     let mut ll = LinearLayout::vertical();
-    add_label_value_text(&mut ll, "Name", &item.name, enc_key, mac_key);
-    add_label_value_text(&mut ll, "Brand", &card.brand, enc_key, mac_key);
-    add_label_value_text(&mut ll, "Number", &card.number, enc_key, mac_key);
-    add_label_value_text(&mut ll, "Code", &card.code, enc_key, mac_key);
+    add_label_value_text(&mut ll, "Name", &item.name, keys);
+    add_label_value_text(&mut ll, "Brand", &card.brand, keys);
+    add_label_value_text(&mut ll, "Number", &card.number, keys);
+    add_label_value_text(&mut ll, "Code", &card.code, keys);
     ll.add_child(TextView::new("Expires"));
     ll.add_child(PaddedView::new(
         Margins::tb(0, 1),
         TextView::new(expiry).style(*VALUE_STYLE),
     ));
-    add_label_value_text(
-        &mut ll,
-        "Card holder",
-        &card.cardholder_name,
-        enc_key,
-        mac_key,
-    );
-    add_label_value_text(&mut ll, "Notes", &item.notes, enc_key, mac_key);
+    add_label_value_text(&mut ll, "Card holder", &card.cardholder_name, keys);
+    add_label_value_text(&mut ll, "Notes", &item.notes, keys);
     ll
 }
 
-fn identity_dialog_contents(
-    item: &CipherItem,
-    enc_key: &EncryptionKey,
-    mac_key: &MacKey,
-) -> LinearLayout {
+fn identity_dialog_contents(item: &CipherItem, keys: &EncMacKeys) -> LinearLayout {
     let identity = match &item.data {
         CipherData::Identity(id) => id,
         _ => unreachable!(),
@@ -172,90 +150,46 @@ fn identity_dialog_contents(
 
     let mut ll = LinearLayout::vertical();
 
-    add_label_value_text(&mut ll, "Name", &item.name, enc_key, mac_key);
+    add_label_value_text(&mut ll, "Name", &item.name, keys);
 
-    add_label_value_text(&mut ll, "Title", &identity.title, enc_key, mac_key);
-    add_label_value_text(
-        &mut ll,
-        "First name",
-        &identity.first_name,
-        enc_key,
-        mac_key,
-    );
-    add_label_value_text(
-        &mut ll,
-        "Middle name",
-        &identity.middle_name,
-        enc_key,
-        mac_key,
-    );
-    add_label_value_text(&mut ll, "Last name", &identity.last_name, enc_key, mac_key);
+    add_label_value_text(&mut ll, "Title", &identity.title, keys);
+    add_label_value_text(&mut ll, "First name", &identity.first_name, keys);
+    add_label_value_text(&mut ll, "Middle name", &identity.middle_name, keys);
+    add_label_value_text(&mut ll, "Last name", &identity.last_name, keys);
 
-    add_label_value_text(&mut ll, "Phone", &identity.phone, enc_key, mac_key);
-    add_label_value_text(&mut ll, "Email", &identity.email, enc_key, mac_key);
+    add_label_value_text(&mut ll, "Phone", &identity.phone, keys);
+    add_label_value_text(&mut ll, "Email", &identity.email, keys);
 
-    add_label_value_text(&mut ll, "Address 1", &identity.address_1, enc_key, mac_key);
-    add_label_value_text(&mut ll, "Address 2", &identity.address_2, enc_key, mac_key);
-    add_label_value_text(&mut ll, "Address 3", &identity.address_3, enc_key, mac_key);
-    add_label_value_text(
-        &mut ll,
-        "Postal code",
-        &identity.postal_code,
-        enc_key,
-        mac_key,
-    );
-    add_label_value_text(&mut ll, "City", &identity.city, enc_key, mac_key);
-    add_label_value_text(&mut ll, "State", &identity.state, enc_key, mac_key);
-    add_label_value_text(&mut ll, "Country", &identity.country, enc_key, mac_key);
+    add_label_value_text(&mut ll, "Address 1", &identity.address_1, keys);
+    add_label_value_text(&mut ll, "Address 2", &identity.address_2, keys);
+    add_label_value_text(&mut ll, "Address 3", &identity.address_3, keys);
+    add_label_value_text(&mut ll, "Postal code", &identity.postal_code, keys);
+    add_label_value_text(&mut ll, "City", &identity.city, keys);
+    add_label_value_text(&mut ll, "State", &identity.state, keys);
+    add_label_value_text(&mut ll, "Country", &identity.country, keys);
 
-    add_label_value_text(&mut ll, "Company", &identity.company, enc_key, mac_key);
-    add_label_value_text(&mut ll, "SSN", &identity.ssn, enc_key, mac_key);
-    add_label_value_text(
-        &mut ll,
-        "License number",
-        &identity.license_number,
-        enc_key,
-        mac_key,
-    );
-    add_label_value_text(
-        &mut ll,
-        "Passport number",
-        &identity.passport_number,
-        enc_key,
-        mac_key,
-    );
-    add_label_value_text(&mut ll, "Username", &identity.username, enc_key, mac_key);
+    add_label_value_text(&mut ll, "Company", &identity.company, keys);
+    add_label_value_text(&mut ll, "SSN", &identity.ssn, keys);
+    add_label_value_text(&mut ll, "License number", &identity.license_number, keys);
+    add_label_value_text(&mut ll, "Passport number", &identity.passport_number, keys);
+    add_label_value_text(&mut ll, "Username", &identity.username, keys);
 
-    add_label_value_text(&mut ll, "Notes", &item.notes, enc_key, mac_key);
+    add_label_value_text(&mut ll, "Notes", &item.notes, keys);
 
     ll
 }
 
-fn add_label_value_text(
-    ll: &mut LinearLayout,
-    name: &str,
-    value: &Cipher,
-    enc_key: &EncryptionKey,
-    mac_key: &MacKey,
-) {
+fn add_label_value_text(ll: &mut LinearLayout, name: &str, value: &Cipher, keys: &EncMacKeys) {
     ll.add_child(TextView::new(name));
-    ll.add_child(value_textview(value, enc_key, mac_key));
+    ll.add_child(value_textview(value, keys));
 }
 
-fn value_textview(
-    cipher: &Cipher,
-    enc_key: &EncryptionKey,
-    mac_key: &MacKey,
-) -> PaddedView<TextView> {
-    let tv = TextView::new(cipher.decrypt_to_string(enc_key, mac_key)).style(*VALUE_STYLE);
+fn value_textview(cipher: &Cipher, keys: &EncMacKeys) -> PaddedView<TextView> {
+    let tv = TextView::new(cipher.decrypt_to_string(keys)).style(*VALUE_STYLE);
     PaddedView::new(Margins::tb(0, 1), tv)
 }
 
-fn value_secret_textview(
-    cipher: &Cipher,
-    enc_key: &EncryptionKey,
-    mac_key: &MacKey,
-) -> PaddedView<SecretTextView> {
-    let tv = SecretTextView::new(cipher.decrypt_to_string(enc_key, mac_key)).style(*VALUE_STYLE);
+fn value_secret_textview(cipher: &Cipher, keys: &EncMacKeys) -> PaddedView<SecretTextView> {
+    let tv = SecretTextView::new(cipher.decrypt_to_string(keys)).style(*VALUE_STYLE);
     PaddedView::new(Margins::tb(0, 1), tv)
 }

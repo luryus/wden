@@ -2,6 +2,12 @@
 
 ## next
 
+## 0.12.0
+
+- Add support for Bitwarden's new item-specific encryption keys (#363)
+- Improvements to secret memory handling
+- Miscellaneous dependency crate updates
+
 ## 0.11.0
 
 - Fix logins to Bitwarden Cloud, once again. This time the issue was caused by Bitwarden removing a deprecated prelogin API that wden still used.

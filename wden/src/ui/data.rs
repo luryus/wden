@@ -1,14 +1,13 @@
 use crate::{
     bitwarden::{
         api::{self, CipherItem, Collection, Organization, TokenResponseSuccess},
-        cipher::{
-            self, extract_enc_mac_keys, EncryptionKey, MacKey, MasterKey, MasterPasswordHash, Pbkdf,
-        },
+        cipher::{self, extract_enc_mac_keys, EncMacKeys, MasterKey, MasterPasswordHash, Pbkdf},
     },
     profile::{GlobalSettings, ProfileStore},
 };
 use anyhow::Context;
 use cipher::decrypt_symmetric_keys;
+use maybe_owned::MaybeOwned;
 
 use std::{
     collections::HashMap,
@@ -48,7 +47,7 @@ pub struct LoggedIn {
 }
 
 impl LoggedIn {
-    fn decrypt_keys(&self) -> Option<(EncryptionKey, MacKey)> {
+    fn decrypt_keys(&self) -> Option<EncMacKeys> {
         let token_key = &self.token.key;
         let master_key = &self.logging_in_data.master_key;
         decrypt_symmetric_keys(token_key, master_key).ok()
@@ -66,7 +65,8 @@ impl Unlocked {
     fn decrypt_organization_keys(
         &self,
         organization_id: &str,
-    ) -> anyhow::Result<(EncryptionKey, MacKey)> {
+        user_keys: &EncMacKeys,
+    ) -> anyhow::Result<EncMacKeys> {
         let organization = &self
             .organizations
             .get(organization_id)
@@ -74,14 +74,8 @@ impl Unlocked {
 
         // Organization.key is encrypted with the user private (RSA) key,
         // get that first
-        let (user_enc_key, user_mac_key) = self
-            .logged_in_data
-            .decrypt_keys()
-            .context("User key decryption failed")?;
         let user_private_key = &self.logged_in_data.token.private_key;
-        let decrypted_private_key = user_private_key
-            .decrypt(&user_enc_key, &user_mac_key)?
-            .into();
+        let decrypted_private_key = user_private_key.decrypt(user_keys)?.into();
 
         // Then use the private key to decrypt the organization key
         let full_org_key = organization
@@ -91,42 +85,45 @@ impl Unlocked {
         Ok(extract_enc_mac_keys(&full_org_key)?)
     }
 
-    fn get_keys_for_item(&self, item: &api::CipherItem) -> Option<(EncryptionKey, MacKey)> {
-        if let Some(oid) = &item.organization_id {
-            let res = self.decrypt_organization_keys(oid);
-            match res {
-                Ok(k) => Some(k),
-                Err(e) => {
-                    log::warn!("Error decrypting org keys: {}", e);
-                    None
-                }
-            }
-        } else {
-            // No organization, use user's keys
-            self.logged_in_data.decrypt_keys()
-        }
-    }
-
-    fn get_keys_for_collection(&self, collection: &Collection) -> Option<(EncryptionKey, MacKey)> {
-        let res = self.decrypt_organization_keys(&collection.organization_id);
-        match res {
-            Ok(k) => Some(k),
-            Err(e) => {
-                log::warn!("Error decrypting org keys: {}", e);
-                None
-            }
-        }
-    }
-
-    fn get_org_keys_for_vault(&self) -> HashMap<&String, (EncryptionKey, MacKey)> {
-        self.organizations
-            .keys()
-            .filter_map(|oid| {
-                self.decrypt_organization_keys(oid)
-                    .map(|key| (oid, key))
+    fn get_keys_for_item(&self, item: &api::CipherItem) -> Option<EncMacKeys> {
+        let user_keys = self.logged_in_data.decrypt_keys()?;
+        let resolved =
+            crate::bitwarden::keys::resolve_item_keys(item, user_keys.into(), |oid, uk| {
+                self.decrypt_organization_keys(oid, uk)
+                    .inspect_err(|e| log::warn!("Org key decryption failed: {e}"))
                     .ok()
+                    .map(|k| k.into())
+            })?;
+
+        match resolved {
+            MaybeOwned::Owned(keys) => Some(keys),
+            MaybeOwned::Borrowed(_) => {
+                panic!("Bug: get_keys_for_item should only handle owned keys")
+            }
+        }
+    }
+
+    fn get_keys_for_collection(&self, collection: &Collection) -> Option<EncMacKeys> {
+        let user_keys = self.logged_in_data.decrypt_keys()?;
+        self.decrypt_organization_keys(&collection.organization_id, &user_keys)
+            .inspect_err(|e| log::warn!("Error decrypting org keys: {}", e))
+            .ok()
+    }
+
+    fn get_org_keys_for_vault(&self) -> HashMap<&String, EncMacKeys> {
+        self.logged_in_data
+            .decrypt_keys()
+            .map(|uk| {
+                self.organizations
+                    .keys()
+                    .filter_map(|oid| {
+                        self.decrypt_organization_keys(oid, &uk)
+                            .map(|key| (oid, key))
+                            .ok()
+                    })
+                    .collect()
             })
-            .collect()
+            .unwrap_or_default()
     }
 }
 
@@ -381,13 +378,10 @@ impl<'a> StatefulUserData<'a, Unlocked> {
             .clear_autolock_time();
 
         // Encrypt the vault view state with the current user keys
-        let enc_search_term =
-            unlocked_data
-                .logged_in_data
-                .decrypt_keys()
-                .and_then(|(enc_key, mac_key)| {
-                    cipher::Cipher::encrypt(search_term.as_bytes(), &enc_key, &mac_key).ok()
-                });
+        let enc_search_term = unlocked_data
+            .logged_in_data
+            .decrypt_keys()
+            .and_then(|user_keys| cipher::Cipher::encrypt(search_term.as_bytes(), &user_keys).ok());
 
         let locked_data = Locked {
             email: unlocked_data.logged_in_data.logging_in_data.email,
@@ -419,7 +413,7 @@ impl<'a> StatefulUserData<'a, Unlocked> {
         StatefulUserData::new(self.user_data)
     }
 
-    pub fn decrypt_keys(&self) -> Option<(EncryptionKey, MacKey)> {
+    pub fn decrypt_keys(&self) -> Option<EncMacKeys> {
         let d = get_state_data!(&self.user_data.state_data, AppStateData::Unlocked);
         d.logged_in_data.decrypt_keys()
     }
@@ -434,20 +428,17 @@ impl<'a> StatefulUserData<'a, Unlocked> {
         d.collections.clone()
     }
 
-    pub fn get_keys_for_item(&self, item: &CipherItem) -> Option<(EncryptionKey, MacKey)> {
+    pub fn get_keys_for_item(&self, item: &CipherItem) -> Option<EncMacKeys> {
         let d = get_state_data!(&self.user_data.state_data, AppStateData::Unlocked);
         d.get_keys_for_item(item)
     }
 
-    pub fn get_keys_for_collection(
-        &self,
-        collection: &Collection,
-    ) -> Option<(EncryptionKey, MacKey)> {
+    pub fn get_keys_for_collection(&self, collection: &Collection) -> Option<EncMacKeys> {
         let d = get_state_data!(&self.user_data.state_data, AppStateData::Unlocked);
         d.get_keys_for_collection(collection)
     }
 
-    pub fn get_org_keys_for_vault(&self) -> HashMap<&String, (EncryptionKey, MacKey)> {
+    pub fn get_org_keys_for_vault(&self) -> HashMap<&String, EncMacKeys> {
         let d = get_state_data!(&self.user_data.state_data, AppStateData::Unlocked);
         d.get_org_keys_for_vault()
     }
@@ -458,7 +449,7 @@ impl<'a> StatefulUserData<'a, Unlocking> {
         let d = get_state_data!(&self.user_data.state_data, AppStateData::Unlocking);
         d.logged_in_data
             .decrypt_keys()
-            .map(|(ec, mc)| d.encrypted_search_term.decrypt_to_string(&ec, &mc))
+            .map(|user_keys| d.encrypted_search_term.decrypt_to_string(&user_keys))
     }
 
     pub fn collection_selection(&self) -> CollectionSelection {

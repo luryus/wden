@@ -43,6 +43,7 @@ zeroize = { version = "1.7", features = ["zeroize_derive"] }
 arrayvec = "0.7"
 simsearch = "0.2"
 tabled = "0.16"
+maybe-owned = "0.3.4"
 
 [target.'cfg(windows)'.dependencies]
 clipboard-win = { version = "5.4", features = ["std"] }

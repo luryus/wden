@@ -40,8 +40,7 @@ impl MasterKey {
         if len == key.0.len() {
             Ok(key)
         } else {
-            Err(
-                base64::DecodeSliceError::DecodeError(
+            Err(base64::DecodeSliceError::DecodeError(
                 base64::DecodeError::InvalidLength(len.abs_diff(key.0.len())),
             ))
         }
@@ -76,6 +75,19 @@ pub struct MacKey(Pin<Box<[u8; CREDENTIAL_LEN]>>);
 impl MacKey {
     fn new() -> Self {
         Self(Box::pin([0u8; CREDENTIAL_LEN]))
+    }
+}
+
+pub struct EncMacKeys(EncryptionKey, MacKey);
+impl EncMacKeys {
+    pub fn new(enc: EncryptionKey, mac: MacKey) -> Self {
+        Self(enc, mac)
+    }
+    pub fn enc(&self) -> &EncryptionKey {
+        &self.0
+    }
+    pub fn mac(&self) -> &MacKey {
+        &self.1
     }
 }
 
@@ -218,14 +230,22 @@ impl Pbkdf for Argon2id {
 pub fn decrypt_symmetric_keys(
     key_cipher: &Cipher,
     master_key: &MasterKey,
-) -> Result<(EncryptionKey, MacKey), CipherError> {
-    let (master_enc, master_mac) = expand_master_key(master_key);
-    let dec_cipher = key_cipher.decrypt(&master_enc, &master_mac)?;
+) -> Result<EncMacKeys, CipherError> {
+    let keys = expand_master_key(master_key);
+    let dec_cipher = key_cipher.decrypt(&keys)?;
 
     extract_enc_mac_keys(&dec_cipher)
 }
 
-pub fn extract_enc_mac_keys(full_key: &[u8]) -> Result<(EncryptionKey, MacKey), CipherError> {
+pub fn decrypt_item_keys(
+    keys: &EncMacKeys,
+    item_key_cipher: &Cipher,
+) -> Result<EncMacKeys, CipherError> {
+    let dec_cipher = item_key_cipher.decrypt(keys)?;
+    extract_enc_mac_keys(&dec_cipher)
+}
+
+pub fn extract_enc_mac_keys(full_key: &[u8]) -> Result<EncMacKeys, CipherError> {
     // Enc key and mac key should both be 32 byets
     if full_key.len() != 2 * 32 {
         return Err(CipherError::InvalidKeyLength);
@@ -237,10 +257,10 @@ pub fn extract_enc_mac_keys(full_key: &[u8]) -> Result<(EncryptionKey, MacKey), 
     enc_key.0.as_mut_slice().copy_from_slice(&full_key[..32]);
     mac_key.0.as_mut_slice().copy_from_slice(&full_key[32..]);
 
-    Ok((enc_key, mac_key))
+    Ok(EncMacKeys(enc_key, mac_key))
 }
 
-fn expand_master_key(master_key: &MasterKey) -> (EncryptionKey, MacKey) {
+fn expand_master_key(master_key: &MasterKey) -> EncMacKeys {
     type HkdfSha256 = Hkdf<Sha256>;
 
     let prk = HkdfSha256::from_prk(master_key.0.as_slice()).unwrap();
@@ -253,7 +273,7 @@ fn expand_master_key(master_key: &MasterKey) -> (EncryptionKey, MacKey) {
     let mut mac_key = MacKey::new();
     prk.expand(mac_info, mac_key.0.as_mut_slice()).unwrap();
 
-    (enc_key, mac_key)
+    EncMacKeys::new(enc_key, mac_key)
 }
 
 #[derive(Clone, Default)]
@@ -356,21 +376,13 @@ impl FromStr for Cipher {
 }
 
 impl Cipher {
-    pub fn decrypt(
-        &self,
-        enc_key: &EncryptionKey,
-        mac_key: &MacKey,
-    ) -> Result<Vec<u8>, CipherError> {
+    pub fn decrypt(&self, keys: &EncMacKeys) -> Result<Vec<u8>, CipherError> {
         match self {
             Self::Empty => Ok(vec![]),
             Self::Value { enc_type, .. } => match enc_type {
-                EncType::AesCbc256B64 => self.decrypt_aescbc256(enc_key, mac_key),
-                EncType::AesCbc128HmacSha256B64 => {
-                    self.decrypt_aescbc128_hmac_sha256(enc_key, mac_key)
-                }
-                EncType::AesCbc256HmacSha256B64 => {
-                    self.decrypt_aescbc256_hmac_sha256(enc_key, mac_key)
-                }
+                EncType::AesCbc256B64 => self.decrypt_aescbc256(keys),
+                EncType::AesCbc128HmacSha256B64 => self.decrypt_aescbc128_hmac_sha256(keys),
+                EncType::AesCbc256HmacSha256B64 => self.decrypt_aescbc256_hmac_sha256(keys),
                 EncType::Rsa2048OaepSha256B64 => Err(CipherError::InvalidKeyTypeForCipher),
                 EncType::Rsa2048OaepSha1B64 => Err(CipherError::InvalidKeyTypeForCipher),
                 EncType::Rsa2048OaepSha256HmacSha256B64 => {
@@ -381,23 +393,19 @@ impl Cipher {
         }
     }
 
-    pub fn encrypt(
-        content: &[u8],
-        enc_key: &EncryptionKey,
-        mac_key: &MacKey,
-    ) -> Result<Self, CipherError> {
+    pub fn encrypt(content: &[u8], keys: &EncMacKeys) -> Result<Self, CipherError> {
         // Only support AesCbc256HmacSHa256B64 because why not
         type Aes256CbcEnc = cbc::Encryptor<Aes256>;
         type HmacSha256 = Hmac<Sha256>;
         // Generate iv of 128 bits (AES block size)
         let iv: [u8; 128 / 8] = rand::random();
         let iv = Vec::from(iv);
-        let aes = Aes256CbcEnc::new_from_slices(enc_key.0.as_slice(), &iv)
+        let aes = Aes256CbcEnc::new_from_slices(keys.enc().0.as_slice(), &iv)
             .map_err(CipherError::InvalidKeyOrIvLength)?;
 
         let ct = aes.encrypt_padded_vec_mut::<Pkcs7>(content);
 
-        let mut hmac = HmacSha256::new_from_slice(mac_key.0.as_slice())
+        let mut hmac = HmacSha256::new_from_slice(keys.mac().0.as_slice())
             .map_err(CipherError::InvalidKeyOrIvLength)?;
         hmac.update(&iv);
         hmac.update(&ct);
@@ -411,8 +419,9 @@ impl Cipher {
         })
     }
 
-    pub fn decrypt_to_string(&self, enc_key: &EncryptionKey, mac_key: &MacKey) -> String {
-        self.decrypt(enc_key, mac_key)
+    pub fn decrypt_to_string(&self, keys: &EncMacKeys) -> String {
+        self.decrypt(keys)
+            .inspect_err(|e| log::warn!("Error decrypting cipher: {}", e))
             .ok()
             .and_then(|s| String::from_utf8(s).ok())
             .unwrap_or_default()
@@ -440,37 +449,25 @@ impl Cipher {
         }
     }
 
-    fn decrypt_aescbc256(
-        &self,
-        _enc_key: &EncryptionKey,
-        _mac_key: &MacKey,
-    ) -> Result<Vec<u8>, CipherError> {
+    fn decrypt_aescbc256(&self, _keys: &EncMacKeys) -> Result<Vec<u8>, CipherError> {
         unimplemented!()
     }
-    fn decrypt_aescbc128_hmac_sha256(
-        &self,
-        _enc_key: &EncryptionKey,
-        _mac_key: &MacKey,
-    ) -> Result<Vec<u8>, CipherError> {
+    fn decrypt_aescbc128_hmac_sha256(&self, _keys: &EncMacKeys) -> Result<Vec<u8>, CipherError> {
         unimplemented!()
     }
-    fn decrypt_aescbc256_hmac_sha256(
-        &self,
-        enc_key: &EncryptionKey,
-        mac_key: &MacKey,
-    ) -> Result<Vec<u8>, CipherError> {
+    fn decrypt_aescbc256_hmac_sha256(&self, keys: &EncMacKeys) -> Result<Vec<u8>, CipherError> {
         if let Self::Value { iv, ct, mac, .. } = self {
             type Aes256CbcDec = cbc::Decryptor<Aes256>;
             type HmacSha256 = Hmac<Sha256>;
 
-            let mut hmac = HmacSha256::new_from_slice(mac_key.0.as_slice()).unwrap();
+            let mut hmac = HmacSha256::new_from_slice(keys.mac().0.as_slice()).unwrap();
             let data = [&iv[..], &ct[..]].concat();
 
             hmac.update(&data);
             hmac.verify_slice(mac)
                 .map_err(CipherError::MacVerificationFailed)?;
 
-            let aes = Aes256CbcDec::new_from_slices(enc_key.0.as_slice(), iv.as_slice())
+            let aes = Aes256CbcDec::new_from_slices(keys.enc().0.as_slice(), iv.as_slice())
                 .context("Initializing AES failed")?;
 
             let decrypted = aes
@@ -709,9 +706,9 @@ mod tests {
             .parse()
             .expect("Parsing symmetric key Cipher failed");
 
-        let (dec_enc_key, dec_mac_key) = decrypt_symmetric_keys(&enc_key, &master_key).unwrap();
+        let keys = decrypt_symmetric_keys(&enc_key, &master_key).unwrap();
 
-        let res = cipher.decrypt(&dec_enc_key, &dec_mac_key).unwrap();
+        let res = cipher.decrypt(&keys).unwrap();
 
         let res = String::from_utf8(res).unwrap();
 
@@ -725,12 +722,12 @@ mod tests {
         let enc_key = testdata::USER_SYMMETRIC_KEY_CIPHER_STRING
             .parse()
             .expect("Parsing symmetric key Cipher failed");
-        let (dec_enc_key, dec_mac_key) = decrypt_symmetric_keys(&enc_key, &master_key).unwrap();
+        let keys = decrypt_symmetric_keys(&enc_key, &master_key).unwrap();
 
         let der_private_key: DerPrivateKey = testdata::USER_PRIVATE_KEY_CIPHER_STRING
             .parse::<Cipher>()
             .unwrap()
-            .decrypt(&dec_enc_key, &dec_mac_key)
+            .decrypt(&keys)
             .unwrap()
             .into();
 

@@ -65,7 +65,7 @@ fn main() -> Result<(), anyhow::Error> {
     let master_key = kdf.create_master_key(&opts.username, &opts.password)?;
 
     let symmetric_key_cipher = opts.symmetric_key_cipher.parse()?;
-    let (enc_key, mac_key) = cipher::decrypt_symmetric_keys(&symmetric_key_cipher, &master_key)?;
+    let keys = cipher::decrypt_symmetric_keys(&symmetric_key_cipher, &master_key)?;
 
     if !opts.encrypt && opts.cipher.is_none() {
         panic!("Either a cipher (to decrypt) or --encrypt must be specified");
@@ -77,18 +77,15 @@ fn main() -> Result<(), anyhow::Error> {
         let mut input_data = vec![];
         stdin.read_to_end(&mut input_data).unwrap();
 
-        let res = Cipher::encrypt(&input_data, &enc_key, &mac_key).expect("Failed to encrypt");
+        let res = Cipher::encrypt(&input_data, &keys).expect("Failed to encrypt");
         println!("{}", res.encode());
     } else {
         let cipher = opts.cipher.unwrap().parse::<Cipher>()?;
         let decrypted_cipher = if let Some(priv_key_cipher) = opts.private_key_cipher {
-            let der_priv_key = priv_key_cipher
-                .parse::<Cipher>()?
-                .decrypt(&enc_key, &mac_key)?
-                .into();
+            let der_priv_key = priv_key_cipher.parse::<Cipher>()?.decrypt(&keys)?.into();
             cipher.decrypt_with_private_key(&der_priv_key)?
         } else {
-            cipher.decrypt(&enc_key, &mac_key)?
+            cipher.decrypt(&keys)?
         };
 
         println!(
