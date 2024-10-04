@@ -74,6 +74,17 @@ struct Opts {
         help_heading=Some("Server options"))]
     identity_server_url: Option<Url>,
 
+    /// Register this wden instance using a Bitwarden API key.
+    /// This option can be used to avoid login issues due to incorrect bot detection in Bitwarden cloud environments.
+    #[arg(long, requires="api_key_client_secret", help_heading=Some("API Keys"))]
+    api_key_client_id: Option<String>,
+     
+    #[arg(long, requires="api_key_client_id", help_heading=Some("API Keys"))]
+    api_key_client_secret: Option<String>,
+
+    #[arg(long, requires="api_key_client_id", help_heading=Some("API Keys"))]
+    api_key_login_email: Option<String>,
+
     /// Instead of starting the application,
     /// list all stored profiles
     #[arg(long)]
@@ -107,12 +118,21 @@ async fn main() {
         Some(ServerConfiguration::cloud(region))
     } else if let Some(url) = opts.server_url {
         Some(ServerConfiguration::single_host(url))
-    } else if let Some((api_url, identity_url)) = opts.api_server_url.zip(opts.identity_server_url)
-    {
+    } else if let Some((api_url, identity_url)) = opts.api_server_url.zip(opts.identity_server_url) {
         Some(ServerConfiguration::separate_hosts(api_url, identity_url))
     } else {
         None
     };
+
+    if let Some(((client_id, client_secret), email)) = opts.api_key_client_id.zip(
+        opts.api_key_client_secret).zip(opts.api_key_login_email) {
+        store_api_keys(
+            opts.profile, server_config,
+            client_id, client_secret,
+            email, opts.accept_invalid_certs)
+            .await.unwrap();
+        return;
+    }
 
     wden::ui::launch(
         opts.profile,
@@ -149,6 +169,29 @@ fn list_profiles() -> std::io::Result<()> {
 
         println!("{table}");
     }
+
+    Ok(())
+}
+
+async fn store_api_keys(profile: String, server_config: Option<ServerConfiguration>, client_id: String, client_secret: String, email: String, accept_invalid_certs: bool) -> anyhow::Result<()> {
+    let (global_settings, profile_data, profile_store) = wden::ui::launch::load_profile(
+        profile,
+        server_config,
+        accept_invalid_certs,
+        false,
+    );
+
+    let client = wden::bitwarden::api::ApiClient::new(
+        &global_settings.server_configuration,
+        &global_settings.device_id,
+        global_settings.accept_invalid_certs
+    );
+
+    let res = client.get_token_with_api_key(
+        &client_id, &client_secret, &email
+    ).await?;
+
+    println!("{res}");
 
     Ok(())
 }

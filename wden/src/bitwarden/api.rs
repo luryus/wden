@@ -157,6 +157,7 @@ impl ApiClient {
             .await?;
 
         if res.status() == 400 {
+            log::info!("{:?}", &res);
             let body = res.json::<HashMap<String, serde_json::Value>>().await?;
             if body.contains_key("TwoFactorProviders") {
                 let providers = body
@@ -198,11 +199,79 @@ impl ApiClient {
         }
 
         let res = res
-            .error_for_status()?
+            .error_for_status()
+            .inspect_err(|e| log::warn!("Error in token request: {e}"))?
             .json::<TokenResponseSuccess>()
             .await?;
 
         Ok(TokenResponse::Success(Box::new(res)))
+    }
+    
+    /// Make Bitwarden (OAuth) /identity/token api call using API key. This is used to "register"
+    /// a new device for the first time.
+    ///
+    /// Arguments:
+    /// * `username`: User's username. Most often this is the user email.
+    /// * `password`: User's master password hash. Not the actual password.
+    /// * `two_factor`: Optional tuple describing the second factor type, the second factor token and
+    ///                 whether to token should be "remembered" by the server or not. None if two-factor
+    ///                 is not used.
+    pub async fn get_token_with_api_key(
+        &self,
+        api_key_client_id: &str,
+        api_key_client_secret: &str,
+        username: &str
+    ) -> Result<String, Error> {
+        let device_type = (get_device_type() as i8).to_string();
+        let mut body = HashMap::new();
+        body.insert("grant_type", "client_credentials");
+        body.insert("username", username);
+        body.insert("client_id", api_key_client_id);
+        body.insert("client_secret", api_key_client_secret);
+        body.insert("scope", "api");
+        body.insert("deviceName", get_device_name());
+        body.insert("deviceIdentifier", &self.device_identifier);
+        body.insert("deviceType", &device_type);
+
+        let url = self.identity_base_url.join("connect/token")?;
+
+        let res = self
+            .http_client
+            .post(url)
+            .form(&body)
+            // As of October 2021, Bitwarden (prod) wants the email as base64-encoded in a header
+            // for some security reason
+            .header("auth-email", BASE64_URL_SAFE.encode(username))
+            .header("device-type", &device_type)
+            // As of May 2024, Bitwarden wants these Bitwarden-Client- headers as well
+            .header("Bitwarden-Client-Name", "wden")
+            .header("Bitwarden-Client-Version", env!("CARGO_PKG_VERSION"))
+            .send()
+            .await?;
+
+        if res.status() == 400 {
+            log::info!("{:?}", &res);
+            let body = res.json::<HashMap<String, serde_json::Value>>().await?;
+            // The error models often include the error message,
+            // so try to get and show it.
+            let server_error_message = body
+                .get("ErrorModel")
+                .and_then(|em| em.as_object())
+                .and_then(|em| em.get("Message"))
+                .and_then(|m| m.as_str());
+
+            return match server_error_message {
+                Some(msg) => Err(anyhow::anyhow!("{}", msg)),
+                None => Err(anyhow::anyhow!("Error logging in: {:?}", body)),
+            };
+        }
+
+        let res = res
+            .error_for_status()
+            .inspect_err(|e| log::warn!("Error in token request: {e}"))?
+            .text().await?;
+
+        Ok(res)
     }
 
     pub async fn refresh_token(

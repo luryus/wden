@@ -73,6 +73,46 @@ pub fn login_dialog(
         .title(format!("Log in ({profile_name})"))
         .button("Submit", submit_login)
 }
+/*
+pub fn api_key_login_dialog(
+    profile_name: &str,
+    saved_email: Option<String>,
+) -> Dialog {
+    let api_key_field = EditView::new()
+        .on_submit(|siv, _| submit_api_key_login(siv))
+        .with_name(VIEW_NAME_PERSONAL_API_KEY)
+        .fixed_width(40);
+
+    let should_focus_api_key = saved_email.is_some();
+    let email_field = match saved_email {
+        Some(em) => EditView::new().content(em),
+        _ => EditView::new(),
+    }
+    .on_submit(|siv, _| {
+        if siv.focus_name(VIEW_NAME_PERSONAL_API_KEY).is_err() {
+            log::warn!("Focusing api key field failed");
+        }
+    })
+    .with_name(VIEW_NAME_EMAIL)
+    .fixed_width(40);
+
+    let mut layout = LinearLayout::vertical()
+        .child(TextView::new("Email address"))
+        .child(email_field)
+        .child(TextView::new("API key"))
+        .child(api_key_field);
+
+    if should_focus_api_key {
+        let focus_res = layout.set_focus_index(3);
+        if focus_res.is_err() {
+            log::warn!("Focusing api_key field failed");
+        }
+    }
+
+    Dialog::around(layout)
+        .title(format!("Log in ({profile_name})"))
+        .button("Submit", submit_api_key_login)
+}*/
 
 fn submit_login(c: &mut Cursive) {
     let email = c
@@ -146,7 +186,55 @@ fn submit_login(c: &mut Cursive) {
         },
     )
 }
+/*
+fn submit_api_key_login(c: &mut Cursive) {
+    let email = c
+        .call_on_name(VIEW_NAME_EMAIL, |view: &mut EditView| view.get_content())
+        .unwrap();
+    let email = Arc::new(String::clone(&email));
+    let email2 = email.clone();
 
+    let api_key = c
+        .call_on_name(VIEW_NAME_PERSONAL_API_KEY, |view: &mut EditView| view.get_content())
+        .unwrap();
+
+    c.pop_layer();
+    c.add_layer(Dialog::text("Signing in..."));
+
+    let ud = c.get_user_data().with_logged_out_state().unwrap();
+    let global_settings = ud.global_settings();
+    let profile_store = ud.profile_store();
+
+    c.async_op(
+        async move {
+            let client = ApiClient::new(
+                &global_settings.server_configuration,
+                &global_settings.device_id,
+                global_settings.accept_invalid_certs,
+            );
+            async {
+                do_login_with_api_key(
+                    &client,
+                    &email,
+                    &api_key,
+                    &profile_store,
+                )
+                .await
+                .map(|t| (t, email))
+            }
+            .await
+        },
+        move |siv, res| {
+            match res {
+                Ok((t, em)) => {
+                    handle_login_response(siv, Ok(t), em, false);
+                }
+                Err(e) => handle_login_response(siv, Err(e), email2, false),
+            };
+        },
+    )
+}
+*/
 pub fn handle_login_response(
     cursive: &mut Cursive,
     res: Result<TokenResponse, anyhow::Error>,
@@ -298,3 +386,26 @@ pub async fn do_login(
 
     Ok(token_res)
 }
+/*
+pub async fn do_login_with_api_key(
+    client: &ApiClient,
+    email: &str,
+    api_key: &str,
+    profile_store: &ProfileStore,
+) -> Result<TokenResponse, anyhow::Error> {
+
+    let mut token_res = client
+        .get_token_with_api_key( email, api_key)
+        .await?;
+
+    if let bitwarden::api::TokenResponse::Success(t) = &mut token_res {
+        if let Some(tft) = t.two_factor_token.take() {
+            profile_store
+                .edit(|d| d.saved_two_factor_token = Some(tft))
+                .expect("Storing 2nd factor token failed");
+        }
+    }
+
+    Ok(token_res)
+}
+*/

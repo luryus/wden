@@ -65,7 +65,7 @@ fn run(mut cursive: CursiveRunnable) {
     }
 }
 
-fn load_profile(
+pub fn load_profile(
     profile_name: String,
     server_configuration: Option<ServerConfiguration>,
     accept_invalid_certs: bool,

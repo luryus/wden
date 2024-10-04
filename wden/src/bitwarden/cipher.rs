@@ -9,7 +9,7 @@ use hmac::digest::{InvalidLength, MacError};
 use hmac::{Hmac, Mac};
 use rsa::Oaep;
 use rsa::{pkcs8::DecodePrivateKey, RsaPrivateKey};
-use serde::de;
+use serde::{de, Serialize, Serializer};
 use serde::{Deserialize, Deserializer};
 use sha2::{digest::OutputSizeUser, Digest, Sha256};
 use std::fmt;
@@ -296,14 +296,6 @@ pub enum Cipher {
     },
 }
 
-impl fmt::Display for Cipher {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Empty => write!(formatter, "Cipher <empty>"),
-            Self::Value { .. } => write!(formatter, "Cipher <value>"),
-        }
-    }
-}
 
 impl fmt::Debug for Cipher {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -325,6 +317,12 @@ impl<'de> Deserialize<'de> for Cipher {
         Option::deserialize(deserializer)?
             .map(|s: String| s.parse().map_err(de::Error::custom))
             .unwrap_or(Ok(Cipher::Empty))
+    }
+}
+
+impl Serialize for Cipher {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.collect_str(&self.to_string())
     }
 }
 
@@ -379,6 +377,27 @@ impl FromStr for Cipher {
                 })
             }
             _ => unimplemented!(),
+        }
+    }
+}
+
+impl ToString for Cipher {
+    fn to_string(&self) -> String {
+        match self {
+            Self::Empty => String::new(),
+            Self::Value { enc_type, iv, ct, mac } => {
+                let enc_type_str = enc_type.str_code();
+                let ct = BASE64_STANDARD.encode(ct);
+                if enc_type.has_mac() && enc_type.has_iv() {
+                    let mac = BASE64_STANDARD.encode(mac);
+                    let iv = BASE64_STANDARD.encode(iv);
+                    format!("{enc_type_str}.{iv}|{ct}|{mac}")
+                } else if !enc_type.has_mac() && !enc_type.has_iv() {
+                    format!("{enc_type_str}.{ct}")
+                } else {
+                    unimplemented!("No cipher types with only either mac or iv implemented")
+                }
+            }
         }
     }
 }
@@ -642,6 +661,18 @@ impl EncType {
         self != &EncType::AesCbc256B64
             && self != &EncType::Rsa2048OaepSha1B64
             && self != &EncType::Rsa2048OaepSha256B64
+    }
+
+    const fn str_code(&self) -> &'static str {
+        match self {
+            EncType::AesCbc256B64 => "0",
+            EncType::AesCbc128HmacSha256B64 => "1",
+            EncType::AesCbc256HmacSha256B64 => "2",
+            EncType::Rsa2048OaepSha256B64 => "3",
+            EncType::Rsa2048OaepSha1B64 => "4",
+            EncType::Rsa2048OaepSha256HmacSha256B64 => "5",
+            EncType::Rsa2048OaepSha1HmacSha256B64 => "6",
+        }
     }
 }
 
