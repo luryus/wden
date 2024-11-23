@@ -9,6 +9,7 @@ use crate::{
 use anyhow::Context;
 use cipher::decrypt_symmetric_keys;
 use maybe_owned::MaybeOwned;
+use rayon::iter::{ParallelBridge, ParallelIterator};
 
 use std::{
     collections::HashMap,
@@ -133,6 +134,7 @@ impl Unlocked {
             .map(|uk| {
                 self.organizations
                     .keys()
+                    .par_bridge()
                     .filter_map(|oid| {
                         self.decrypt_organization_keys(oid, &uk)
                             .map(|key| (oid, key))

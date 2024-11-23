@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use simsearch::SimSearch;
 
 use crate::bitwarden::{self, api::CipherData};
@@ -36,7 +37,7 @@ fn get_tokenized_rows(ud: &StatefulUserData<Unlocked>) -> Option<HashMap<String,
     let user_keys = ud.decrypt_keys()?;
 
     let res = vd
-        .iter()
+        .par_iter()
         .filter_map(|(k, v)| {
             // Get appropriate keys for this item
             let item_keys =
