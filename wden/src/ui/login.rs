@@ -2,9 +2,11 @@ use std::sync::Arc;
 
 use anyhow::Context;
 use cursive::{
+    theme::Effect,
     traits::{Nameable, Resizable},
-    views::{Dialog, EditView, LinearLayout, TextView},
-    Cursive,
+    view::{Margins, Selector},
+    views::{Dialog, EditView, LinearLayout, PaddedView, TextView},
+    Cursive, View,
 };
 use cursive_secret_edit_view::SecretEditView;
 use zeroize::Zeroizing;
@@ -48,23 +50,34 @@ pub fn login_dialog(
         .on_submit(move |siv| submit_callback(siv))
         .with_name(VIEW_NAME_PASSWORD)
         .fixed_width(40);
-
     let should_focus_password = saved_email.is_some();
-    let email_field = match saved_email {
-        Some(em) => EditView::new().content(em),
-        _ => EditView::new(),
-    }
-    .on_submit(|siv, _| {
-        if siv.focus_name(VIEW_NAME_PASSWORD).is_err() {
-            log::warn!("Focusing password field failed");
-        }
-    })
-    .with_name(VIEW_NAME_EMAIL)
-    .fixed_width(40);
 
-    let mut layout = LinearLayout::vertical()
-        .child(TextView::new("Email address"))
-        .child(email_field)
+    let mut layout = if !api_key_login {
+        let email_field = match saved_email {
+            Some(em) => EditView::new().content(em),
+            _ => EditView::new(),
+        }
+        .on_submit(|siv, _| {
+            if siv.focus_name(VIEW_NAME_PASSWORD).is_err() {
+                log::warn!("Focusing password field failed");
+            }
+        })
+        .with_name(VIEW_NAME_EMAIL)
+        .fixed_width(40);
+
+        LinearLayout::vertical()
+            .child(TextView::new("Email address"))
+            .child(email_field)
+    } else {
+        LinearLayout::vertical()
+            .child(TextView::new("API key stored for email"))
+            .child(PaddedView::new(
+                Margins::tb(0, 1),
+                TextView::new(saved_email.unwrap()).style(Effect::Bold),
+            ))
+    };
+
+    layout = layout
         .child(TextView::new("Password"))
         .child(password_field);
 
@@ -78,7 +91,7 @@ pub fn login_dialog(
     }
 
     if should_focus_password {
-        let focus_res = layout.set_focus_index(3);
+        let focus_res = layout.focus_view(&Selector::Name(VIEW_NAME_PASSWORD));
         if focus_res.is_err() {
             log::warn!("Focusing password field failed");
         }
@@ -248,7 +261,7 @@ pub fn handle_login_response(
                             .global_settings()
                             .profile,
                         Some(String::clone(&email)),
-                        false,
+                        api_key_login,
                         had_token_field,
                     );
                     siv.add_layer(d);

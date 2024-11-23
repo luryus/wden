@@ -36,11 +36,11 @@ impl ApiKey {
     }
 
     pub fn serialize_to_bytes(&self) -> anyhow::Result<Vec<u8>> {
-        serde_json::to_vec(self).context("Serializing failed")
+        serde_json::to_vec(self).context("Serializing API key failed")
     }
 
     pub fn deserialize_from_bytes(data: &[u8]) -> anyhow::Result<Self> {
-        serde_json::from_slice(data).context("Parsing failed")
+        serde_json::from_slice(data).context("Parsing API key failed")
     }
 
     pub fn encrypt(
