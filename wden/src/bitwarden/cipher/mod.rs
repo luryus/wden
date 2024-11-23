@@ -1,104 +1,25 @@
 use aes::cipher::block_padding::{Pkcs7, UnpadError};
-use aes::cipher::generic_array::GenericArray;
 use aes::Aes256;
 use anyhow::Context;
 use base64::prelude::*;
 use cbc::cipher::{BlockDecryptMut, BlockEncryptMut, KeyIvInit};
-use hkdf::Hkdf;
 use hmac::digest::{InvalidLength, MacError};
 use hmac::{Hmac, Mac};
 use rsa::Oaep;
 use rsa::{pkcs8::DecodePrivateKey, RsaPrivateKey};
 use serde::{de, Serialize, Serializer};
 use serde::{Deserialize, Deserializer};
-use sha2::{digest::OutputSizeUser, Digest, Sha256};
+use sha2::Sha256;
 use std::fmt;
-
-use std::pin::Pin;
 use std::str::FromStr;
-use std::sync::Arc;
 use thiserror::Error;
-use zeroize::{ZeroizeOnDrop, Zeroizing};
 
-const CREDENTIAL_LEN: usize = 256 / 8;
+mod pbkdf;
+pub use pbkdf::*;
 
-#[derive(ZeroizeOnDrop)]
-pub struct MasterKey(Pin<Box<[u8; CREDENTIAL_LEN]>>);
-impl MasterKey {
-    fn new() -> Self {
-        MasterKey(Box::pin([0; CREDENTIAL_LEN]))
-    }
+mod keys;
+pub use keys::*;
 
-    #[cfg(test)]
-    fn from_base64(b64_data: &str) -> Result<Self, base64::DecodeSliceError> {
-        let mut key = Self::new();
-
-        let len = BASE64_STANDARD.decode_slice(b64_data, key.0.as_mut_slice())?;
-        if len == key.0.len() {
-            Ok(key)
-        } else {
-            Err(base64::DecodeSliceError::DecodeError(
-                base64::DecodeError::InvalidLength(len.abs_diff(key.0.len())),
-            ))
-        }
-    }
-}
-
-#[derive(Clone, ZeroizeOnDrop)]
-pub struct MasterPasswordHash(Pin<Box<[u8; CREDENTIAL_LEN]>>);
-impl MasterPasswordHash {
-    fn new() -> Self {
-        MasterPasswordHash(Box::pin([0; CREDENTIAL_LEN]))
-    }
-
-    pub fn base64_encoded(&self) -> Zeroizing<String> {
-        BASE64_STANDARD.encode(self.0.as_slice()).into()
-    }
-}
-
-impl Default for MasterPasswordHash {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-#[derive(ZeroizeOnDrop)]
-pub struct EncryptionKey(Pin<Box<[u8; CREDENTIAL_LEN]>>);
-impl EncryptionKey {
-    fn new() -> Self {
-        Self(Box::pin([0u8; CREDENTIAL_LEN]))
-    }
-}
-
-#[derive(ZeroizeOnDrop)]
-pub struct MacKey(Pin<Box<[u8; CREDENTIAL_LEN]>>);
-impl MacKey {
-    fn new() -> Self {
-        Self(Box::pin([0u8; CREDENTIAL_LEN]))
-    }
-}
-
-pub struct EncMacKeys(EncryptionKey, MacKey);
-impl EncMacKeys {
-    pub fn new(enc: EncryptionKey, mac: MacKey) -> Self {
-        Self(enc, mac)
-    }
-    pub fn enc(&self) -> &EncryptionKey {
-        &self.0
-    }
-    pub fn mac(&self) -> &MacKey {
-        &self.1
-    }
-}
-
-// Private key is in DER format
-#[derive(ZeroizeOnDrop)]
-pub struct DerPrivateKey(Vec<u8>);
-impl From<Vec<u8>> for DerPrivateKey {
-    fn from(data: Vec<u8>) -> Self {
-        DerPrivateKey(data)
-    }
-}
 
 #[derive(Error, Debug)]
 pub enum CipherError {
@@ -124,193 +45,7 @@ pub enum CipherError {
     KdfError(argon2::Error),
 }
 
-pub trait Pbkdf {
-    fn create_master_key(
-        &self,
-        user_email: &str,
-        user_password: &str,
-    ) -> Result<MasterKey, CipherError>;
 
-    fn derive_enc_mac_keys(&self, password: &str, salt: &str) -> Result<EncMacKeys, CipherError> {
-        let master_key = self.create_master_key(salt, password)?;
-        Ok(expand_master_key(&master_key))
-    }
-}
-
-#[derive(Serialize, Deserialize, Clone, Copy)]
-pub enum KeyDerivationFunction {
-    Pbkdf2,
-    Argon2id,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-pub struct PbkdfParameters {
-    pub kdf: KeyDerivationFunction,
-    pub iterations: u32,
-    #[serde(default)]
-    pub memory_mib: u32,
-    #[serde(default)]
-    pub parallelism: u32,
-}
-
-pub fn get_pbkdf(params: &PbkdfParameters) -> Arc<dyn Pbkdf + Send + Sync> {
-    match params.kdf {
-        KeyDerivationFunction::Pbkdf2 => Arc::new(Pbkdf2 {
-            hash_iterations: params.iterations,
-        }),
-        KeyDerivationFunction::Argon2id => Arc::new(Argon2id {
-            iterations: params.iterations,
-            memory_kib: params.memory_mib * 1024,
-            parallelism: params.parallelism,
-        }),
-    }
-}
-
-pub fn create_master_key(
-    user_email: &str,
-    user_password: &str,
-    pbkdf_params: &PbkdfParameters,
-) -> Result<MasterKey, CipherError> {
-    get_pbkdf(pbkdf_params).create_master_key(user_email, user_password)
-}
-
-pub fn create_master_password_hash(
-    master_key: &MasterKey,
-    user_password: &str,
-) -> MasterPasswordHash {
-    let mut res = MasterPasswordHash::new();
-    pbkdf2::pbkdf2_hmac::<Sha256>(
-        master_key.0.as_slice(),
-        user_password.as_bytes(),
-        1,
-        res.0.as_mut_slice(),
-    );
-    res
-}
-
-pub struct Pbkdf2 {
-    pub hash_iterations: u32,
-}
-
-impl Pbkdf for Pbkdf2 {
-    fn create_master_key(
-        &self,
-        user_email: &str,
-        user_password: &str,
-    ) -> Result<MasterKey, CipherError> {
-        let mut res = MasterKey::new();
-        pbkdf2::pbkdf2_hmac::<Sha256>(
-            user_password.as_bytes(),
-            // Email is always lowercased
-            user_email.to_lowercase().as_bytes(),
-            self.hash_iterations,
-            res.0.as_mut_slice(),
-        );
-        Ok(res)
-    }
-}
-
-pub struct Argon2id {
-    pub iterations: u32,
-    pub memory_kib: u32,
-    pub parallelism: u32,
-}
-
-impl Argon2id {
-    fn hashed_salt(salt: &[u8]) -> GenericArray<u8, <Sha256 as OutputSizeUser>::OutputSize> {
-        // With Argon2id, bitwarden first hashes the salt (here email) with SHA-256
-        // to ensure the salt is long enough for Argon2
-        let mut sha = Sha256::new();
-        sha.update(salt);
-        sha.finalize()
-    }
-}
-
-impl Pbkdf for Argon2id {
-    fn create_master_key(
-        &self,
-        user_email: &str,
-        user_password: &str,
-    ) -> Result<MasterKey, CipherError> {
-        let salt = Self::hashed_salt(user_email.to_lowercase().as_bytes());
-
-        let params = argon2::ParamsBuilder::new()
-            .m_cost(self.memory_kib)
-            .p_cost(self.parallelism)
-            .t_cost(self.iterations)
-            .build()
-            .map_err(CipherError::InvalidKdfParameters)?;
-
-        let kdf = argon2::Argon2::new(argon2::Algorithm::Argon2id, argon2::Version::V0x13, params);
-
-        let mut res = MasterKey::new();
-        kdf.hash_password_into(user_password.as_bytes(), &salt, res.0.as_mut_slice())
-            .map_err(CipherError::KdfError)?;
-        Ok(res)
-    }
-}
-
-pub fn decrypt_symmetric_keys(
-    key_cipher: &Cipher,
-    master_key: &MasterKey,
-) -> Result<EncMacKeys, CipherError> {
-    let keys = expand_master_key(master_key);
-
-    let len = key_cipher.ct_len();
-    let mut buf = Zeroizing::new(vec![0u8; len].into_boxed_slice());
-    let dec_cipher = key_cipher.decrypt_to(&keys, &mut buf)?;
-
-    extract_enc_mac_keys(dec_cipher)
-}
-
-pub fn decrypt_item_keys(
-    keys: &EncMacKeys,
-    item_key_cipher: &Cipher,
-) -> Result<EncMacKeys, CipherError> {
-    let len = item_key_cipher.ct_len();
-    let mut buf = Zeroizing::new(vec![0u8; len].into_boxed_slice());
-    let dec_cipher = item_key_cipher.decrypt_to(keys, &mut buf)?;
-    extract_enc_mac_keys(dec_cipher)
-}
-
-pub fn decrypt_org_keys(
-    private_key: &DerPrivateKey,
-    org_key_cipher: &Cipher,
-) -> Result<EncMacKeys, CipherError> {
-    let dec_cipher = org_key_cipher.decrypt_with_private_key(private_key)?;
-    extract_enc_mac_keys(&dec_cipher)
-}
-
-pub fn extract_enc_mac_keys(full_key: &[u8]) -> Result<EncMacKeys, CipherError> {
-    // Enc key and mac key should both be 32 bytes
-    if full_key.len() != 2 * CREDENTIAL_LEN {
-        return Err(CipherError::InvalidKeyLength);
-    }
-
-    let mut enc_key = EncryptionKey::new();
-    let mut mac_key = MacKey::new();
-
-    enc_key.0.as_mut_slice().copy_from_slice(&full_key[..32]);
-    mac_key.0.as_mut_slice().copy_from_slice(&full_key[32..]);
-
-    Ok(EncMacKeys(enc_key, mac_key))
-}
-
-fn expand_master_key(master_key: &MasterKey) -> EncMacKeys {
-    type HkdfSha256 = Hkdf<Sha256>;
-
-    let prk = HkdfSha256::from_prk(master_key.0.as_slice()).unwrap();
-
-    let enc_info = "enc".as_bytes();
-    let mac_info = "mac".as_bytes();
-
-    let mut enc_key = EncryptionKey::new();
-    prk.expand(enc_info, enc_key.0.as_mut_slice()).unwrap();
-    let mut mac_key = MacKey::new();
-    prk.expand(mac_info, mac_key.0.as_mut_slice()).unwrap();
-
-    EncMacKeys::new(enc_key, mac_key)
-}
 
 #[derive(Clone, Default)]
 pub enum Cipher {
@@ -454,12 +189,12 @@ impl Cipher {
         // Generate iv of 128 bits (AES block size)
         let iv: [u8; 128 / 8] = rand::random();
         let iv = Vec::from(iv);
-        let aes = Aes256CbcEnc::new_from_slices(keys.enc().0.as_slice(), &iv)
+        let aes = Aes256CbcEnc::new_from_slices(keys.enc().data(), &iv)
             .map_err(CipherError::InvalidKeyOrIvLength)?;
 
         let ct = aes.encrypt_padded_vec_mut::<Pkcs7>(content);
 
-        let mut hmac = HmacSha256::new_from_slice(keys.mac().0.as_slice())
+        let mut hmac = HmacSha256::new_from_slice(keys.mac().data())
             .map_err(CipherError::InvalidKeyOrIvLength)?;
         hmac.update(&iv);
         hmac.update(&ct);
@@ -528,14 +263,14 @@ impl Cipher {
             type Aes256CbcDec = cbc::Decryptor<Aes256>;
             type HmacSha256 = Hmac<Sha256>;
 
-            let mut hmac = HmacSha256::new_from_slice(keys.mac().0.as_slice()).unwrap();
+            let mut hmac = HmacSha256::new_from_slice(keys.mac().data()).unwrap();
 
             hmac.update(iv);
             hmac.update(ct);
             hmac.verify_slice(mac)
                 .map_err(CipherError::MacVerificationFailed)?;
 
-            let aes = Aes256CbcDec::new_from_slices(keys.enc().0.as_slice(), iv.as_slice())
+            let aes = Aes256CbcDec::new_from_slices(keys.enc().data(), iv.as_slice())
                 .context("Initializing AES failed")?;
 
             let decrypted = aes
@@ -557,14 +292,14 @@ impl Cipher {
             type Aes256CbcDec = cbc::Decryptor<Aes256>;
             type HmacSha256 = Hmac<Sha256>;
 
-            let mut hmac = HmacSha256::new_from_slice(keys.mac().0.as_slice()).unwrap();
+            let mut hmac = HmacSha256::new_from_slice(keys.mac().data()).unwrap();
             let data = [&iv[..], &ct[..]].concat();
 
             hmac.update(&data);
             hmac.verify_slice(mac)
                 .map_err(CipherError::MacVerificationFailed)?;
 
-            let aes = Aes256CbcDec::new_from_slices(keys.enc().0.as_slice(), iv.as_slice())
+            let aes = Aes256CbcDec::new_from_slices(keys.enc().data(), iv.as_slice())
                 .context("Initializing AES failed")?;
 
             let decrypted = aes
@@ -588,7 +323,7 @@ impl Cipher {
         private_key: &DerPrivateKey,
     ) -> Result<Vec<u8>, CipherError> {
         if let Self::Value { ct, .. } = self {
-            let rsa_key = RsaPrivateKey::from_pkcs8_der(&private_key.0)
+            let rsa_key = RsaPrivateKey::from_pkcs8_der(private_key.data())
                 .context("Reading RSA private key failed")?;
 
             let padding = Oaep::new::<sha1::Sha1>();
@@ -756,7 +491,7 @@ mod tests {
             .expect("Master key decoding failed");
         let pass_hash = create_master_password_hash(&master_key, testdata::USER_PASSWORD);
         assert_eq!(
-            BASE64_STANDARD.encode(pass_hash.0.as_slice()),
+            pass_hash.base64_encoded().as_str(),
             testdata::USER_MASTER_PASSWORD_HASH_B64
         );
     }
@@ -770,7 +505,7 @@ mod tests {
             .create_master_key(testdata::USER_EMAIL, testdata::USER_PASSWORD)
             .expect("Hashing failed");
         assert_eq!(
-            BASE64_STANDARD.encode(key.0.as_slice()),
+            key.base64_encoded().as_str(),
             testdata::USER_MASTER_KEY_PBKDF2_B64
         );
     }
@@ -786,7 +521,7 @@ mod tests {
             .create_master_key(testdata::USER_EMAIL, testdata::USER_PASSWORD)
             .expect("Hashing failed");
         assert_eq!(
-            BASE64_STANDARD.encode(key.0.as_slice()),
+            key.base64_encoded().as_str(),
             testdata::USER_MASTER_KEY_ARGON2ID_B64
         );
     }

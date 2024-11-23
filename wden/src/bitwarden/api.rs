@@ -208,15 +208,6 @@ impl ApiClient {
         Ok(TokenResponse::Success(Box::new(res)))
     }
 
-    /// Make Bitwarden (OAuth) /identity/token api call using API key. This is used to "register"
-    /// a new device for the first time.
-    ///
-    /// Arguments:
-    /// * `username`: User's username. Most often this is the user email.
-    /// * `password`: User's master password hash. Not the actual password.
-    /// * `two_factor`: Optional tuple describing the second factor type, the second factor token and
-    ///                 whether to token should be "remembered" by the server or not. None if two-factor
-    ///                 is not used.
     pub async fn get_token_with_api_key(
         &self,
         api_key: &ApiKey,
