@@ -47,6 +47,7 @@ maybe-owned = "0.3.4"
 indicatif = "0.17.9"
 console = "0.15.8"
 rpassword = "7.3.1"
+rayon = "1.10.0"
 
 [target.'cfg(windows)'.dependencies]
 clipboard-win = { version = "5.4", features = ["std"] }
