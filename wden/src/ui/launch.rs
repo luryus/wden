@@ -39,7 +39,26 @@ pub fn launch(
     cursive::logger::init();
     log::set_max_level(log::LevelFilter::Info);
 
-    siv.add_layer(login_dialog(&profile_name, profile_data.saved_email, false));
+    siv.add_layer(login_dialog(
+        &profile_name,
+        profile_data.saved_email,
+        profile_data.encrypted_api_key.is_some(),
+        false,
+    ));
+
+    let hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        use cursive::backends::crossterm::crossterm::*;
+        _ = execute!(
+            std::io::stdout(),
+            terminal::LeaveAlternateScreen,
+            cursor::Show,
+            event::DisableMouseCapture,
+        );
+        _ = terminal::disable_raw_mode();
+
+        hook(info)
+    }));
 
     run(siv);
 }
@@ -81,6 +100,7 @@ pub fn load_profile(
         device_id: profile_data.device_id.clone(),
         accept_invalid_certs,
         always_refresh_token_on_sync: always_refresh_on_sync,
+        encrypted_api_key: profile_data.encrypted_api_key.clone(),
     };
 
     // Write new settings

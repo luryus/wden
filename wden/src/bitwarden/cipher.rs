@@ -20,8 +20,6 @@ use std::sync::Arc;
 use thiserror::Error;
 use zeroize::{ZeroizeOnDrop, Zeroizing};
 
-use super::api::{KdfFunction, PreloginResponse};
-
 const CREDENTIAL_LEN: usize = 256 / 8;
 
 #[derive(ZeroizeOnDrop)]
@@ -55,6 +53,12 @@ impl MasterPasswordHash {
 
     pub fn base64_encoded(&self) -> Zeroizing<String> {
         BASE64_STANDARD.encode(self.0.as_slice()).into()
+    }
+}
+
+impl Default for MasterPasswordHash {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -126,24 +130,48 @@ pub trait Pbkdf {
         user_email: &str,
         user_password: &str,
     ) -> Result<MasterKey, CipherError>;
+
+    fn derive_enc_mac_keys(&self, password: &str, salt: &str) -> Result<EncMacKeys, CipherError> {
+        let master_key = self.create_master_key(salt, password)?;
+        Ok(expand_master_key(&master_key))
+    }
 }
 
-pub fn get_pbkdf(prelogin_res: &PreloginResponse) -> Option<Arc<dyn Pbkdf + Send + Sync>> {
-    match prelogin_res.kdf {
-        KdfFunction::Pbkdf2 => Some(Arc::new(Pbkdf2 {
-            hash_iterations: prelogin_res.kdf_iterations,
-        })),
-        KdfFunction::Argon2id => prelogin_res
-            .kdf_memory_mib
-            .zip(prelogin_res.kdf_parallelism)
-            .map(|(mem, par)| -> Arc<(dyn Pbkdf + Send + Sync)> {
-                Arc::new(Argon2id {
-                    iterations: prelogin_res.kdf_iterations,
-                    memory_kib: mem * 1024,
-                    parallelism: par,
-                })
-            }),
+#[derive(Serialize, Deserialize, Clone, Copy)]
+pub enum KeyDerivationFunction {
+    Pbkdf2,
+    Argon2id,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct PbkdfParameters {
+    pub kdf: KeyDerivationFunction,
+    pub iterations: u32,
+    #[serde(default)]
+    pub memory_mib: u32,
+    #[serde(default)]
+    pub parallelism: u32,
+}
+
+pub fn get_pbkdf(params: &PbkdfParameters) -> Arc<dyn Pbkdf + Send + Sync> {
+    match params.kdf {
+        KeyDerivationFunction::Pbkdf2 => Arc::new(Pbkdf2 {
+            hash_iterations: params.iterations,
+        }),
+        KeyDerivationFunction::Argon2id => Arc::new(Argon2id {
+            iterations: params.iterations,
+            memory_kib: params.memory_mib * 1024,
+            parallelism: params.parallelism,
+        }),
     }
+}
+
+pub fn create_master_key(
+    user_email: &str,
+    user_password: &str,
+    pbkdf_params: &PbkdfParameters,
+) -> Result<MasterKey, CipherError> {
+    get_pbkdf(pbkdf_params).create_master_key(user_email, user_password)
 }
 
 pub fn create_master_password_hash(
@@ -296,7 +324,6 @@ pub enum Cipher {
     },
 }
 
-
 impl fmt::Debug for Cipher {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -322,7 +349,7 @@ impl<'de> Deserialize<'de> for Cipher {
 
 impl Serialize for Cipher {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.collect_str(&self.to_string())
+        serializer.collect_str(&self.encode())
     }
 }
 
@@ -377,27 +404,6 @@ impl FromStr for Cipher {
                 })
             }
             _ => unimplemented!(),
-        }
-    }
-}
-
-impl ToString for Cipher {
-    fn to_string(&self) -> String {
-        match self {
-            Self::Empty => String::new(),
-            Self::Value { enc_type, iv, ct, mac } => {
-                let enc_type_str = enc_type.str_code();
-                let ct = BASE64_STANDARD.encode(ct);
-                if enc_type.has_mac() && enc_type.has_iv() {
-                    let mac = BASE64_STANDARD.encode(mac);
-                    let iv = BASE64_STANDARD.encode(iv);
-                    format!("{enc_type_str}.{iv}|{ct}|{mac}")
-                } else if !enc_type.has_mac() && !enc_type.has_iv() {
-                    format!("{enc_type_str}.{ct}")
-                } else {
-                    unimplemented!("No cipher types with only either mac or iv implemented")
-                }
-            }
         }
     }
 }
@@ -661,18 +667,6 @@ impl EncType {
         self != &EncType::AesCbc256B64
             && self != &EncType::Rsa2048OaepSha1B64
             && self != &EncType::Rsa2048OaepSha256B64
-    }
-
-    const fn str_code(&self) -> &'static str {
-        match self {
-            EncType::AesCbc256B64 => "0",
-            EncType::AesCbc128HmacSha256B64 => "1",
-            EncType::AesCbc256HmacSha256B64 => "2",
-            EncType::Rsa2048OaepSha256B64 => "3",
-            EncType::Rsa2048OaepSha1B64 => "4",
-            EncType::Rsa2048OaepSha256HmacSha256B64 => "5",
-            EncType::Rsa2048OaepSha1HmacSha256B64 => "6",
-        }
     }
 }
 

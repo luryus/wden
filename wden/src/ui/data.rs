@@ -1,10 +1,11 @@
 use crate::{
     bitwarden::{
         api::{self, CipherItem, Collection, Organization, TokenResponseSuccess},
-        cipher::{self, EncMacKeys, MasterKey, MasterPasswordHash, Pbkdf},
+        apikey::ApiKey,
+        cipher::{self, EncMacKeys, MasterKey, MasterPasswordHash, PbkdfParameters},
     },
     profile::{GlobalSettings, ProfileStore},
-};  
+};
 use anyhow::Context;
 use cipher::decrypt_symmetric_keys;
 use maybe_owned::MaybeOwned;
@@ -36,9 +37,10 @@ pub struct LoggedOut;
 
 pub struct LoggingIn {
     email: Arc<String>,
-    pbkdf: Arc<dyn Pbkdf>,
+    pbkdf: Arc<PbkdfParameters>,
     master_key: Arc<cipher::MasterKey>,
     master_password_hash: Arc<cipher::MasterPasswordHash>,
+    api_key: Option<Arc<ApiKey>>,
 }
 
 pub struct LoggedIn {
@@ -126,13 +128,14 @@ impl Unlocked {
 
 pub struct Locked {
     email: Arc<String>,
-    pbkdf: Arc<dyn Pbkdf>,
+    pbkdf: Arc<PbkdfParameters>,
     token: Arc<TokenResponseSuccess>,
     vault_data: Arc<HashMap<String, CipherItem>>,
     organizations: Arc<HashMap<String, Organization>>,
     collections: Arc<HashMap<String, Collection>>,
     encrypted_search_term: cipher::Cipher,
     collection_selection: CollectionSelection,
+    api_key: Option<Arc<ApiKey>>,
 }
 
 pub struct Unlocking {
@@ -260,14 +263,16 @@ impl<'a> StatefulUserData<'a, LoggedOut> {
         self,
         master_key: Arc<MasterKey>,
         master_password_hash: Arc<MasterPasswordHash>,
-        pbkdf: Arc<dyn cipher::Pbkdf>,
+        pbkdf: Arc<PbkdfParameters>,
         email: Arc<String>,
+        api_key: Option<Arc<ApiKey>>,
     ) -> StatefulUserData<'a, LoggingIn> {
         self.user_data.state_data = AppStateData::LoggingIn(LoggingIn {
             email,
             pbkdf,
             master_key,
             master_password_hash,
+            api_key,
         });
 
         StatefulUserData::new(self.user_data)
@@ -323,6 +328,13 @@ impl<'a> StatefulUserData<'a, LoggedIn> {
     pub fn token(&self) -> Arc<TokenResponseSuccess> {
         get_state_data!(&self.user_data.state_data, AppStateData::LoggedIn)
             .token
+            .clone()
+    }
+
+    pub fn api_key(&self) -> Option<Arc<ApiKey>> {
+        get_state_data!(&self.user_data.state_data, AppStateData::LoggedIn)
+            .logging_in_data
+            .api_key
             .clone()
     }
 
@@ -389,6 +401,7 @@ impl<'a> StatefulUserData<'a, Unlocked> {
             collections: unlocked_data.collections,
             encrypted_search_term: enc_search_term.unwrap_or_default(),
             collection_selection,
+            api_key: unlocked_data.logged_in_data.logging_in_data.api_key,
         };
 
         self.user_data.state_data = AppStateData::Locked(locked_data);
@@ -485,9 +498,15 @@ impl<'a> StatefulUserData<'a, Locked> {
             .clone()
     }
 
-    pub fn pbkdf(&self) -> Arc<dyn Pbkdf> {
+    pub fn pbkdf(&self) -> Arc<PbkdfParameters> {
         get_state_data!(&self.user_data.state_data, AppStateData::Locked)
             .pbkdf
+            .clone()
+    }
+
+    pub fn api_key(&self) -> Option<Arc<ApiKey>> {
+        get_state_data!(&self.user_data.state_data, AppStateData::Locked)
+            .api_key
             .clone()
     }
 
@@ -495,6 +514,7 @@ impl<'a> StatefulUserData<'a, Locked> {
         self,
         master_key: Arc<MasterKey>,
         master_password_hash: Arc<MasterPasswordHash>,
+        api_key: Option<Arc<ApiKey>>,
     ) -> StatefulUserData<'a, Unlocking> {
         let state_data =
             std::mem::replace(&mut self.user_data.state_data, AppStateData::Intermediate);
@@ -507,6 +527,7 @@ impl<'a> StatefulUserData<'a, Locked> {
                     pbkdf: locked_data.pbkdf,
                     master_key,
                     master_password_hash,
+                    api_key,
                 },
                 token: locked_data.token,
             },

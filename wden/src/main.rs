@@ -1,11 +1,17 @@
+use std::time::Duration;
+
 use clap::{
     builder::{StringValueParser, TypedValueParser},
     Parser,
 };
+use indicatif::ProgressBar;
 use reqwest::Url;
 use tabled::{settings::Style, Table, Tabled};
 use wden::{
-    bitwarden::server::{BitwardenCloudRegion, ServerConfiguration},
+    bitwarden::{
+        apikey::ApiKey,
+        server::{BitwardenCloudRegion, ServerConfiguration},
+    },
     profile::ProfileStore,
 };
 
@@ -78,7 +84,7 @@ struct Opts {
     /// This option can be used to avoid login issues due to incorrect bot detection in Bitwarden cloud environments.
     #[arg(long, requires="api_key_client_secret", help_heading=Some("API Keys"))]
     api_key_client_id: Option<String>,
-     
+
     #[arg(long, requires="api_key_client_id", help_heading=Some("API Keys"))]
     api_key_client_secret: Option<String>,
 
@@ -118,19 +124,28 @@ async fn main() {
         Some(ServerConfiguration::cloud(region))
     } else if let Some(url) = opts.server_url {
         Some(ServerConfiguration::single_host(url))
-    } else if let Some((api_url, identity_url)) = opts.api_server_url.zip(opts.identity_server_url) {
+    } else if let Some((api_url, identity_url)) = opts.api_server_url.zip(opts.identity_server_url)
+    {
         Some(ServerConfiguration::separate_hosts(api_url, identity_url))
     } else {
         None
     };
 
-    if let Some(((client_id, client_secret), email)) = opts.api_key_client_id.zip(
-        opts.api_key_client_secret).zip(opts.api_key_login_email) {
+    if let Some(((client_id, client_secret), email)) = opts
+        .api_key_client_id
+        .zip(opts.api_key_client_secret)
+        .zip(opts.api_key_login_email)
+    {
         store_api_keys(
-            opts.profile, server_config,
-            client_id, client_secret,
-            email, opts.accept_invalid_certs)
-            .await.unwrap();
+            opts.profile,
+            server_config,
+            client_id,
+            client_secret,
+            email,
+            opts.accept_invalid_certs,
+        )
+        .await
+        .unwrap();
         return;
     }
 
@@ -173,25 +188,102 @@ fn list_profiles() -> std::io::Result<()> {
     Ok(())
 }
 
-async fn store_api_keys(profile: String, server_config: Option<ServerConfiguration>, client_id: String, client_secret: String, email: String, accept_invalid_certs: bool) -> anyhow::Result<()> {
-    let (global_settings, profile_data, profile_store) = wden::ui::launch::load_profile(
-        profile,
-        server_config,
-        accept_invalid_certs,
-        false,
-    );
+async fn store_api_keys(
+    profile: String,
+    server_config: Option<ServerConfiguration>,
+    client_id: String,
+    client_secret: String,
+    email: String,
+    accept_invalid_certs: bool,
+) -> anyhow::Result<()> {
+    use console::style;
+    use std::io::Write;
+    use wden::bitwarden::cipher;
+
+    let spinner = ProgressBar::new_spinner();
+    spinner.set_message("Loading data...");
+    spinner.enable_steady_tick(Duration::from_millis(200));
+
+    let (global_settings, _profile_data, profile_store) =
+        wden::ui::launch::load_profile(profile, server_config, accept_invalid_certs, false);
 
     let client = wden::bitwarden::api::ApiClient::new(
         &global_settings.server_configuration,
         &global_settings.device_id,
-        global_settings.accept_invalid_certs
+        global_settings.accept_invalid_certs,
     );
 
-    let res = client.get_token_with_api_key(
-        &client_id, &client_secret, &email
-    ).await?;
+    let api_key = ApiKey::new(email.clone(), client_id, client_secret);
 
-    println!("{res}");
+    let token_res = client.get_token_with_api_key(&api_key).await?;
+    let pbkdf_params = token_res
+        .pbkdf_parameters()
+        .expect("Token response did not include Pbkdf parameters");
+    spinner.finish_and_clear();
+
+    println!(
+        "\n{}",
+        style(":: Enter your master password ::")
+            .bold()
+            .bright()
+            .white()
+    );
+    println!("wden will encrypt the API key with an encryption key derived from your master password, and store it in profile `{}`\n", &global_settings.profile);
+
+    let mut password: String;
+
+    loop {
+        print!(
+            "{}",
+            style(":: Enter master password: ").bold().bright().white()
+        );
+        std::io::stdout().flush().unwrap();
+
+        password = rpassword::read_password()?;
+
+        let spinner = ProgressBar::new_spinner();
+        spinner.set_message("Validating password");
+        spinner.enable_steady_tick(Duration::from_millis(200));
+
+        let check_res = cipher::create_master_key(&email, &password, &pbkdf_params)
+            .and_then(|mk| cipher::decrypt_symmetric_keys(&token_res.key, &mk));
+
+        spinner.finish_and_clear();
+
+        if check_res.is_ok() {
+            break;
+        } else {
+            println!("Invalid password.")
+        }
+    }
+
+    let spinner = ProgressBar::new_spinner();
+    spinner.set_message("Encrypting API key");
+    spinner.enable_steady_tick(Duration::from_millis(200));
+
+    let enc_api_key = api_key.encrypt(&global_settings.profile, &email, &password)?;
+    profile_store
+        .edit(|d| {
+            d.saved_email = Some(email);
+            d.encrypted_api_key = Some(enc_api_key);
+        })
+        .unwrap();
+
+    spinner.finish_and_clear();
+
+    println!(
+        "{}",
+        style(":: API key encrypted and stored")
+            .bold()
+            .bright()
+            .white()
+    );
+    println!("You can now start wden with this profile without the API key arguments. Example:");
+    println!(
+        "\t{} --profile {}",
+        std::env::args().next().unwrap(),
+        global_settings.profile
+    );
 
     Ok(())
 }

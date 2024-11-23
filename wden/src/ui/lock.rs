@@ -73,10 +73,11 @@ fn submit_unlock(c: &mut Cursive) {
     let pbkdf = user_data.pbkdf();
     let email = user_data.email();
     let token_key = &user_data.token().key;
+    let api_key = user_data.api_key();
 
     let keys_res =
         (|| -> Result<(Arc<cipher::MasterKey>, Arc<cipher::MasterPasswordHash>), CipherError> {
-            let master_key = Arc::new(pbkdf.create_master_key(&email, &password)?);
+            let master_key = Arc::new(cipher::create_master_key(&email, &password, &pbkdf)?);
             let master_pw_hash =
                 Arc::new(cipher::create_master_password_hash(&master_key, &password));
             // Verify that the password was correct by checking if token key can be decrypted
@@ -105,7 +106,7 @@ fn submit_unlock(c: &mut Cursive) {
         }
         Ok((master_key, master_pw_hash)) => {
             // Success, store keys, restore other data and continue
-            let user_data = user_data.into_unlocking(master_key, master_pw_hash);
+            let user_data = user_data.into_unlocking(master_key, master_pw_hash, api_key);
 
             let search_term = user_data.decrypt_search_term().unwrap_or_default();
             let collection_selection = user_data.collection_selection();
