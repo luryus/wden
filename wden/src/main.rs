@@ -29,8 +29,9 @@ fn validate_profile_name(value: String) -> Result<String, &'static str> {
 #[derive(Parser)]
 #[command(version)]
 struct Opts {
-    /// Sets the profile that will be used. Profile names can only
-    /// include lowercase alphanumeric characters, dashes (-) and
+    /// Sets the profile that will be used.
+    /// 
+    /// Profile names can only include lowercase alphanumeric characters, dashes (-) and
     /// underscores (_).
     #[arg(
         short, long,
@@ -80,14 +81,19 @@ struct Opts {
         help_heading=Some("Server options"))]
     identity_server_url: Option<Url>,
 
-    /// Register this wden instance using a Bitwarden API key.
-    /// This option can be used to avoid login issues due to incorrect bot detection in Bitwarden cloud environments.
-    #[arg(long, requires="api_key_client_secret", help_heading=Some("API Keys"))]
+    /// Client secret of Bitwarden API key
+    /// 
+    /// The --api-key-* options can be used to store a Bitwarden API key to the wden profile.
+    /// This is a one-time operation. Subsequent launches without these flags will use the stored API key to log in.
+    /// This feature can be used to avoid login issues due to incorrect bot detection in Bitwarden cloud environments.
+    #[arg(long, requires="api_key_client_secret", requires="api_key_login_email", help_heading=Some("API Keys"))]
     api_key_client_id: Option<String>,
 
+    /// Client ID of Bitwarden API key
     #[arg(long, requires="api_key_client_id", help_heading=Some("API Keys"))]
     api_key_client_secret: Option<String>,
 
+    /// Email address of the API key account
     #[arg(long, requires="api_key_client_id", help_heading=Some("API Keys"))]
     api_key_login_email: Option<String>,
 
@@ -96,9 +102,9 @@ struct Opts {
     #[arg(long)]
     list_profiles: bool,
 
-    /// Accept invalid and untrusted (e.g. self-signed) certificates
-    /// when connecting to the server. This option makes connections
-    /// insecure, so avoid using it.
+    /// Danger: Accept invalid and untrusted (e.g. self-signed) certificates
+    /// 
+    /// This option makes connections insecure, so avoid using it.
     ///
     /// Note: this option is not stored in the profile settings.
     /// It must be specified every time when
@@ -273,7 +279,7 @@ async fn store_api_keys(
 
     println!(
         "{}",
-        style(":: API key encrypted and stored")
+        style(":: API key encrypted and stored ::")
             .bold()
             .bright()
             .white()
