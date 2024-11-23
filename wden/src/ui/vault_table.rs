@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use crate::bitwarden::{
     self,
@@ -18,6 +18,7 @@ use cursive::{
     wrap_impl, Cursive, View,
 };
 use cursive_table_view::{TableView, TableViewItem};
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use simsearch::SimSearch;
 use zeroize::Zeroize;
 
@@ -369,12 +370,14 @@ fn vault_table_view() -> impl View {
 }
 
 fn create_rows(user_data: &StatefulUserData<Unlocked>, user_keys: EncMacKeys) -> Vec<Row> {
+    let before = Instant::now();
+
     // Find all organization keys we will need
     let org_keys = user_data.get_org_keys_for_vault();
     let vault_data = user_data.vault_data();
 
     let mut rows: Vec<Row> = vault_data
-        .iter()
+        .par_iter()
         .filter_map(|(id, ci)| {
             let item_keys = resolve_item_keys(ci, (&user_keys).into(), |oid, _uk| {
                 org_keys.get(oid).map(|k| k.into())
@@ -401,6 +404,12 @@ fn create_rows(user_data: &StatefulUserData<Unlocked>, user_keys: EncMacKeys) ->
         })
         .collect();
     rows.sort();
+
+    let after = Instant::now();
+    let dur = after - before;
+
+    log::info!("create_rows: {}ms", dur.as_millis());
+
     rows
 }
 

@@ -1,13 +1,15 @@
 use crate::{
     bitwarden::{
         api::{self, CipherItem, Collection, Organization, TokenResponseSuccess},
-        cipher::{self, EncMacKeys, MasterKey, MasterPasswordHash, Pbkdf},
+        apikey::ApiKey,
+        cipher::{self, EncMacKeys, MasterKey, MasterPasswordHash, PbkdfParameters},
     },
     profile::{GlobalSettings, ProfileStore},
-};  
+};
 use anyhow::Context;
 use cipher::decrypt_symmetric_keys;
 use maybe_owned::MaybeOwned;
+use rayon::iter::{ParallelBridge, ParallelIterator};
 
 use std::{
     collections::HashMap,
@@ -36,20 +38,39 @@ pub struct LoggedOut;
 
 pub struct LoggingIn {
     email: Arc<String>,
-    pbkdf: Arc<dyn Pbkdf>,
+    pbkdf: Arc<PbkdfParameters>,
     master_key: Arc<cipher::MasterKey>,
     master_password_hash: Arc<cipher::MasterPasswordHash>,
+    api_key: Option<Arc<ApiKey>>,
+}
+
+pub struct Refreshing {
+    email: Arc<String>,
+    pbkdf: Arc<PbkdfParameters>,
+    master_key: Arc<cipher::MasterKey>,
+    api_key: Option<Arc<ApiKey>>,
+}
+
+impl From<LoggingIn> for Refreshing {
+    fn from(logging_in: LoggingIn) -> Self {
+        Self {
+            email: logging_in.email,
+            pbkdf: logging_in.pbkdf,
+            master_key: logging_in.master_key,
+            api_key: logging_in.api_key,
+        }
+    }
 }
 
 pub struct LoggedIn {
-    logging_in_data: LoggingIn,
+    refreshing_data: Refreshing,
     token: Arc<TokenResponseSuccess>,
 }
 
 impl LoggedIn {
     fn decrypt_keys(&self) -> Option<EncMacKeys> {
         let token_key = &self.token.key;
-        let master_key = &self.logging_in_data.master_key;
+        let master_key = &self.refreshing_data.master_key;
         decrypt_symmetric_keys(token_key, master_key).ok()
     }
 }
@@ -113,6 +134,7 @@ impl Unlocked {
             .map(|uk| {
                 self.organizations
                     .keys()
+                    .par_bridge()
                     .filter_map(|oid| {
                         self.decrypt_organization_keys(oid, &uk)
                             .map(|key| (oid, key))
@@ -126,13 +148,14 @@ impl Unlocked {
 
 pub struct Locked {
     email: Arc<String>,
-    pbkdf: Arc<dyn Pbkdf>,
+    pbkdf: Arc<PbkdfParameters>,
     token: Arc<TokenResponseSuccess>,
     vault_data: Arc<HashMap<String, CipherItem>>,
     organizations: Arc<HashMap<String, Organization>>,
     collections: Arc<HashMap<String, Collection>>,
     encrypted_search_term: cipher::Cipher,
     collection_selection: CollectionSelection,
+    api_key: Option<Arc<ApiKey>>,
 }
 
 pub struct Unlocking {
@@ -147,6 +170,7 @@ pub struct Unlocking {
 enum AppStateData {
     LoggedOut(LoggedOut),
     LoggingIn(LoggingIn),
+    Refreshing(Refreshing),
     LoggedIn(LoggedIn),
     Unlocked(Unlocked),
     Locked(Locked),
@@ -162,6 +186,7 @@ impl Display for AppStateData {
         match self {
             AppStateData::LoggedOut(_) => f.write_str("LoggedOut"),
             AppStateData::LoggingIn(_) => f.write_str("LoggingIn"),
+            AppStateData::Refreshing(_) => f.write_str("Refreshing"),
             AppStateData::LoggedIn(_) => f.write_str("LoggedIn"),
             AppStateData::Unlocked(_) => f.write_str("Unlocked"),
             AppStateData::Locked(_) => f.write_str("Locked"),
@@ -177,6 +202,9 @@ pub struct UserData {
     autolocker: Arc<Mutex<Autolocker>>,
     state_data: AppStateData,
 }
+
+/// A pseudo-state: either LoggingIn or Refreshing
+pub struct LoggingInLikeState;
 
 pub struct StatefulUserData<'a, T> {
     user_data: &'a mut UserData,
@@ -253,6 +281,14 @@ impl UserData {
             _ => None,
         }
     }
+
+    pub fn with_logging_in_like_state(&mut self) -> Option<StatefulUserData<LoggingInLikeState>> {
+        match &self.state_data {
+            AppStateData::Refreshing(_) => Some(StatefulUserData::new(self)),
+            AppStateData::LoggingIn(_) => Some(StatefulUserData::new(self)),
+            _ => None,
+        }
+    }
 }
 
 impl<'a> StatefulUserData<'a, LoggedOut> {
@@ -260,14 +296,16 @@ impl<'a> StatefulUserData<'a, LoggedOut> {
         self,
         master_key: Arc<MasterKey>,
         master_password_hash: Arc<MasterPasswordHash>,
-        pbkdf: Arc<dyn cipher::Pbkdf>,
+        pbkdf: Arc<PbkdfParameters>,
         email: Arc<String>,
+        api_key: Option<Arc<ApiKey>>,
     ) -> StatefulUserData<'a, LoggingIn> {
         self.user_data.state_data = AppStateData::LoggingIn(LoggingIn {
             email,
             pbkdf,
             master_key,
             master_password_hash,
+            api_key,
         });
 
         StatefulUserData::new(self.user_data)
@@ -276,29 +314,7 @@ impl<'a> StatefulUserData<'a, LoggedOut> {
 
 impl<'a> StatefulUserData<'a, LoggingIn> {
     pub fn into_logged_out(self) -> StatefulUserData<'a, LoggedOut> {
-        self.user_data
-            .autolocker
-            .lock()
-            .unwrap()
-            .clear_autolock_time();
-        self.user_data.state_data = AppStateData::LoggedOut(LoggedOut);
-        StatefulUserData::new(self.user_data)
-    }
-
-    pub fn into_logged_in(
-        self,
-        token: Arc<TokenResponseSuccess>,
-    ) -> StatefulUserData<'a, LoggedIn> {
-        let state_data =
-            std::mem::replace(&mut self.user_data.state_data, AppStateData::Intermediate);
-        let logging_in_data = get_state_data!(state_data, AppStateData::LoggingIn);
-
-        self.user_data.state_data = AppStateData::LoggedIn(LoggedIn {
-            logging_in_data,
-            token,
-        });
-
-        StatefulUserData::new(self.user_data)
+        into_logged_out_impl(self.user_data)
     }
 
     pub fn master_password_hash(&self) -> Arc<MasterPasswordHash> {
@@ -312,10 +328,43 @@ impl<'a> StatefulUserData<'a, LoggingIn> {
     }
 }
 
+impl<'a> StatefulUserData<'a, LoggingInLikeState> {
+    pub fn into_logged_in(
+        self,
+        token: Arc<TokenResponseSuccess>,
+    ) -> StatefulUserData<'a, LoggedIn> {
+        let state_data =
+            std::mem::replace(&mut self.user_data.state_data, AppStateData::Intermediate);
+
+        // LoggingIn-like: either LoggingIn or Refreshing
+        let refreshing_data = match state_data {
+            AppStateData::LoggingIn(logging_in) => logging_in.into(),
+            _ => get_state_data!(state_data, AppStateData::Refreshing),
+        };
+
+        self.user_data.state_data = AppStateData::LoggedIn(LoggedIn {
+            refreshing_data,
+            token,
+        });
+
+        StatefulUserData::new(self.user_data)
+    }
+
+    pub fn into_logged_out(self) -> StatefulUserData<'a, LoggedOut> {
+        into_logged_out_impl(self.user_data)
+    }
+}
+
+fn into_logged_out_impl(user_data: &mut UserData) -> StatefulUserData<'_, LoggedOut> {
+    user_data.autolocker.lock().unwrap().clear_autolock_time();
+    user_data.state_data = AppStateData::LoggedOut(LoggedOut);
+    StatefulUserData::new(user_data)
+}
+
 impl<'a> StatefulUserData<'a, LoggedIn> {
     pub fn email(&self) -> Arc<String> {
         get_state_data!(&self.user_data.state_data, AppStateData::LoggedIn)
-            .logging_in_data
+            .refreshing_data
             .email
             .clone()
     }
@@ -323,6 +372,13 @@ impl<'a> StatefulUserData<'a, LoggedIn> {
     pub fn token(&self) -> Arc<TokenResponseSuccess> {
         get_state_data!(&self.user_data.state_data, AppStateData::LoggedIn)
             .token
+            .clone()
+    }
+
+    pub fn api_key(&self) -> Option<Arc<ApiKey>> {
+        get_state_data!(&self.user_data.state_data, AppStateData::LoggedIn)
+            .refreshing_data
+            .api_key
             .clone()
     }
 
@@ -347,12 +403,12 @@ impl<'a> StatefulUserData<'a, LoggedIn> {
         StatefulUserData::new(self.user_data)
     }
 
-    pub fn into_logging_in(self) -> StatefulUserData<'a, LoggingIn> {
+    pub fn into_refreshing(self) -> StatefulUserData<'a, Refreshing> {
         let state_data =
             std::mem::replace(&mut self.user_data.state_data, AppStateData::Intermediate);
         let logged_in_data = get_state_data!(state_data, AppStateData::LoggedIn);
 
-        self.user_data.state_data = AppStateData::LoggingIn(logged_in_data.logging_in_data);
+        self.user_data.state_data = AppStateData::Refreshing(logged_in_data.refreshing_data);
 
         StatefulUserData::new(self.user_data)
     }
@@ -381,14 +437,15 @@ impl<'a> StatefulUserData<'a, Unlocked> {
             .and_then(|user_keys| cipher::Cipher::encrypt(search_term.as_bytes(), &user_keys).ok());
 
         let locked_data = Locked {
-            email: unlocked_data.logged_in_data.logging_in_data.email,
-            pbkdf: unlocked_data.logged_in_data.logging_in_data.pbkdf,
+            email: unlocked_data.logged_in_data.refreshing_data.email,
+            pbkdf: unlocked_data.logged_in_data.refreshing_data.pbkdf,
             token: unlocked_data.logged_in_data.token,
             vault_data: unlocked_data.vault_data,
             organizations: unlocked_data.organizations,
             collections: unlocked_data.collections,
             encrypted_search_term: enc_search_term.unwrap_or_default(),
             collection_selection,
+            api_key: unlocked_data.logged_in_data.refreshing_data.api_key,
         };
 
         self.user_data.state_data = AppStateData::Locked(locked_data);
@@ -485,16 +542,22 @@ impl<'a> StatefulUserData<'a, Locked> {
             .clone()
     }
 
-    pub fn pbkdf(&self) -> Arc<dyn Pbkdf> {
+    pub fn pbkdf(&self) -> Arc<PbkdfParameters> {
         get_state_data!(&self.user_data.state_data, AppStateData::Locked)
             .pbkdf
+            .clone()
+    }
+
+    pub fn api_key(&self) -> Option<Arc<ApiKey>> {
+        get_state_data!(&self.user_data.state_data, AppStateData::Locked)
+            .api_key
             .clone()
     }
 
     pub fn into_unlocking(
         self,
         master_key: Arc<MasterKey>,
-        master_password_hash: Arc<MasterPasswordHash>,
+        api_key: Option<Arc<ApiKey>>,
     ) -> StatefulUserData<'a, Unlocking> {
         let state_data =
             std::mem::replace(&mut self.user_data.state_data, AppStateData::Intermediate);
@@ -502,11 +565,11 @@ impl<'a> StatefulUserData<'a, Locked> {
 
         let unlocking_data = Unlocking {
             logged_in_data: LoggedIn {
-                logging_in_data: LoggingIn {
+                refreshing_data: Refreshing {
                     email: locked_data.email,
                     pbkdf: locked_data.pbkdf,
                     master_key,
-                    master_password_hash,
+                    api_key,
                 },
                 token: locked_data.token,
             },

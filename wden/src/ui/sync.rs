@@ -23,6 +23,7 @@ pub fn do_sync(cursive: &mut Cursive, just_refreshed_token: bool) {
     let global_settings = user_data.global_settings();
     let email = user_data.email();
     let token = user_data.token();
+    let api_key = user_data.api_key();
 
     let should_refresh = token.should_refresh();
     if should_refresh && just_refreshed_token {
@@ -36,7 +37,8 @@ pub fn do_sync(cursive: &mut Cursive, just_refreshed_token: bool) {
     }
 
     if !just_refreshed_token && (should_refresh || global_settings.always_refresh_token_on_sync) {
-        let _ = user_data.into_logging_in();
+        let _ = user_data.into_refreshing();
+        let is_api_key_login = api_key.is_some();
         cursive.async_op(
             async move {
                 log::info!("Refreshing access token");
@@ -46,10 +48,10 @@ pub fn do_sync(cursive: &mut Cursive, just_refreshed_token: bool) {
                     global_settings.accept_invalid_certs,
                 );
 
-                client.refresh_token(&token).await
+                client.refresh_token(&token, api_key.as_deref()).await
             },
             move |siv, refresh_res| {
-                login::handle_login_response(siv, refresh_res, email, false);
+                login::handle_login_response(siv, refresh_res, email, false, is_api_key_login);
             },
         );
         // Login response handling above calls do_sync again, so nothing to do here

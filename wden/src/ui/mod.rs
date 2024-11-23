@@ -4,7 +4,7 @@ mod collections;
 pub mod components;
 mod data;
 mod item_details;
-mod launch;
+pub mod launch;
 mod lock;
 mod login;
 mod search;

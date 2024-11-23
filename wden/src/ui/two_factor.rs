@@ -48,7 +48,7 @@ pub fn two_factor_dialog(
             let ud = siv.get_user_data().with_logging_in_state().unwrap();
             let ud = ud.into_logged_out();
             let pn = &ud.global_settings().profile;
-            let d = login_dialog(pn, Some(email3.to_string()), had_captcha_token);
+            let d = login_dialog(pn, Some(email3.to_string()), false, had_captcha_token);
             siv.clear_layers();
             siv.add_layer(d);
         })
@@ -90,6 +90,6 @@ fn submit_two_factor(c: &mut Cursive, email: Arc<String>, personal_api_key: Opti
             )
             .await
         },
-        move |siv, res| handle_login_response(siv, res, email2, false),
+        move |siv, res| handle_login_response(siv, res, email2, false, false),
     );
 }

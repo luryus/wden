@@ -5,7 +5,10 @@ use reqwest::Url;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::bitwarden::server::{BitwardenCloudRegion, ServerConfiguration};
+use crate::bitwarden::{
+    apikey::EncryptedApiKey,
+    server::{BitwardenCloudRegion, ServerConfiguration},
+};
 
 #[derive(Deserialize, Serialize)]
 pub struct ProfileData {
@@ -19,6 +22,8 @@ pub struct ProfileData {
     pub device_id: String,
     #[serde(default)]
     pub server_configuration: ServerConfiguration,
+    #[serde(default)]
+    pub encrypted_api_key: Option<EncryptedApiKey>,
 }
 
 impl Default for ProfileData {
@@ -31,6 +36,7 @@ impl Default for ProfileData {
             autolock_duration: Duration::from_secs(5 * 60), // 5 minutes
             device_id: format!("{}", Uuid::new_v4()),
             server_configuration: Default::default(),
+            encrypted_api_key: None,
         }
     }
 }

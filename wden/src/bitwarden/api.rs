@@ -1,6 +1,7 @@
-use super::cipher::Cipher;
+use super::apikey::ApiKey;
+use super::cipher::{Cipher, KeyDerivationFunction, PbkdfParameters};
 use super::server::ServerConfiguration;
-use anyhow::Error;
+use anyhow::{bail, Error};
 use base64::prelude::*;
 use reqwest;
 use reqwest::Url;
@@ -78,7 +79,7 @@ impl ApiClient {
         c
     }
 
-    pub async fn prelogin(&self, user_email: &str) -> Result<PreloginResponse, Error> {
+    pub async fn prelogin(&self, user_email: &str) -> Result<PbkdfParameters, Error> {
         let mut body = HashMap::new();
         body.insert("email", user_email);
 
@@ -93,7 +94,7 @@ impl ApiClient {
             .error_for_status()?;
 
         let res: PreloginResponse = res.json().await?;
-        Ok(res)
+        Ok(res.into())
     }
 
     /// Make Bitwarden (OAuth) /identity/token api call for authenticating.
@@ -157,6 +158,7 @@ impl ApiClient {
             .await?;
 
         if res.status() == 400 {
+            log::info!("{:?}", &res);
             let body = res.json::<HashMap<String, serde_json::Value>>().await?;
             if body.contains_key("TwoFactorProviders") {
                 let providers = body
@@ -198,21 +200,89 @@ impl ApiClient {
         }
 
         let res = res
-            .error_for_status()?
+            .error_for_status()
+            .inspect_err(|e| log::warn!("Error in token request: {e}"))?
             .json::<TokenResponseSuccess>()
             .await?;
 
         Ok(TokenResponse::Success(Box::new(res)))
     }
 
+    pub async fn get_token_with_api_key(
+        &self,
+        api_key: &ApiKey,
+    ) -> Result<TokenResponseSuccess, Error> {
+        let device_type = (get_device_type() as i8).to_string();
+        let mut body = HashMap::new();
+        body.insert("grant_type", "client_credentials");
+        body.insert("username", &api_key.email);
+        body.insert("client_id", &api_key.client_id);
+        body.insert("client_secret", &api_key.client_secret);
+        body.insert("scope", "api");
+        body.insert("deviceName", get_device_name());
+        body.insert("deviceIdentifier", &self.device_identifier);
+        body.insert("deviceType", &device_type);
+
+        let url = self.identity_base_url.join("connect/token")?;
+
+        let res = self
+            .http_client
+            .post(url)
+            .form(&body)
+            // As of October 2021, Bitwarden (prod) wants the email as base64-encoded in a header
+            // for some security reason
+            .header("auth-email", BASE64_URL_SAFE.encode(&api_key.email))
+            .header("device-type", &device_type)
+            // As of May 2024, Bitwarden wants these Bitwarden-Client- headers as well
+            .header("Bitwarden-Client-Name", "wden")
+            .header("Bitwarden-Client-Version", env!("CARGO_PKG_VERSION"))
+            .send()
+            .await?;
+
+        if res.status() == 400 {
+            log::info!("{:?}", &res);
+            let body = res.json::<HashMap<String, serde_json::Value>>().await?;
+            // The error models often include the error message,
+            // so try to get and show it.
+            let server_error_message = body
+                .get("ErrorModel")
+                .and_then(|em| em.as_object())
+                .and_then(|em| em.get("Message"))
+                .and_then(|m| m.as_str());
+
+            return match server_error_message {
+                Some(msg) => Err(anyhow::anyhow!("{}", msg)),
+                None => Err(anyhow::anyhow!("Error logging in: {:?}", body)),
+            };
+        }
+
+        let res = res
+            .error_for_status()
+            .inspect_err(|e| log::warn!("Error in token request: {e}"))?
+            .json::<TokenResponseSuccess>()
+            .await?;
+
+        Ok(res)
+    }
+
     pub async fn refresh_token(
         &self,
         token: &TokenResponseSuccess,
+        api_key: Option<&ApiKey>,
     ) -> Result<TokenResponse, Error> {
+        if let Some(ak) = api_key {
+            let res = self.get_token_with_api_key(ak).await?;
+            return Ok(TokenResponse::Success(Box::new(res)));
+        }
+
         let mut body = HashMap::new();
-        body.insert("grant_type", "refresh_token");
-        body.insert("refresh_token", &token.refresh_token);
-        body.insert("client_id", "cli");
+        if let Some(rt) = token.refresh_token.as_ref() {
+            body.insert("grant_type", "refresh_token");
+            body.insert("refresh_token", rt);
+            body.insert("client_id", "cli");
+        } else {
+            bail!("Refresh token or api key not present while trying to refresh");
+        }
 
         let url = self.identity_base_url.join("connect/token")?;
 
@@ -268,12 +338,16 @@ pub struct TokenResponseSuccess {
     pub private_key: Cipher,
     pub access_token: String,
     expires_in: u32,
-    pub refresh_token: String,
+    pub refresh_token: Option<String>,
     #[serde(alias = "TwoFactorToken")]
     #[serde(alias = "twoFactorToken")]
     pub two_factor_token: Option<String>,
     #[serde(skip, default = "token_response_timestamp")]
     token_timestamp: Instant,
+
+    #[serde(default, flatten)]
+    // When authenticating with an API key, the token response also contains the Pbkdf parameters
+    kdf_parameters: Option<PreloginResponse>,
 }
 
 impl TokenResponseSuccess {
@@ -288,6 +362,10 @@ impl TokenResponseSuccess {
             Some(d) if d < Duration::from_secs(60 * 4) => true,
             _ => false,
         }
+    }
+
+    pub fn pbkdf_parameters(&self) -> Option<PbkdfParameters> {
+        self.kdf_parameters.as_ref().map(|x| x.clone().into())
     }
 }
 
@@ -340,14 +418,23 @@ impl TryFrom<&str> for TwoFactorProviderType {
 
 #[derive(Deserialize_repr, Debug, Clone, Default)]
 #[repr(u8)]
-pub enum KdfFunction {
+enum KdfFunction {
     #[default]
     Pbkdf2 = 0,
     Argon2id = 1,
 }
 
-#[derive(Deserialize, Debug)]
-pub struct PreloginResponse {
+impl From<KdfFunction> for KeyDerivationFunction {
+    fn from(kdf_function: KdfFunction) -> Self {
+        match kdf_function {
+            KdfFunction::Pbkdf2 => Self::Pbkdf2,
+            KdfFunction::Argon2id => Self::Argon2id,
+        }
+    }
+}
+
+#[derive(Deserialize, Debug, Clone)]
+struct PreloginResponse {
     #[serde(alias = "kdf", default)]
     #[serde(alias = "Kdf")]
     pub kdf: KdfFunction,
@@ -360,6 +447,17 @@ pub struct PreloginResponse {
     #[serde(alias = "kdfParallelism")]
     #[serde(alias = "KdfParallelism")]
     pub kdf_parallelism: Option<u32>,
+}
+
+impl From<PreloginResponse> for PbkdfParameters {
+    fn from(val: PreloginResponse) -> Self {
+        PbkdfParameters {
+            kdf: val.kdf.into(),
+            iterations: val.kdf_iterations,
+            memory_mib: val.kdf_memory_mib.unwrap_or_default(),
+            parallelism: val.kdf_parallelism.unwrap_or_default(),
+        }
+    }
 }
 
 #[derive(Deserialize, Debug)]
