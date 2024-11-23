@@ -231,7 +231,9 @@ pub fn handle_login_response(
     match res {
         Result::Err(e) => {
             let err_msg = format!("Error: {e:?}");
-            if let Some(ud) = cursive.get_user_data().with_logging_in_state() {
+            // User data may be either in the LoggingIn or Refreshing state.
+            // In both cases move to LoggedOut
+            if let Some(ud) = cursive.get_user_data().with_logging_in_like_state() {
                 ud.into_logged_out();
             }
             cursive.add_layer(Dialog::text(err_msg).title("Login error").button(
@@ -257,7 +259,10 @@ pub fn handle_login_response(
             match token {
                 bitwarden::api::TokenResponse::Success(t) => {
                     cursive.pop_layer();
-                    let ud = cursive.get_user_data().with_logging_in_state().unwrap();
+                    let ud = cursive
+                        .get_user_data()
+                        .with_logging_in_like_state()
+                        .unwrap();
                     // Try to store the email, unless this is an api key login. Those must already
                     // have the email stored, and the email is immutable
                     if !api_key_login {

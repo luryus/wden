@@ -37,7 +37,7 @@ pub fn do_sync(cursive: &mut Cursive, just_refreshed_token: bool) {
     }
 
     if !just_refreshed_token && (should_refresh || global_settings.always_refresh_token_on_sync) {
-        let _ = user_data.into_logging_in();
+        let _ = user_data.into_refreshing();
         let is_api_key_login = api_key.is_some();
         cursive.async_op(
             async move {
