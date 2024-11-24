@@ -172,6 +172,8 @@ struct ProfileListRow<'a> {
     server_config: &'a ServerConfiguration,
     #[tabled(rename = "SAVED EMAIL")]
     saved_email: &'a str,
+    #[tabled(rename = "API KEY")]
+    api_key: &'static str
 }
 
 fn list_profiles() -> std::io::Result<()> {
@@ -184,6 +186,7 @@ fn list_profiles() -> std::io::Result<()> {
             name,
             server_config: &profile.server_configuration,
             saved_email: profile.saved_email.as_deref().unwrap_or("None"),
+            api_key: if profile.encrypted_api_key.is_some() { "✓" } else { "" },
         });
 
         let mut table = Table::new(rows);
