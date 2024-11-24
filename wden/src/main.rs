@@ -155,6 +155,7 @@ async fn main() {
         return;
     }
 
+    let _ph = wden::ui::panic_handler::PanicHandler::new();
     wden::ui::launch(
         opts.profile,
         server_config,

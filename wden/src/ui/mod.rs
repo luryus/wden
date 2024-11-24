@@ -12,5 +12,6 @@ mod sync;
 mod two_factor;
 mod util;
 mod vault_table;
+pub mod panic_handler;
 
 pub use launch::launch;

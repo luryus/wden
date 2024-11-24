@@ -46,20 +46,6 @@ pub fn launch(
         false,
     ));
 
-    let hook = std::panic::take_hook();
-    std::panic::set_hook(Box::new(move |info| {
-        use cursive::backends::crossterm::crossterm::*;
-        _ = execute!(
-            std::io::stdout(),
-            terminal::LeaveAlternateScreen,
-            cursor::Show,
-            event::DisableMouseCapture,
-        );
-        _ = terminal::disable_raw_mode();
-
-        hook(info)
-    }));
-
     run(siv);
 }
 
