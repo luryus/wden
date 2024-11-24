@@ -42,7 +42,7 @@ anyhow = "1.0"
 zeroize = { version = "1.7", features = ["zeroize_derive"] }
 arrayvec = "0.7"
 simsearch = "0.2"
-tabled = "0.16"
+tabled = "0.17"
 maybe-owned = "0.3.4"
 indicatif = "0.17.9"
 console = "0.15.8"
