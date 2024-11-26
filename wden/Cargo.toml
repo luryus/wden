@@ -8,6 +8,9 @@ license = "MIT"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[features]
+puppet-integration-tests = []
+
 [dependencies]
 base64 = "0.22"
 rand = "0.8"
@@ -57,3 +60,6 @@ x11-clipboard = { git = "https://github.com/luryus/x11-clipboard", tag = "v0.9.1
 x11rb = "0.13"
 # Use native_lib because the rust implementation currently does not work with KDE
 wl-clipboard-rs = { version = "0.9", features = ["native_lib"] }
+
+[dev-dependencies]
+testcontainers = "0.23.1"
