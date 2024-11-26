@@ -84,8 +84,7 @@ jobs:
       shell: bash
       run: ls -laR artifacts/
     - uses: softprops/action-gh-release@v2
-      with:
-        draft: true        
+      with:     
         body_path: artifacts/release-changelog.md
         body: ''  # Empty string as fallback
         files: |
