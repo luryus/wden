@@ -11,17 +11,16 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  create_release:
-    name: Create release
+  extract_changelog:
+    name: Extract changelog
     runs-on: ubuntu-22.04
     if: startsWith(github.ref, 'refs/tags/')
 
     steps:
     - uses: actions/checkout@v4
-    - uses: actions-rs/toolchain@v1
-      with:
-        toolchain: stable
-        profile: minimal
+    - uses: dtolnay/rust-toolchain@stable
+    - uses: Swatinem/rust-cache@v2
+
     - name: Extract changelog
       shell: bash
       continue-on-error: true  # If parsing the changelog fails, continue with empty changelog
@@ -29,11 +28,11 @@ jobs:
         cargo install --verbose --version 0.4.7 parse-changelog
         export VERSION="$GITHUB_REF_NAME"
         parse-changelog CHANGELOG.md "$VERSION" > release-changelog.md
-    - name: Release
-      uses: softprops/action-gh-release@v2
+    
+    - uses: actions/upload-artifact@v4
       with:
-        body_path: release-changelog.md
-        body: ''  # Empty string as fallback
+        name: release-changelog
+        path: release-changelog.md
 
   build:
     strategy:
@@ -66,14 +65,25 @@ jobs:
 
     - uses: actions/upload-artifact@v4
       with:
-        name: ${{ matrix.os }} wden binary
+        name: wden-bin-${{ matrix.os }}
         path: out/
 
-    # For tags, create a release
-    - name: Release
-      uses: softprops/action-gh-release@v2
-      if: startsWith(github.ref, 'refs/tags/')
+  publish_release:
+    name: Publish release
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-22.04
+    needs: [extract_changelog, build]
+
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/download-artifact@v4
       with:
+        merge-multiple: true
+    - uses: softprops/action-gh-release@v2
+      with:
+        draft: true        
+        body_path: release-changelog.md
+        body: ''  # Empty string as fallback
         files: |
           LICENSE
           out/wden-*
