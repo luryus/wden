@@ -79,6 +79,10 @@ jobs:
     - uses: actions/download-artifact@v4
       with:
         merge-multiple: true
+        path: artifacts/
+    - name: list artifacts
+      shell: bash
+      run: ls -laR artifacts/
     - uses: softprops/action-gh-release@v2
       with:
         draft: true        
