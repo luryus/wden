@@ -2,7 +2,7 @@
 
 ## next
 
-## 0.13.0-rc.2
+## 0.13.0-rc.3
 
 Prerelease for CI release pipeline testing.
 
