@@ -86,8 +86,8 @@ jobs:
     - uses: softprops/action-gh-release@v2
       with:
         draft: true        
-        body_path: release-changelog.md
+        body_path: artifacts/release-changelog.md
         body: ''  # Empty string as fallback
         files: |
           LICENSE
-          out/wden-*
+          artifacts/wden-*
