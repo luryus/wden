@@ -2,9 +2,7 @@
 
 ## next
 
-## 0.13.0-rc.3
-
-Prerelease for CI release pipeline testing.
+## 0.13.0
 
 - Add support for signing in using Bitwarden API keys instead of just email and password. This should be a workaround for issue #366 where Bitwarden's cloud bot detection does not allow wden to log in.
 - Internal refactoring and improvements
