@@ -1,6 +1,6 @@
 [package]
 name = "wden"
-version = "0.13.0"
+version = "0.13.1"
 authors = ["Lauri Koskela <lk@lkoskela.com>"]
 edition = "2021"
 default-run = "wden"
