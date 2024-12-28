@@ -15,6 +15,11 @@ use super::{util::cursive_ext::CursiveExt, vault_table};
 const VIEW_NAME_PASSWORD: &str = "password";
 
 pub fn lock_vault(c: &mut Cursive) {
+    if c.get_user_data().with_locked_state().is_some() {
+        // Already locked
+        return;
+    }
+
     // Get the search term, we want to restore it after unlocking
     let (search_term, collection_selection) = vault_table::get_filters(c).unwrap_or_default();
 
@@ -25,7 +30,7 @@ pub fn lock_vault(c: &mut Cursive) {
     let ud = c
         .get_user_data()
         .with_unlocked_state()
-        .unwrap()
+        .expect("The app state should be 'Unlocked' when trying to lock")
         .into_locked(&search_term, collection_selection);
     let global_settings = ud.global_settings();
     let profile = global_settings.profile.as_str();
