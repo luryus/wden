@@ -394,7 +394,7 @@ fn create_rows(user_data: &StatefulUserData<Unlocked>, user_keys: EncMacKeys) ->
                     CipherData::Login(_) => "L",
                     CipherData::Card(_) => "C",
                     CipherData::Identity(_) => "I",
-                    CipherData::SecureNote => "N",
+                    CipherData::SecureNote(_) => "N",
                     _ => "",
                 }
                 .to_string(),

@@ -41,7 +41,7 @@ pub fn item_detail_dialog(ud: &StatefulUserData<Unlocked>, item_id: &str) -> Opt
 
     let dialog_contents = match item.data {
         CipherData::Login(..) => login_dialog_contents(item, &keys),
-        CipherData::SecureNote => note_dialog_contents(item, &keys),
+        CipherData::SecureNote(..) => note_dialog_contents(item, &keys),
         CipherData::Card(..) => card_dialog_contents(item, &keys),
         CipherData::Identity(..) => identity_dialog_contents(item, &keys),
         _ => LinearLayout::vertical(),
