@@ -63,4 +63,4 @@ wl-clipboard-rs = { version = "0.9", features = ["native_lib"] }
 
 [dev-dependencies]
 testcontainers = "0.23.1"
-tokio-test-shutdown-timeout = { path = "../../tokio-test-shutdown-timeout" }
+tokio-test-shutdown-timeout = "0.0.2"
