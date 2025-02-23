@@ -2,11 +2,12 @@ use api::VaultwardenClient;
 use testcontainers::{
     core::{IntoContainerPort, WaitFor}, runners::AsyncRunner, ContainerAsync, GenericImage, ImageExt
 };
-use user_init::{PBKDF2_USER_EMAIL, PBKDF2_USER_MASTER_PW_HASH};
+use user_init::{PBKDF2_USER_EMAIL, PBKDF2_USER_MASTER_PW_HASH, PBKDF2_USER_PASSWORD};
 
 mod user_init;
 mod vault_init;
 mod api;
+pub mod testdata;
 
 pub struct IntegrationTestContext {
     _container: ContainerAsync<GenericImage>,
@@ -23,11 +24,11 @@ pub async fn setup() -> anyhow::Result<IntegrationTestContext> {
         .await?;
 
     let http_port = container.get_host_port_ipv4(80.tcp()).await?;
-    let client = VaultwardenClient::new(http_port);
+    let mut client = VaultwardenClient::new(http_port);
 
     user_init::init_users(&client).await?;
 
-    vault_init::init_vault_data(&client, PBKDF2_USER_EMAIL, PBKDF2_USER_MASTER_PW_HASH).await?;
+    vault_init::init_vault_data(&mut client, PBKDF2_USER_EMAIL, PBKDF2_USER_MASTER_PW_HASH, PBKDF2_USER_PASSWORD).await?;
 
     Ok(IntegrationTestContext {
         _container: container,
