@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use cursive::{
-    theme::BaseColor, theme::Color, theme::PaletteColor::*, theme::Theme, Cursive, CursiveRunnable,
+    theme::{BaseColor, Color, PaletteColor::*, Theme}, Cursive, CursiveRunnable
 };
 
 use crate::{
@@ -10,6 +10,38 @@ use crate::{
 };
 
 use super::{autolock, data::UserData, login::login_dialog};
+
+#[cfg(feature = "puppet-integration-tests")]
+use {
+    std::sync::OnceLock,
+    cursive::{
+        backends::puppet::observed::ObservedScreen,
+        event::Event,
+        reexports::crossbeam_channel::{Receiver, Sender},
+    }
+};
+
+#[cfg(feature = "puppet-integration-tests")]
+pub static CURSIVE_PUPPET_IO: OnceLock<(Sender<Option<Event>>, Receiver<ObservedScreen>)> = OnceLock::new();
+
+#[cfg(not(feature = "puppet-integration-tests"))]
+fn build_cursive() -> CursiveRunnable {
+    cursive::default()
+}
+
+#[cfg(feature = "puppet-integration-tests")]
+fn build_cursive() -> CursiveRunnable {
+    // When running tests, use the puppet backend
+    CursiveRunnable::new::<std::convert::Infallible, _>(|| {
+        let backend = cursive::backends::puppet::Backend::init(Some(
+            cursive::XY::new(80, 60),
+        ));
+        let puppet_output = backend.stream();
+        let puppet_input = backend.input();
+        CURSIVE_PUPPET_IO.set((puppet_input, puppet_output)).unwrap();
+        Ok(backend)
+    })
+}
 
 pub fn launch(
     profile: String,
@@ -25,7 +57,8 @@ pub fn launch(
     );
     let profile_name = global_settings.profile.clone();
 
-    let mut siv = cursive::default();
+    let mut siv = build_cursive();
+
     siv.set_theme(custom_theme());
     let autolocker =
         autolock::start_autolocker(siv.cb_sink().clone(), global_settings.autolock_duration);

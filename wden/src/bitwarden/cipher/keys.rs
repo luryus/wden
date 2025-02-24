@@ -1,6 +1,7 @@
 use std::pin::Pin;
 
 use hkdf::Hkdf;
+use rsa::{pkcs8::DecodePrivateKey, RsaPublicKey};
 use sha2::Sha256;
 use base64::prelude::*;
 use zeroize::{ZeroizeOnDrop, Zeroizing};
@@ -108,6 +109,11 @@ impl DerPrivateKey {
     pub(super) fn data(&self) -> &[u8] {
         &self.0
     }
+
+    pub fn public_key(&self) -> Result<RsaPublicKey, rsa::Error> {
+        let priv_key = rsa::RsaPrivateKey::from_pkcs8_der(self.data())?;
+        Ok(priv_key.to_public_key())
+    } 
 }
 
 pub fn create_master_key(

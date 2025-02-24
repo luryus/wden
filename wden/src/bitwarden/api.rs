@@ -5,7 +5,7 @@ use anyhow::{bail, Error};
 use base64::prelude::*;
 use reqwest;
 use reqwest::Url;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_repr::Deserialize_repr;
 use std::convert::TryInto;
 use std::time::{Duration, Instant};
@@ -516,8 +516,9 @@ impl From<SyncResponseInternal> for SyncResponse {
     }
 }
 
-#[derive(Deserialize, Debug)]
-struct CipherItemInternal {
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all="camelCase")]
+pub struct CipherItemInternal {
     #[serde(alias = "Id")]
     id: String,
     #[serde(alias = "Type")]
@@ -535,6 +536,9 @@ struct CipherItemInternal {
     card: Option<CardItem>,
     #[serde(alias = "Identity")]
     identity: Option<IdentityItem>,
+    #[serde(alias = "secureNote")]
+    #[serde(alias = "SecureNote")]
+    secure_note: Option<SecureNoteItem>,
     #[serde(alias = "Favorite")]
     favorite: bool,
     #[serde(alias = "CollectionIds")]
@@ -545,6 +549,10 @@ struct CipherItemInternal {
     organization_id: Option<String>,
     #[serde(alias = "Key")]
     key: Option<Cipher>,
+    #[serde(alias = "lastKnownRevisionDate")]
+    #[serde(alias = "LastKnownRevisionDate")]
+    last_known_revision_date: Option<String>,
+    reprompt: u8,
 }
 
 #[derive(Debug)]
@@ -553,7 +561,7 @@ pub enum CipherData {
     Login(Box<LoginItem>),
     Card(Box<CardItem>),
     Identity(Box<IdentityItem>),
-    SecureNote,
+    SecureNote(Box<SecureNoteItem>),
 }
 
 impl From<CipherItemInternal> for CipherItem {
@@ -568,7 +576,7 @@ impl From<CipherItemInternal> for CipherItem {
             organization_id: cii.organization_id,
             data: match cii.cipher_type {
                 1 => CipherData::Login(Box::new(cii.login.unwrap())),
-                2 => CipherData::SecureNote,
+                2 => CipherData::SecureNote(Box::new(cii.secure_note.unwrap())),
                 3 => CipherData::Card(Box::new(cii.card.unwrap())),
                 4 => CipherData::Identity(Box::new(cii.identity.unwrap())),
                 _ => CipherData::None,
@@ -589,7 +597,20 @@ pub struct CipherItem {
     pub organization_id: Option<String>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all="camelCase")]
+pub struct LoginItemUri {
+    #[serde(rename = "match")]
+    #[serde(alias = "Match")]
+    #[serde(default)]
+    pub uri_match: Option<i32>,
+    #[serde(alias = "Uri")]
+    pub uri: Cipher,
+    #[serde(alias = "UriChecksum")]
+    pub uri_checksum: Cipher
+}
+
+#[derive(Serialize, Deserialize, Debug)]
 pub struct LoginItem {
     #[serde(default)]
     #[serde(alias = "Username")]
@@ -600,9 +621,11 @@ pub struct LoginItem {
     #[serde(default)]
     #[serde(alias = "Uri")]
     pub uri: Cipher,
+    #[serde(default)]
+    pub uris: Vec<LoginItemUri>
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct CardItem {
     #[serde(default)]
     #[serde(alias = "Brand")]
@@ -628,7 +651,7 @@ pub struct CardItem {
     pub number: Cipher,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct IdentityItem {
     #[serde(default)]
     #[serde(alias = "Address1")]
@@ -693,4 +716,13 @@ pub struct IdentityItem {
     #[serde(default)]
     #[serde(alias = "Username")]
     pub username: Cipher,
+}
+
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct SecureNoteItem {
+    #[serde(rename="type")]
+    #[serde(alias="Type")]
+    #[serde(default)]
+    pub secure_note_type: i32,
 }

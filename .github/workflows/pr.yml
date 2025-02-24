@@ -23,4 +23,9 @@ jobs:
     - name: cargo check
       run: cargo check --verbose    
     - name: Run tests
-      run: cargo test --verbose
+      # Release build so that the integration tests can run as release later
+      run: cargo test --verbose --release
+
+    - name: Run integration tests
+      if: runner.os == 'Linux'
+      run: cargo --verbose it-release

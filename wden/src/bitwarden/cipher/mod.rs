@@ -5,10 +5,11 @@ use base64::prelude::*;
 use cbc::cipher::{BlockDecryptMut, BlockEncryptMut, KeyIvInit};
 use hmac::digest::{InvalidLength, MacError};
 use hmac::{Hmac, Mac};
-use rsa::Oaep;
+use rsa::{Oaep, RsaPublicKey};
 use rsa::{pkcs8::DecodePrivateKey, RsaPrivateKey};
 use serde::{de, Serialize, Serializer};
 use serde::{Deserialize, Deserializer};
+use sha1::Sha1;
 use sha2::Sha256;
 use std::fmt;
 use std::str::FromStr;
@@ -43,6 +44,8 @@ pub enum CipherError {
     InvalidKdfParameters(argon2::Error),
     #[error("Error with KDF")]
     KdfError(argon2::Error),
+    #[error("RSA Encryption failed")]
+    RsaEncryptionFailed(#[from] rsa::Error),
 }
 
 
@@ -205,6 +208,20 @@ impl Cipher {
             ct,
             iv,
             mac,
+        })
+    }
+
+    pub fn encrypt_pub_key(content: &[u8], public_key: &RsaPublicKey) -> Result<Self, CipherError> {
+        // Rsa2048OaepSha1B64 is what the Bitwarden frontend uses
+        let oaep = rsa::oaep::Oaep::new::<Sha1>();
+        let mut rng = rand::thread_rng();
+        let enc_data = public_key.encrypt(&mut rng, oaep, content)?;
+
+        Ok(Self::Value {
+            enc_type: EncType::Rsa2048OaepSha1B64,
+            ct: enc_data,
+            iv: vec![],
+            mac: vec![]
         })
     }
 
