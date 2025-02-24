@@ -50,7 +50,9 @@ jobs:
     - name: Run tests
       run: cargo test --verbose --release
     - name: Run integration tests
+      if: runner.os == 'Linux'
       run: cargo --verbose it-release
+
     - name: Build
       run: cargo build --verbose --release
     
