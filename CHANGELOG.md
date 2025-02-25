@@ -2,6 +2,8 @@
 
 ## next
 
+- Fix 429 errors on signing in to Bitwarden cloud servers (#403)
+
 ## 0.13.1
 
 - Maybe fix crash upon autolock activating

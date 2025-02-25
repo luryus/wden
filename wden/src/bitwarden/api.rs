@@ -151,8 +151,8 @@ impl ApiClient {
             // for some security reason
             .header("auth-email", BASE64_URL_SAFE.encode(username))
             .header("device-type", &device_type)
-            // As of May 2024, Bitwarden wants these Bitwarden-Client- headers as well
-            .header("Bitwarden-Client-Name", "wden")
+            // As of Nov 2024, Bitwarden wants these Bitwarden-Client- headers as well, with valid values
+            .header("Bitwarden-Client-Name", "cli")
             .header("Bitwarden-Client-Version", env!("CARGO_PKG_VERSION"))
             .send()
             .await?;
@@ -234,7 +234,7 @@ impl ApiClient {
             .header("auth-email", BASE64_URL_SAFE.encode(&api_key.email))
             .header("device-type", &device_type)
             // As of May 2024, Bitwarden wants these Bitwarden-Client- headers as well
-            .header("Bitwarden-Client-Name", "wden")
+            .header("Bitwarden-Client-Name", "cli")
             .header("Bitwarden-Client-Version", env!("CARGO_PKG_VERSION"))
             .send()
             .await?;
