@@ -145,7 +145,7 @@ impl VaultwardenClient {
         let url = self.base_url.join(path)?;
         let req = self.reqwest
             .post(url)
-            .header("Bitwarden-Client-Name", "web")
+            .header("Bitwarden-Client-Name", "cli")
             .header("Bitwarden-Client-Version", "2024.6.2")
             .json(&body);
         

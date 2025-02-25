@@ -1,19 +1,17 @@
-use std::time::{Duration, Instant};
-
-use anyhow::Context;
-use cursive::{
-    backends::puppet::observed::{ObservedPieceInterface, ObservedScreen},
-    event::{Event, Key},
-    reexports::crossbeam_channel::{Receiver, RecvTimeoutError, SendError, Sender},
-    XY,
-};
-use wden::bitwarden::server::ServerConfiguration;
-
+#[cfg(feature = "puppet-integration-tests")]
 mod common;
 
 #[cfg(feature = "puppet-integration-tests")]
 #[tokio_test_shutdown_timeout::test]
 pub(crate) async fn test_normal_flows_pbkdf2() -> anyhow::Result<()> {
+    use std::time::Duration;
+
+    use anyhow::Context;
+    use cursive::{backends::puppet::observed::ObservedPieceInterface, event::{Event, Key}};
+    use wden::bitwarden::server::ServerConfiguration;
+
+    use helpers::*;
+
     let ctx = common::setup().await?;
 
     let profile_name = uuid::Uuid::new_v4().to_string();
@@ -108,44 +106,61 @@ pub(crate) async fn test_normal_flows_pbkdf2() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn wait_until_string_visible(
-    needle: &str,
-    recv: &Receiver<ObservedScreen>,
-) -> Result<ObservedScreen, RecvTimeoutError> {
-    const TIMEOUT: Duration = Duration::from_secs(15);
-    let deadline = Instant::now() + TIMEOUT;
+#[cfg(feature = "puppet-integration-tests")]
+mod helpers {
+    use std::time::{Duration, Instant};
 
-    while Instant::now() < deadline {
-        let r = recv.recv_deadline(deadline)?;
-        if !r.find_occurences(needle).is_empty() {
-            return Ok(r);
+    use cursive::{
+        backends::puppet::observed::ObservedScreen,
+        event::Event,
+        reexports::crossbeam_channel::{Receiver, RecvTimeoutError, SendError, Sender},
+        XY,
+    };
+
+    pub(super) fn wait_until_string_visible(
+        needle: &str,
+        recv: &Receiver<ObservedScreen>,
+    ) -> Result<ObservedScreen, RecvTimeoutError> {
+        const TIMEOUT: Duration = Duration::from_secs(15);
+        let deadline = Instant::now() + TIMEOUT;
+
+        while Instant::now() < deadline {
+            let r = recv.recv_deadline(deadline)?;
+            if !r.find_occurences(needle).is_empty() {
+                return Ok(r);
+            }
         }
+
+        Err(RecvTimeoutError::Timeout)
     }
 
-    Err(RecvTimeoutError::Timeout)
-}
-
-fn send_string(text: &str, sender: &Sender<Option<Event>>) -> Result<(), SendError<Option<Event>>> {
-    for c in text.chars() {
-        let ev = Some(Event::Char(c));
-        sender.send(ev)?;
+    #[cfg(feature = "puppet-integration-tests")]
+    pub(super) fn send_string(
+        text: &str,
+        sender: &Sender<Option<Event>>,
+    ) -> Result<(), SendError<Option<Event>>> {
+        for c in text.chars() {
+            let ev = Some(Event::Char(c));
+            sender.send(ev)?;
+        }
+        Ok(())
     }
-    Ok(())
-}
 
-fn click_position(
-    pos: XY<usize>,
-    sender: &Sender<Option<Event>>,
-) -> Result<(), SendError<Option<Event>>> {
-    sender.send(Some(Event::Mouse {
-        offset: XY::zero(),
-        position: pos,
-        event: cursive::event::MouseEvent::Press(cursive::event::MouseButton::Left),
-    }))?;
-    sender.send(Some(Event::Mouse {
-        offset: XY::zero(),
-        position: pos,
-        event: cursive::event::MouseEvent::Release(cursive::event::MouseButton::Left),
-    }))?;
-    Ok(())
+    #[cfg(feature = "puppet-integration-tests")]
+    pub(super) fn click_position(
+        pos: XY<usize>,
+        sender: &Sender<Option<Event>>,
+    ) -> Result<(), SendError<Option<Event>>> {
+        sender.send(Some(Event::Mouse {
+            offset: XY::zero(),
+            position: pos,
+            event: cursive::event::MouseEvent::Press(cursive::event::MouseButton::Left),
+        }))?;
+        sender.send(Some(Event::Mouse {
+            offset: XY::zero(),
+            position: pos,
+            event: cursive::event::MouseEvent::Release(cursive::event::MouseButton::Left),
+        }))?;
+        Ok(())
+    }
 }
