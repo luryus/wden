@@ -622,7 +622,7 @@ pub struct LoginItem {
     #[serde(alias = "Uri")]
     pub uri: Cipher,
     #[serde(default)]
-    pub uris: Vec<LoginItemUri>
+    pub uris: Option<Vec<LoginItemUri>>
 }
 
 #[derive(Serialize, Deserialize, Debug)]

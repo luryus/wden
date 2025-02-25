@@ -407,7 +407,7 @@ fn encrypt_login(
             username,
             password,
             uri,
-            uris: vec![uri_object]
+            uris: Some(vec![uri_object])
         })),
     };
 
