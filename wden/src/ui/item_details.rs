@@ -23,7 +23,7 @@ lazy_static! {
     static ref VALUE_STYLE: Style = Style::from(Effect::Reverse).combine(ColorStyle::secondary());
 }
 
-pub fn item_detail_dialog(ud: &StatefulUserData<Unlocked>, item_id: &str) -> Option<impl View> {
+pub fn item_detail_dialog(ud: &StatefulUserData<Unlocked>, item_id: &str) -> Option<impl View + use<>> {
     // Find the item
     let vault_data = ud.vault_data();
     let item = vault_data

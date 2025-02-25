@@ -299,7 +299,7 @@ enum Copyable {
     Username,
 }
 
-fn search_edit_view(search_term: &str) -> impl View {
+fn search_edit_view(search_term: &str) -> impl View + use<> {
     let search_edit = EditView::new()
         .on_edit(|siv, text, _| {
             if let Some(mut vv) = siv.find_name::<VaultView>("vault_view") {
@@ -322,7 +322,7 @@ fn search_edit_view(search_term: &str) -> impl View {
 fn active_collection_filter_view(
     collection: &CollectionSelection,
     user_data: &StatefulUserData<Unlocked>,
-) -> impl View {
+) -> impl View + use<> {
     let label = TextView::new(active_collection_filter_label_text(collection, user_data))
         .style(PaletteColor::Secondary)
         .with_name("active_collection_filter_label");
@@ -425,7 +425,7 @@ fn show_item_details(cb: cursive::CbSink, row: &Row) {
 }
 
 fn key_hint_view() -> impl View {
-    fn hint_text(content: &str) -> impl View {
+    fn hint_text(content: &str) -> impl View + use<> {
         PaddedView::new(
             Margins::lr(2, 2),
             TextView::new(content).style(Color::Light(BaseColor::Black)),

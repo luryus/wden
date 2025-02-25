@@ -22,14 +22,13 @@ use super::{autolock::Autolocker, collections::CollectionSelection};
 
 macro_rules! get_state_data {
     ($app_state_data: expr, $state: path) => {{
-        if let $state(a) = $app_state_data {
-            a
-        } else {
-            panic!(
+        match $app_state_data {
+            $state(a) => a,
+            _ => panic!(
                 "App not in expected state: requested {}, was {}",
                 stringify!($state),
                 $app_state_data
-            );
+            ),
         }
     }};
 }

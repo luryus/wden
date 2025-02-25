@@ -96,7 +96,7 @@ fn run(mut cursive: CursiveRunnable) {
                     ud.autolocker()
                         .lock()
                         .unwrap()
-                        .update_next_autolock_time(false)
+                        .update_next_autolock_time(false);
                 }
             });
         }
