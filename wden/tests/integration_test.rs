@@ -7,14 +7,17 @@ pub(crate) async fn test_normal_flows_pbkdf2() -> anyhow::Result<()> {
     use std::time::Duration;
 
     use anyhow::Context;
-    use cursive::{backends::puppet::observed::ObservedPieceInterface, event::{Event, Key}};
+    use cursive::{
+        backends::puppet::observed::ObservedPieceInterface,
+        event::{Event, Key},
+    };
     use wden::bitwarden::server::ServerConfiguration;
 
     use helpers::*;
 
     let ctx = common::setup().await?;
+    let profile_name = ctx.profile_name.clone();
 
-    let profile_name = uuid::Uuid::new_v4().to_string();
     let server_config = ServerConfiguration::single_host(
         format!("http://localhost:{}", ctx.http_port)
             .parse()
@@ -22,7 +25,9 @@ pub(crate) async fn test_normal_flows_pbkdf2() -> anyhow::Result<()> {
     );
 
     println!("Launching...");
-    tokio::task::spawn_blocking(|| wden::ui::launch(profile_name, Some(server_config), true, true));
+    tokio::task::spawn_blocking(|| {
+        wden::ui::launch(profile_name, Some(server_config), true, true)
+    });
 
     while wden::ui::launch::CURSIVE_PUPPET_IO.get().is_none() {
         // hack

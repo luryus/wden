@@ -3,6 +3,7 @@ use testcontainers::{
     core::{IntoContainerPort, WaitFor}, runners::AsyncRunner, ContainerAsync, GenericImage, ImageExt
 };
 use user_init::{PBKDF2_USER_EMAIL, PBKDF2_USER_MASTER_PW_HASH, PBKDF2_USER_PASSWORD};
+use wden::profile;
 
 
 mod user_init;
@@ -14,6 +15,7 @@ pub struct IntegrationTestContext {
     _container: ContainerAsync<GenericImage>,
     _client: VaultwardenClient,
     pub http_port: u16,
+    pub profile_name: String,
 }
 
 pub async fn setup() -> anyhow::Result<IntegrationTestContext> {
@@ -31,10 +33,20 @@ pub async fn setup() -> anyhow::Result<IntegrationTestContext> {
 
     vault_init::init_vault_data(&mut client, PBKDF2_USER_EMAIL, PBKDF2_USER_MASTER_PW_HASH, PBKDF2_USER_PASSWORD).await?;
 
+    let profile_name = format!("integrationtest_{}", uuid::Uuid::new_v4());
+
     Ok(IntegrationTestContext {
         _container: container,
         _client: client,
         http_port,
+        profile_name
     })
+}
+
+// When dropping IntegrationTestContext, try to remove profile file
+impl Drop for IntegrationTestContext {
+    fn drop(&mut self) {
+        let _ = profile::ProfileStore::delete(&self.profile_name);
+    }
 }
 

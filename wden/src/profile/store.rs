@@ -17,11 +17,10 @@ pub struct ProfileStore {
 
 impl ProfileStore {
     pub fn new(profile_name: &str) -> ProfileStore {
-        let config_dir = get_config_dir();
-        let profile_config_file = config_dir.join(format!("{profile_name}.json"));
+        let profile_config_file = profile_file_path(profile_name);
 
         ProfileStore {
-            config_dir,
+            config_dir: get_config_dir(),
             profile_config_file,
         }
     }
@@ -62,6 +61,16 @@ impl ProfileStore {
         Ok(migrated)
     }
 
+    #[cfg(feature = "puppet-integration-tests")]
+    pub fn delete(profile_name: &str) -> Result<(), anyhow::Error> {
+        let path = profile_file_path(profile_name);
+        match std::fs::remove_file(path) {
+            Ok(_) => Ok(()),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(e) => Err(e).context("Failed to delete profile file"),
+        }
+    }
+
     pub fn store(&self, data: &ProfileData) -> std::io::Result<()> {
         std::fs::create_dir_all(&self.config_dir)?;
         let serialized = serde_json::to_vec_pretty(data)?;
@@ -80,6 +89,10 @@ impl ProfileStore {
         // Store the edited data
         self.store(&data).context("Rewriting profile file failed")
     }
+}
+
+fn profile_file_path(profile_name: &str) -> PathBuf {
+    get_config_dir().join(format!("{profile_name}.json"))
 }
 
 fn get_config_dir() -> PathBuf {
