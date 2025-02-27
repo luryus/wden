@@ -2,7 +2,10 @@
 
 ## next
 
+## 0.13.2
+
 - Fix 429 errors on signing in to Bitwarden cloud servers (#403)
+- Miscellaneous dependency crate updates
 
 ## 0.13.1
 
