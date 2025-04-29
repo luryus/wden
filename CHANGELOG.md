@@ -2,6 +2,8 @@
 
 ## next
 
+- Dependency updates, including security patches (https://github.com/advisories/GHSA-4p46-pwfr-66x6, https://github.com/advisories/GHSA-4fcv-w3qc-ppgg, https://github.com/advisories/GHSA-pg9f-39pc-qf8g)
+
 ## 0.13.2
 
 - Fix 429 errors on signing in to Bitwarden cloud servers (#403)
