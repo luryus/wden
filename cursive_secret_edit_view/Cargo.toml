@@ -1,6 +1,6 @@
 [package]
 name = "cursive_secret_edit_view"
-edition = "2021"
+edition = "2024"
 version = "0.1.0"
 
 [dependencies]

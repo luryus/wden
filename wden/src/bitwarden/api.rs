@@ -103,10 +103,10 @@ impl ApiClient {
     /// * `username`: User's username. Most often this is the user email.
     /// * `password`: User's master password hash. Not the actual password.
     /// * `two_factor`: Optional tuple describing the second factor type, the second factor token and
-    ///                 whether to token should be "remembered" by the server or not. None if two-factor
-    ///                 is not used.
+    ///   whether to token should be "remembered" by the server or not. None if two-factor
+    ///   is not used.
     /// * `captcha_token`: Token for skipping the captcha check. Either the user's private api key or a captcha
-    ///                    bypass token sent by the server.
+    ///   bypass token sent by the server.
     pub async fn get_token(
         &self,
         username: &str,

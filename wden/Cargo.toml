@@ -2,7 +2,7 @@
 name = "wden"
 version = "0.13.2"
 authors = ["Lauri Koskela <lk@lkoskela.com>"]
-edition = "2021"
+edition = "2024"
 default-run = "wden"
 license = "MIT"
 
