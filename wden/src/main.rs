@@ -1,12 +1,12 @@
 use std::time::Duration;
 
 use clap::{
-    builder::{StringValueParser, TypedValueParser},
     Parser,
+    builder::{StringValueParser, TypedValueParser},
 };
 use indicatif::ProgressBar;
 use reqwest::Url;
-use tabled::{settings::Style, Table, Tabled};
+use tabled::{Table, Tabled, settings::Style};
 use wden::{
     bitwarden::{
         apikey::ApiKey,
@@ -20,7 +20,9 @@ fn validate_profile_name(value: String) -> Result<String, &'static str> {
         .chars()
         .any(|c| !c.is_ascii_lowercase() && !c.is_ascii_digit() && c != '_' && c != '-')
     {
-        Err("Invalid profile name. Profile names can only include lowercase alphanumeric characters, dashes (-) and underscores (_).")
+        Err(
+            "Invalid profile name. Profile names can only include lowercase alphanumeric characters, dashes (-) and underscores (_).",
+        )
     } else {
         Ok(value)
     }
@@ -30,7 +32,7 @@ fn validate_profile_name(value: String) -> Result<String, &'static str> {
 #[command(version)]
 struct Opts {
     /// Sets the profile that will be used.
-    /// 
+    ///
     /// Profile names can only include lowercase alphanumeric characters, dashes (-) and
     /// underscores (_).
     #[arg(
@@ -82,7 +84,7 @@ struct Opts {
     identity_server_url: Option<Url>,
 
     /// Client secret of Bitwarden API key
-    /// 
+    ///
     /// The --api-key-* options can be used to store a Bitwarden API key to the wden profile.
     /// This is a one-time operation. Subsequent launches without these flags will use the stored API key to log in.
     /// This feature can be used to avoid login issues due to incorrect bot detection in Bitwarden cloud environments.
@@ -103,7 +105,7 @@ struct Opts {
     list_profiles: bool,
 
     /// Danger: Accept invalid and untrusted (e.g. self-signed) certificates
-    /// 
+    ///
     /// This option makes connections insecure, so avoid using it.
     ///
     /// Note: this option is not stored in the profile settings.
@@ -173,7 +175,7 @@ struct ProfileListRow<'a> {
     #[tabled(rename = "SAVED EMAIL")]
     saved_email: &'a str,
     #[tabled(rename = "API KEY")]
-    api_key: &'static str
+    api_key: &'static str,
 }
 
 fn list_profiles() -> std::io::Result<()> {
@@ -186,7 +188,11 @@ fn list_profiles() -> std::io::Result<()> {
             name,
             server_config: &profile.server_configuration,
             saved_email: profile.saved_email.as_deref().unwrap_or("None"),
-            api_key: if profile.encrypted_api_key.is_some() { "✓" } else { "" },
+            api_key: if profile.encrypted_api_key.is_some() {
+                "✓"
+            } else {
+                ""
+            },
         });
 
         let mut table = Table::new(rows);
@@ -238,7 +244,10 @@ async fn store_api_keys(
             .bright()
             .white()
     );
-    println!("wden will encrypt the API key with an encryption key derived from your master password, and store it in profile `{}`\n", &global_settings.profile);
+    println!(
+        "wden will encrypt the API key with an encryption key derived from your master password, and store it in profile `{}`\n",
+        &global_settings.profile
+    );
 
     let mut password: String;
 

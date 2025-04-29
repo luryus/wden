@@ -24,13 +24,13 @@ mod array_string_ext;
 
 use arrayvec::ArrayString;
 use cursive_core::{
+    Cursive, Printer, Rect, Vec2, View, With,
     direction::Direction,
     event::{Callback, Event, EventResult, Key, MouseEvent},
     immut2, impl_enabled,
     theme::{Effect, PaletteStyle, StyleType},
     utils::lines::simple::{simple_prefix, simple_suffix},
     view::CannotFocus,
-    Cursive, Printer, Rect, Vec2, View, With,
 };
 use std::pin::Pin;
 use std::sync::{Arc, Mutex};

@@ -1,11 +1,11 @@
 use std::sync::Arc;
 
 use cursive::{
+    Cursive,
     theme::{BaseColor, Color},
     traits::Nameable,
     view::Margins,
     views::{Dialog, EditView, LinearLayout, PaddedView, TextView},
-    Cursive,
 };
 
 use crate::bitwarden::cipher::{self, CipherError};

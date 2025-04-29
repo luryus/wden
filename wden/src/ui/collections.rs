@@ -1,7 +1,8 @@
 use cursive::{
+    Cursive,
     view::{Scrollable, ViewWrapper},
     views::{Dialog, SelectView},
-    wrap_impl, Cursive,
+    wrap_impl,
 };
 use serde::{Deserialize, Serialize};
 

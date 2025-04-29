@@ -27,6 +27,8 @@ static PBKDF2_TEST_USER_JSON: LazyLock<serde_json::Value> = LazyLock::new(|| {
 });
 
 pub async fn init_users(client: &VaultwardenClient) -> anyhow::Result<()> {
-    client.post("/identity/accounts/register", PBKDF2_TEST_USER_JSON.deref()).await?;
+    client
+        .post("/identity/accounts/register", PBKDF2_TEST_USER_JSON.deref())
+        .await?;
     Ok(())
 }

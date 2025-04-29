@@ -25,9 +25,7 @@ pub(crate) async fn test_normal_flows_pbkdf2() -> anyhow::Result<()> {
     );
 
     println!("Launching...");
-    tokio::task::spawn_blocking(|| {
-        wden::ui::launch(profile_name, Some(server_config), true, true)
-    });
+    tokio::task::spawn_blocking(|| wden::ui::launch(profile_name, Some(server_config), true, true));
 
     while wden::ui::launch::CURSIVE_PUPPET_IO.get().is_none() {
         // hack
@@ -89,18 +87,26 @@ pub(crate) async fn test_normal_flows_pbkdf2() -> anyhow::Result<()> {
     click_position(pos, input)?;
 
     let screen = wait_until_string_visible("Uri", output)?;
-    assert!(!screen
-        .find_occurences(common::testdata::ORG_1_COLL_1_LOGIN_1.name)
-        .is_empty());
-    assert!(!screen
-        .find_occurences(common::testdata::ORG_1_COLL_1_LOGIN_1.username)
-        .is_empty());
-    assert!(!screen
-        .find_occurences(common::testdata::ORG_1_COLL_1_LOGIN_1.uri)
-        .is_empty());
-    assert!(!screen
-        .find_occurences(common::testdata::ORG_1_COLL_1_LOGIN_1.notes)
-        .is_empty());
+    assert!(
+        !screen
+            .find_occurences(common::testdata::ORG_1_COLL_1_LOGIN_1.name)
+            .is_empty()
+    );
+    assert!(
+        !screen
+            .find_occurences(common::testdata::ORG_1_COLL_1_LOGIN_1.username)
+            .is_empty()
+    );
+    assert!(
+        !screen
+            .find_occurences(common::testdata::ORG_1_COLL_1_LOGIN_1.uri)
+            .is_empty()
+    );
+    assert!(
+        !screen
+            .find_occurences(common::testdata::ORG_1_COLL_1_LOGIN_1.notes)
+            .is_empty()
+    );
     assert!(!screen.find_occurences("*****").is_empty());
 
     input.send(Some(Event::Char('s')))?;
@@ -116,10 +122,10 @@ mod helpers {
     use std::time::{Duration, Instant};
 
     use cursive::{
+        XY,
         backends::puppet::observed::ObservedScreen,
         event::Event,
         reexports::crossbeam_channel::{Receiver, RecvTimeoutError, SendError, Sender},
-        XY,
     };
 
     pub(super) fn wait_until_string_visible(

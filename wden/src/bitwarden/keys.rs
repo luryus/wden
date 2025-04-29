@@ -2,7 +2,7 @@ use maybe_owned::MaybeOwned;
 
 use super::{
     api::CipherItem,
-    cipher::{decrypt_item_keys, EncMacKeys},
+    cipher::{EncMacKeys, decrypt_item_keys},
 };
 
 pub fn resolve_item_keys<'a, 'b, F>(

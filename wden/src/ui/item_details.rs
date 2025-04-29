@@ -10,11 +10,11 @@ use crate::{
     ui::components::secret_text_view::SecretTextView,
 };
 use cursive::{
+    View,
     theme::{BaseColor, Color, ColorStyle, Effect, Style},
     traits::{Nameable, Resizable},
     view::Margins,
     views::{Dialog, LinearLayout, OnEventView, PaddedView, ScrollView, TextView, ViewRef},
-    View,
 };
 use lazy_static::lazy_static;
 use log::warn;
@@ -23,7 +23,10 @@ lazy_static! {
     static ref VALUE_STYLE: Style = Style::from(Effect::Reverse).combine(ColorStyle::secondary());
 }
 
-pub fn item_detail_dialog(ud: &StatefulUserData<Unlocked>, item_id: &str) -> Option<impl View + use<>> {
+pub fn item_detail_dialog(
+    ud: &StatefulUserData<Unlocked>,
+    item_id: &str,
+) -> Option<impl View + use<>> {
     // Find the item
     let vault_data = ud.vault_data();
     let item = vault_data

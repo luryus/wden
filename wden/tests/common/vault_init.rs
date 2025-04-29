@@ -20,7 +20,8 @@ pub async fn init_vault_data(
     let mut org_ids_keys = vec![];
 
     for (org, keys) in orgs {
-        let resp: CreateOrganizationResponse = client.post_response("/api/organizations", &org).await?;
+        let resp: CreateOrganizationResponse =
+            client.post_response("/api/organizations", &org).await?;
         org_ids_keys.push((resp.id, keys));
     }
 

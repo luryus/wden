@@ -1,4 +1,4 @@
-use cursive::{theme::Style, utils::span::SpannedString, View};
+use cursive::{View, theme::Style, utils::span::SpannedString};
 use zeroize::Zeroizing;
 
 pub struct SecretTextView {

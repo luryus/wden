@@ -1,13 +1,12 @@
 use std::pin::Pin;
 
-use hkdf::Hkdf;
-use rsa::{pkcs8::DecodePrivateKey, RsaPublicKey};
-use sha2::Sha256;
 use base64::prelude::*;
+use hkdf::Hkdf;
+use rsa::{RsaPublicKey, pkcs8::DecodePrivateKey};
+use sha2::Sha256;
 use zeroize::{ZeroizeOnDrop, Zeroizing};
 
-use super::{get_pbkdf, Cipher, CipherError, PbkdfParameters};
-
+use super::{Cipher, CipherError, PbkdfParameters, get_pbkdf};
 
 const CREDENTIAL_LEN: usize = 256 / 8;
 
@@ -113,7 +112,7 @@ impl DerPrivateKey {
     pub fn public_key(&self) -> Result<RsaPublicKey, rsa::Error> {
         let priv_key = rsa::RsaPrivateKey::from_pkcs8_der(self.data())?;
         Ok(priv_key.to_public_key())
-    } 
+    }
 }
 
 pub fn create_master_key(
@@ -137,7 +136,6 @@ pub fn create_master_password_hash(
     );
     res
 }
-
 
 pub fn decrypt_symmetric_keys(
     key_cipher: &Cipher,

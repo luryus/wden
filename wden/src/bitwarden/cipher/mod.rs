@@ -1,14 +1,14 @@
-use aes::cipher::block_padding::{Pkcs7, UnpadError};
 use aes::Aes256;
+use aes::cipher::block_padding::{Pkcs7, UnpadError};
 use anyhow::Context;
 use base64::prelude::*;
 use cbc::cipher::{BlockDecryptMut, BlockEncryptMut, KeyIvInit};
 use hmac::digest::{InvalidLength, MacError};
 use hmac::{Hmac, Mac};
 use rsa::{Oaep, RsaPublicKey};
-use rsa::{pkcs8::DecodePrivateKey, RsaPrivateKey};
-use serde::{de, Serialize, Serializer};
+use rsa::{RsaPrivateKey, pkcs8::DecodePrivateKey};
 use serde::{Deserialize, Deserializer};
+use serde::{Serialize, Serializer, de};
 use sha1::Sha1;
 use sha2::Sha256;
 use std::fmt;
@@ -20,7 +20,6 @@ pub use pbkdf::*;
 
 mod keys;
 pub use keys::*;
-
 
 #[derive(Error, Debug)]
 pub enum CipherError {
@@ -47,8 +46,6 @@ pub enum CipherError {
     #[error("RSA Encryption failed")]
     RsaEncryptionFailed(#[from] rsa::Error),
 }
-
-
 
 #[derive(Clone, Default)]
 pub enum Cipher {
@@ -221,7 +218,7 @@ impl Cipher {
             enc_type: EncType::Rsa2048OaepSha1B64,
             ct: enc_data,
             iv: vec![],
-            mac: vec![]
+            mac: vec![],
         })
     }
 
@@ -458,15 +455,13 @@ mod tests {
 
         // Contains the encryption key of the user encrypted
         // with the master key
-        pub const USER_SYMMETRIC_KEY_CIPHER_STRING: &str =
-            "2.BztLR8IR0LVpkRL222P4rg==\
+        pub const USER_SYMMETRIC_KEY_CIPHER_STRING: &str = "2.BztLR8IR0LVpkRL222P4rg==\
              |cBSzwekYt1RPgYAEHI29mtqrjRge8U+FOSmtJtheAMnaEq4eCEurazgzRweksbE9abJYxriOXFnzTR/13HyCJqO9ytLK11N+G0kmhdW/scM=\
              |nLLHbuK4KnVJnRyVIfOu396iI7xJ/ZXWYHRscMFugTI=";
 
         // Contains the (asymmetric) private key of the user,
         // encrypted with the symmetric key
-        pub const USER_PRIVATE_KEY_CIPHER_STRING: &str =
-            "2.G+7HwPaG5oG6GqQAC1ANsA==|wH37HJOmlJ3N1BUo9sncrcoHRCKR6hJnCDyKOKvd1TfzRWu5uNLtzYmd33m\
+        pub const USER_PRIVATE_KEY_CIPHER_STRING: &str = "2.G+7HwPaG5oG6GqQAC1ANsA==|wH37HJOmlJ3N1BUo9sncrcoHRCKR6hJnCDyKOKvd1TfzRWu5uNLtzYmd33m\
             G155jYTX6Sa+HD83eGRoWzjlZxPeX40nHVFEsLbqAyNgpMfLahtF4mM2fcaTLuPpOQxY+tNdFaU8lgjH42eYAkR\
             R0aPjUaX9WYWZoJvFFz/4bQjMM9kmKIC6kuhHerDZq/hr+6TwMJXLz7Y+NXvP5ESdU8D1INaDBqlny5K1VtvvLj\
             3hdVuBM6J1NaDPcrUBjGq9tBLa1fpc0r3HUHpRojWEfKUbwXE1w0DcCb/7XiVdSK0GUxhEJrjrdKoSjih5usXQ3\
@@ -488,8 +483,7 @@ mod tests {
             gssTLUwJts7RSd1+lQ=|rFzZYOkVQOu5mEWWDfvPpLrdIrOoOy8rmJfbJUjPV94=";
 
         // Contains the string "Test", encrypted with the public key of the user
-        pub const TEST_CIPHER_STRING_ASYMMETRIC: &str =
-            "4.CzrGfIA+mHbPJy9km5J+gsC4mgwvu5267Xk2kfBscqroqEFza6g2a+fkRcaoXOIX+1Pq7DcwlbgQ\
+        pub const TEST_CIPHER_STRING_ASYMMETRIC: &str = "4.CzrGfIA+mHbPJy9km5J+gsC4mgwvu5267Xk2kfBscqroqEFza6g2a+fkRcaoXOIX+1Pq7DcwlbgQ\
              6GVMMwA8Orm4uA4v8XCGH2Zsj3wVVnloNxsVYDmny6HFWMuJdfbNUXO/jdIjF8R8hzPka2hQ5jAZ\
              3d81ivaQ+EqC9uKU+UOudAx9oPoD3F12DgVZJxKrbL+yi9Z8rD4ospic9ntuUfOUEesRD/q/g9yT\
              aKWwdPnegyIfId9cB4PhUZhMx02kDildno4VOGu6iTpLmeRZPi2RY3YN9tCDzYnxbK1Nf41zzQYR\

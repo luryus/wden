@@ -1,9 +1,9 @@
 use std::sync::Arc;
 
 use cursive::{
+    Cursive,
     traits::Nameable,
     views::{Dialog, EditView, LinearLayout, TextView},
-    Cursive,
 };
 
 use crate::bitwarden::api::{ApiClient, TwoFactorProviderType};
@@ -22,7 +22,9 @@ pub fn two_factor_dialog(
     captcha_token: Option<Arc<String>>,
 ) -> Dialog {
     if !types.contains(&TwoFactorProviderType::Authenticator) {
-        Dialog::info("Account requires two-factor authentication, but active two-factor methods are not supported.")
+        Dialog::info(
+            "Account requires two-factor authentication, but active two-factor methods are not supported.",
+        )
     } else {
         let email2 = email.clone();
         let email3 = email.clone();

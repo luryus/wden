@@ -16,10 +16,10 @@ impl PanicHandler {
                 event::DisableMouseCapture,
             );
             _ = terminal::disable_raw_mode();
-        
+
             let msg = format!("{info}");
             _ = PANIC_MSG.set(Some(msg));
-        
+
             hook(info)
         }));
 

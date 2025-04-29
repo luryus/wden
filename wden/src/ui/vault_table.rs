@@ -8,6 +8,7 @@ use crate::bitwarden::{
 };
 use bitwarden::api::CipherData;
 use cursive::{
+    Cursive, View,
     event::Event,
     theme::{BaseColor, Color, PaletteColor},
     traits::{Finder, Nameable, Resizable},
@@ -15,7 +16,7 @@ use cursive::{
     views::{
         Dialog, EditView, LayerPosition, LinearLayout, OnEventView, PaddedView, Panel, TextView,
     },
-    wrap_impl, Cursive, View,
+    wrap_impl,
 };
 use cursive_table_view::{TableView, TableViewItem};
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
@@ -23,7 +24,7 @@ use simsearch::SimSearch;
 use zeroize::Zeroize;
 
 use super::{
-    collections::{show_collection_filter, CollectionSelection},
+    collections::{CollectionSelection, show_collection_filter},
     util::cursive_ext::CursiveExt,
 };
 use super::{

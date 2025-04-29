@@ -2,11 +2,11 @@ use std::sync::Arc;
 
 use anyhow::Context;
 use cursive::{
+    Cursive, View,
     theme::Effect,
     traits::{Nameable, Resizable},
     view::{Margins, Selector},
     views::{Dialog, EditView, LinearLayout, PaddedView, TextView},
-    Cursive, View,
 };
 use cursive_secret_edit_view::SecretEditView;
 use zeroize::Zeroizing;

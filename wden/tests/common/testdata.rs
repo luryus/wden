@@ -5,10 +5,12 @@ use sha1::Digest;
 use wden::bitwarden::{
     self,
     api::{CipherData, CipherItem, LoginItemUri, SecureNoteItem},
-    cipher::{extract_enc_mac_keys, Cipher, CipherError, EncMacKeys},
+    cipher::{Cipher, CipherError, EncMacKeys, extract_enc_mac_keys},
 };
 
-use super::api::{CreateCollectionRequest, CreateOrgCipherRequest, CreateOrganizationRequest, OrganizationKeyPair};
+use super::api::{
+    CreateCollectionRequest, CreateOrgCipherRequest, CreateOrganizationRequest, OrganizationKeyPair,
+};
 
 pub struct NoteItem {
     pub name: &'static str,
@@ -213,7 +215,7 @@ pub fn organizations(
                     billing_email: email.to_string(),
                     collection_name: enc_collection_name,
                     initiation_path: "",
-                    plan_type: 0
+                    plan_type: 0,
                 },
                 org_enc_mac_keys,
             )
@@ -369,7 +371,10 @@ fn encrypt_card(
 
     let personal_cipher = item.into();
     let collection_ids = collection_id.into_iter().map(|x| x.to_owned()).collect();
-    Ok(CreateOrgCipherRequest { cipher: personal_cipher, collection_ids })
+    Ok(CreateOrgCipherRequest {
+        cipher: personal_cipher,
+        collection_ids,
+    })
 }
 
 fn encrypt_login(
@@ -387,12 +392,14 @@ fn encrypt_login(
     let collection_ids: Vec<String> = collection_id.into_iter().map(|x| x.to_owned()).collect();
 
     // Bitwarden wants base64-encoded SHA256 hashes of uris
-    let uri_checksum = base64::prelude::BASE64_STANDARD.encode(
-        sha2::Sha256::new_with_prefix(item.uri.as_bytes()).finalize());
+    let uri_checksum = base64::prelude::BASE64_STANDARD
+        .encode(sha2::Sha256::new_with_prefix(item.uri.as_bytes()).finalize());
     let uri_checksum = Cipher::encrypt(uri_checksum.as_bytes(), keys)?;
 
     let uri_object = LoginItemUri {
-        uri: uri.clone(), uri_match: None, uri_checksum
+        uri: uri.clone(),
+        uri_match: None,
+        uri_checksum,
     };
 
     let item = CipherItem {
@@ -407,13 +414,16 @@ fn encrypt_login(
             username,
             password,
             uri,
-            uris: Some(vec![uri_object])
+            uris: Some(vec![uri_object]),
         })),
     };
 
     let personal_cipher = item.into();
     let collection_ids = collection_id.into_iter().map(|x| x.to_owned()).collect();
-    Ok(CreateOrgCipherRequest { cipher: personal_cipher, collection_ids })
+    Ok(CreateOrgCipherRequest {
+        cipher: personal_cipher,
+        collection_ids,
+    })
 }
 
 fn encrypt_note(
@@ -435,10 +445,15 @@ fn encrypt_note(
         organization_id: org_id.map(|x| x.to_owned()),
         key: None,
         favorite: false,
-        data: CipherData::SecureNote(Box::new(SecureNoteItem { secure_note_type: 0 })),
+        data: CipherData::SecureNote(Box::new(SecureNoteItem {
+            secure_note_type: 0,
+        })),
     };
 
     let personal_cipher = item.into();
     let collection_ids = collection_id.into_iter().map(|x| x.to_owned()).collect();
-    Ok(CreateOrgCipherRequest { cipher: personal_cipher, collection_ids })
+    Ok(CreateOrgCipherRequest {
+        cipher: personal_cipher,
+        collection_ids,
+    })
 }

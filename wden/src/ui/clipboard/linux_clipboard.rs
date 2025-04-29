@@ -122,7 +122,7 @@ mod wayland {
         copy,
         copy::{MimeSource, Options, Source},
         paste,
-        paste::{get_contents, ClipboardType, Error, Seat},
+        paste::{ClipboardType, Error, Seat, get_contents},
     };
 
     use super::PlatformClipboardResult;

@@ -2,7 +2,7 @@ use anyhow::Context;
 use serde::{Deserialize, Serialize};
 use serde_json;
 
-use super::cipher::{self, get_pbkdf, Cipher, PbkdfParameters};
+use super::cipher::{self, Cipher, PbkdfParameters, get_pbkdf};
 
 // OWASP recommendations as of 2024-11-19
 // https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html#argon2id

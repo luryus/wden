@@ -1,8 +1,12 @@
 use std::time::Duration;
 
 use reqwest::{RequestBuilder, Url};
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use wden::bitwarden::{api::{ApiClient, CipherData, CipherItem, TokenResponseSuccess}, cipher::Cipher, server::ServerConfiguration};
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
+use wden::bitwarden::{
+    api::{ApiClient, CipherData, CipherItem, TokenResponseSuccess},
+    cipher::Cipher,
+    server::ServerConfiguration,
+};
 
 pub struct VaultwardenClient {
     reqwest: reqwest::Client,
@@ -26,12 +30,12 @@ pub struct CreateOrganizationRequest {
     pub billing_email: String,
     pub collection_name: Cipher,
     pub plan_type: u8,
-    pub initiation_path: &'static str
+    pub initiation_path: &'static str,
 }
 
 #[derive(Deserialize)]
 pub struct CreateOrganizationResponse {
-    pub id: String
+    pub id: String,
 }
 
 #[derive(Serialize)]
@@ -47,10 +51,8 @@ pub struct CreateCollectionRequest {
 
 #[derive(Deserialize)]
 pub struct CreateCollectionResponse {
-    pub id: String
+    pub id: String,
 }
-
-
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -99,7 +101,7 @@ impl From<CipherItem> for CreatePersonalCipherRequest {
             collection_ids: item.collection_ids,
             organization_id: item.organization_id,
             reprompt: 0,
-            last_known_revision_date: None
+            last_known_revision_date: None,
         }
     }
 }
@@ -116,7 +118,7 @@ impl VaultwardenClient {
         Self {
             reqwest: client,
             base_url,
-            access_token: None
+            access_token: None,
         }
     }
 
@@ -132,31 +134,46 @@ impl VaultwardenClient {
         Ok(())
     }
 
-    pub async fn post_response<T: Serialize, R: DeserializeOwned>(&self, path: &str, body: &T) -> Result<R, anyhow::Error> {
-        let resp = self.get_post_req(path, body)?
+    pub async fn post_response<T: Serialize, R: DeserializeOwned>(
+        &self,
+        path: &str,
+        body: &T,
+    ) -> Result<R, anyhow::Error> {
+        let resp = self
+            .get_post_req(path, body)?
             .send()
             .await?
             .error_for_status()?
-            .json().await?;
+            .json()
+            .await?;
         Ok(resp)
     }
 
-    fn get_post_req<T: Serialize>(&self, path: &str, body: &T) -> Result<RequestBuilder, anyhow::Error> {
+    fn get_post_req<T: Serialize>(
+        &self,
+        path: &str,
+        body: &T,
+    ) -> Result<RequestBuilder, anyhow::Error> {
         let url = self.base_url.join(path)?;
-        let req = self.reqwest
+        let req = self
+            .reqwest
             .post(url)
             .header("Bitwarden-Client-Name", "cli")
             .header("Bitwarden-Client-Version", "2024.6.2")
             .json(&body);
-        
+
         if let Some(acctok) = &self.access_token {
             Ok(req.bearer_auth(acctok))
         } else {
             Ok(req)
         }
- }
+    }
 
-    pub async fn get_token(&self, username: &str, password: &str) -> anyhow::Result<Box<TokenResponseSuccess>> {
+    pub async fn get_token(
+        &self,
+        username: &str,
+        password: &str,
+    ) -> anyhow::Result<Box<TokenResponseSuccess>> {
         let sc = ServerConfiguration::single_host(self.base_url.clone());
         let cl = ApiClient::new(&sc, "", true);
 

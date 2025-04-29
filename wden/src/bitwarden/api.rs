@@ -1,7 +1,7 @@
 use super::apikey::ApiKey;
 use super::cipher::{Cipher, KeyDerivationFunction, PbkdfParameters};
 use super::server::ServerConfiguration;
-use anyhow::{bail, Error};
+use anyhow::{Error, bail};
 use base64::prelude::*;
 use reqwest;
 use reqwest::Url;
@@ -517,7 +517,7 @@ impl From<SyncResponseInternal> for SyncResponse {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-#[serde(rename_all="camelCase")]
+#[serde(rename_all = "camelCase")]
 pub struct CipherItemInternal {
     #[serde(alias = "Id")]
     id: String,
@@ -598,7 +598,7 @@ pub struct CipherItem {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-#[serde(rename_all="camelCase")]
+#[serde(rename_all = "camelCase")]
 pub struct LoginItemUri {
     #[serde(rename = "match")]
     #[serde(alias = "Match")]
@@ -607,7 +607,7 @@ pub struct LoginItemUri {
     #[serde(alias = "Uri")]
     pub uri: Cipher,
     #[serde(alias = "UriChecksum")]
-    pub uri_checksum: Cipher
+    pub uri_checksum: Cipher,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -622,7 +622,7 @@ pub struct LoginItem {
     #[serde(alias = "Uri")]
     pub uri: Cipher,
     #[serde(default)]
-    pub uris: Option<Vec<LoginItemUri>>
+    pub uris: Option<Vec<LoginItemUri>>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -718,11 +718,10 @@ pub struct IdentityItem {
     pub username: Cipher,
 }
 
-
 #[derive(Serialize, Deserialize, Debug)]
 pub struct SecureNoteItem {
-    #[serde(rename="type")]
-    #[serde(alias="Type")]
+    #[serde(rename = "type")]
+    #[serde(alias = "Type")]
     #[serde(default)]
     pub secure_note_type: i32,
 }

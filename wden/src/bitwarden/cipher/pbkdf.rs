@@ -2,10 +2,9 @@ use std::sync::Arc;
 
 use aes::cipher::generic_array::GenericArray;
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, digest::OutputSizeUser, Sha256};
+use sha2::{Digest, Sha256, digest::OutputSizeUser};
 
 use super::{CipherError, EncMacKeys, MasterKey};
-
 
 pub trait Pbkdf {
     fn create_master_key(

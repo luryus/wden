@@ -1,15 +1,16 @@
 use api::VaultwardenClient;
 use testcontainers::{
-    core::{IntoContainerPort, WaitFor}, runners::AsyncRunner, ContainerAsync, GenericImage, ImageExt
+    ContainerAsync, GenericImage, ImageExt,
+    core::{IntoContainerPort, WaitFor},
+    runners::AsyncRunner,
 };
 use user_init::{PBKDF2_USER_EMAIL, PBKDF2_USER_MASTER_PW_HASH, PBKDF2_USER_PASSWORD};
 use wden::profile;
 
-
-mod user_init;
-mod vault_init;
 mod api;
 pub mod testdata;
+mod user_init;
+mod vault_init;
 
 pub struct IntegrationTestContext {
     _container: ContainerAsync<GenericImage>,
@@ -31,7 +32,13 @@ pub async fn setup() -> anyhow::Result<IntegrationTestContext> {
 
     user_init::init_users(&client).await?;
 
-    vault_init::init_vault_data(&mut client, PBKDF2_USER_EMAIL, PBKDF2_USER_MASTER_PW_HASH, PBKDF2_USER_PASSWORD).await?;
+    vault_init::init_vault_data(
+        &mut client,
+        PBKDF2_USER_EMAIL,
+        PBKDF2_USER_MASTER_PW_HASH,
+        PBKDF2_USER_PASSWORD,
+    )
+    .await?;
 
     let profile_name = format!("integrationtest_{}", uuid::Uuid::new_v4());
 
@@ -39,7 +46,7 @@ pub async fn setup() -> anyhow::Result<IntegrationTestContext> {
         _container: container,
         _client: client,
         http_port,
-        profile_name
+        profile_name,
     })
 }
 
@@ -49,4 +56,3 @@ impl Drop for IntegrationTestContext {
         let _ = profile::ProfileStore::delete(&self.profile_name);
     }
 }
-

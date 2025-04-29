@@ -1,9 +1,10 @@
 use super::{PlatformClipboard, PlatformClipboardResult};
 use clipboard_win::{
+    Clipboard, Setter,
     formats::Unicode,
     get_clipboard_string,
     raw::{empty, set_without_clear},
-    register_format, Clipboard, Setter,
+    register_format,
 };
 
 pub struct WindowsClipboard;

@@ -1,7 +1,7 @@
 use cursive::{
+    Cursive, CursiveExt,
     view::{Nameable, Resizable},
     views::{Dialog, EditView, LinearLayout, TextView},
-    Cursive, CursiveExt,
 };
 use cursive_secret_edit_view::SecretEditView;
 

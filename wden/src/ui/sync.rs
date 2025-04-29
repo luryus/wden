@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use cursive::{views::Dialog, Cursive};
+use cursive::{Cursive, views::Dialog};
 
 use crate::{bitwarden::api::ApiClient, ui::login};
 
