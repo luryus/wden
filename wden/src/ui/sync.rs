@@ -103,7 +103,7 @@ pub fn do_sync(cursive: &mut Cursive, just_refreshed_token: bool) {
             }
             Err(sync_err) => {
                 let err_msg = format!("Error syncing: {}", &sync_err);
-                log::error!("Sync error: {:?}", sync_err);
+                log::error!("Sync error: {sync_err:?}");
                 c.add_layer(Dialog::text(err_msg));
             }
         },

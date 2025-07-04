@@ -123,7 +123,7 @@ impl Unlocked {
     fn get_keys_for_collection(&self, collection: &Collection) -> Option<EncMacKeys> {
         let user_keys = self.logged_in_data.decrypt_keys()?;
         self.decrypt_organization_keys(&collection.organization_id, &user_keys)
-            .inspect_err(|e| log::warn!("Error decrypting org keys: {}", e))
+            .inspect_err(|e| log::warn!("Error decrypting org keys: {e}"))
             .ok()
     }
 

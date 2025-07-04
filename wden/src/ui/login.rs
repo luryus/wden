@@ -283,7 +283,7 @@ pub fn handle_login_response(
                             .profile_store()
                             .edit(|d| d.saved_email = Some(String::clone(&email)));
                         if let Err(e) = store_res {
-                            log::error!("Failed to store profile data: {}", e);
+                            log::error!("Failed to store profile data: {e}");
                         }
                     }
 

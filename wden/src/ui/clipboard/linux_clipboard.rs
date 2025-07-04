@@ -181,7 +181,7 @@ mod wayland {
             paste::MimeType::Any,
         );
 
-        log::info!("Wayland res: {:?}", res);
+        log::info!("Wayland res: {res:?}");
 
         matches!(
             res,

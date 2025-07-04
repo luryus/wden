@@ -224,7 +224,7 @@ impl Cipher {
 
     pub fn decrypt_to_string(&self, keys: &EncMacKeys) -> String {
         self.decrypt(keys)
-            .inspect_err(|e| log::warn!("Error decrypting cipher: {}", e))
+            .inspect_err(|e| log::warn!("Error decrypting cipher: {e}"))
             .ok()
             .and_then(|s| String::from_utf8(s).ok())
             .unwrap_or_default()

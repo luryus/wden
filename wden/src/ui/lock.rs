@@ -84,7 +84,7 @@ fn submit_unlock(c: &mut Cursive) {
 
     match keys_res {
         Err(e) => {
-            log::warn!("Unlocking failed: {}", e);
+            log::warn!("Unlocking failed: {e}");
 
             let err_msg = match e {
                 CipherError::MacVerificationFailed(_) => {

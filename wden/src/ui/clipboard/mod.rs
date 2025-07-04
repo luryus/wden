@@ -13,7 +13,7 @@ type PlatformCbImpl = linux_clipboard::LinuxClipboard;
 pub fn clip_string(s: String) {
     log::info!("Clipping...");
     if let Err(e) = PlatformCbImpl::clip_string(s) {
-        log::warn!("Clipping string failed: {}", e)
+        log::warn!("Clipping string failed: {e}")
     };
 }
 
@@ -31,7 +31,7 @@ pub fn clip_expiring_string(s: String, expiry_seconds: u64) {
         });
 
         if let Err(e) = res {
-            log::warn!("Clearing clipboard failed: {}", e);
+            log::warn!("Clearing clipboard failed: {e}");
         }
     });
 }
