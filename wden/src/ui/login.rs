@@ -401,12 +401,12 @@ pub async fn do_login(
             .await?
     };
 
-    if let bitwarden::api::TokenResponse::Success(t) = &mut token_res {
-        if let Some(tft) = t.two_factor_token.take() {
-            profile_store
-                .edit(|d| d.saved_two_factor_token = Some(tft))
-                .expect("Storing 2nd factor token failed");
-        }
+    if let bitwarden::api::TokenResponse::Success(t) = &mut token_res
+        && let Some(tft) = t.two_factor_token.take()
+    {
+        profile_store
+            .edit(|d| d.saved_two_factor_token = Some(tft))
+            .expect("Storing 2nd factor token failed");
     }
 
     Ok(token_res)

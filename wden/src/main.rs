@@ -139,10 +139,9 @@ async fn main() {
         None
     };
 
-    if let Some(((client_id, client_secret), email)) = opts
-        .api_key_client_id
-        .zip(opts.api_key_client_secret)
-        .zip(opts.api_key_login_email)
+    if let Some(client_id) = opts.api_key_client_id
+        && let Some(client_secret) = opts.api_key_client_secret
+        && let Some(email) = opts.api_key_login_email
     {
         store_api_keys(
             opts.profile,
