@@ -17,7 +17,7 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/')
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
     - uses: dtolnay/rust-toolchain@stable
     - uses: Swatinem/rust-cache@v2
 
@@ -42,7 +42,7 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
 
     - name: Prepare environment
       uses: ./.github/actions/wden-rust-env-setup
@@ -79,7 +79,7 @@ jobs:
     needs: [extract_changelog, build]
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
     - uses: actions/download-artifact@v4
       with:
         merge-multiple: true
