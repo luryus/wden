@@ -42,7 +42,7 @@ clap = { version="4", features = ["derive"] }
 directories-next = "2.0"
 thiserror = "2.0"
 anyhow = "1.0"
-zeroize = { version = "1.7", features = ["zeroize_derive"] }
+zeroize = { version = "1.8", features = ["zeroize_derive"] }
 arrayvec = "0.7"
 simsearch = "0.2"
 tabled = "0.20"
