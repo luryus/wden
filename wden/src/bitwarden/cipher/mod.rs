@@ -198,7 +198,7 @@ impl Cipher {
             .map_err(CipherError::InvalidKeyOrIvLength)?;
         hmac.update(&iv);
         hmac.update(&ct);
-        let mac = hmac.finalize().into_bytes().as_slice().to_owned();
+        let mac = hmac.finalize().into_bytes().to_vec();
 
         Ok(Self::Value {
             enc_type: EncType::AesCbc256HmacSha256B64,

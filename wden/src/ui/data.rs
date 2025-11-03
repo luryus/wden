@@ -246,42 +246,42 @@ impl UserData {
         }
     }
 
-    pub fn with_logged_out_state(&mut self) -> Option<StatefulUserData<LoggedOut>> {
+    pub fn with_logged_out_state(&mut self) -> Option<StatefulUserData<'_, LoggedOut>> {
         match &self.state_data {
             &AppStateData::LoggedOut(_) => Some(StatefulUserData::new(self)),
             _ => None,
         }
     }
 
-    pub fn with_logging_in_state(&mut self) -> Option<StatefulUserData<LoggingIn>> {
+    pub fn with_logging_in_state(&mut self) -> Option<StatefulUserData<'_, LoggingIn>> {
         match &self.state_data {
             &AppStateData::LoggingIn(_) => Some(StatefulUserData::new(self)),
             _ => None,
         }
     }
 
-    pub fn with_logged_in_state(&mut self) -> Option<StatefulUserData<LoggedIn>> {
+    pub fn with_logged_in_state(&mut self) -> Option<StatefulUserData<'_, LoggedIn>> {
         match &self.state_data {
             &AppStateData::LoggedIn(_) => Some(StatefulUserData::new(self)),
             _ => None,
         }
     }
 
-    pub fn with_unlocked_state(&mut self) -> Option<StatefulUserData<Unlocked>> {
+    pub fn with_unlocked_state(&mut self) -> Option<StatefulUserData<'_, Unlocked>> {
         match &self.state_data {
             &AppStateData::Unlocked(_) => Some(StatefulUserData::new(self)),
             _ => None,
         }
     }
 
-    pub fn with_locked_state(&mut self) -> Option<StatefulUserData<Locked>> {
+    pub fn with_locked_state(&mut self) -> Option<StatefulUserData<'_, Locked>> {
         match &self.state_data {
             &AppStateData::Locked(_) => Some(StatefulUserData::new(self)),
             _ => None,
         }
     }
 
-    pub fn with_logging_in_like_state(&mut self) -> Option<StatefulUserData<LoggingInLikeState>> {
+    pub fn with_logging_in_like_state(&mut self) -> Option<StatefulUserData<'_, LoggingInLikeState>> {
         match &self.state_data {
             AppStateData::Refreshing(_) => Some(StatefulUserData::new(self)),
             AppStateData::LoggingIn(_) => Some(StatefulUserData::new(self)),

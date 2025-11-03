@@ -453,11 +453,11 @@ pub fn show_copy_notification(cursive: &mut Cursive, message: &'static str) {
         tokio::time::sleep(Duration::from_millis(500)).await;
         cb.send_msg(Box::new(|siv| {
             let sc = siv.screen_mut();
-            if let Some(LayerPosition::FromBack(l)) = sc.find_layer_from_name("copy_notification") {
-                if l == sc.len() - 1 {
-                    // If the dialog is the topmost layer, pop it
-                    siv.pop_layer();
-                }
+            if let Some(LayerPosition::FromBack(l)) = sc.find_layer_from_name("copy_notification")
+                && l == sc.len() - 1
+            {
+                // If the dialog is the topmost layer, pop it
+                siv.pop_layer();
             }
         }));
     });

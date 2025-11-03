@@ -26,6 +26,11 @@ pbkdf2 = "0.12"
 hkdf = "0.12"
 argon2 = { version = "0.5", features = ["zeroize"] }
 
+# Pin generic-array to a specific version. RustCrypto depends on 0.14, but the newer
+# patch versions of that contain a deprecation warning for everything.
+# See: https://github.com/RustCrypto/traits/issues/2036
+generic-array = "=0.14.7"
+
 uuid = { version = "1.17", features = ["v4"] }
 
 serde = { version = "1.0", features = ["derive"] }

@@ -40,10 +40,10 @@ async fn autolock_loop(cb_sink: CbSink, next_autolock_time: Arc<Mutex<Autolocker
     loop {
         int.tick().await;
 
-        if let Some(t) = next_autolock_time.lock().unwrap().next_lock_time {
-            if Instant::now() > t {
-                cb_sink.send_msg(Box::new(lock_vault));
-            }
+        if let Some(t) = next_autolock_time.lock().unwrap().next_lock_time
+            && Instant::now() > t
+        {
+            cb_sink.send_msg(Box::new(lock_vault));
         }
     }
 }
