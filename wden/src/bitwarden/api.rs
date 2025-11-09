@@ -105,14 +105,11 @@ impl ApiClient {
     /// * `two_factor`: Optional tuple describing the second factor type, the second factor token and
     ///   whether to token should be "remembered" by the server or not. None if two-factor
     ///   is not used.
-    /// * `captcha_token`: Token for skipping the captcha check. Either the user's private api key or a captcha
-    ///   bypass token sent by the server.
     pub async fn get_token(
         &self,
         username: &str,
         password: &str,
         two_factor: Option<(TwoFactorProviderType, &str, bool)>,
-        captcha_token: Option<&str>,
     ) -> Result<TokenResponse, Error> {
         let device_type = (get_device_type() as i8).to_string();
         let mut body = HashMap::new();
@@ -135,10 +132,6 @@ impl ApiClient {
             if two_factor_remember && two_factor_type != TwoFactorProviderType::Remember {
                 body.insert("twoFactorRemember", "1");
             }
-        }
-
-        if let Some(ct) = captcha_token {
-            body.insert("captchaResponse", ct);
         }
 
         let url = self.identity_base_url.join("connect/token")?;
@@ -175,14 +168,7 @@ impl ApiClient {
                     })
                     .ok_or_else(|| anyhow::anyhow!("Error parsing provider types"))?;
 
-                let captcha_bypass = body
-                    .get("CaptchaBypassToken")
-                    .and_then(|cbt| cbt.as_str())
-                    .map(|s| s.to_string());
-
-                return Ok(TokenResponse::TwoFactorRequired(providers, captcha_bypass));
-            } else if body.contains_key("HCaptcha_SiteKey") {
-                return Ok(TokenResponse::CaptchaRequired);
+                return Ok(TokenResponse::TwoFactorRequired(providers));
             } else {
                 // The error models often include the error message,
                 // so try to get and show it.
@@ -325,8 +311,7 @@ impl ApiClient {
 
 pub enum TokenResponse {
     Success(Box<TokenResponseSuccess>),
-    TwoFactorRequired(Vec<TwoFactorProviderType>, Option<String>),
-    CaptchaRequired,
+    TwoFactorRequired(Vec<TwoFactorProviderType>),
 }
 
 #[derive(Deserialize, Debug, Clone)]

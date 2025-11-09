@@ -19,7 +19,6 @@ pub fn two_factor_dialog(
     types: Vec<TwoFactorProviderType>,
     email: Arc<String>,
     profile_name: &str,
-    captcha_token: Option<Arc<String>>,
 ) -> Dialog {
     if !types.contains(&TwoFactorProviderType::Authenticator) {
         Dialog::info(
@@ -28,8 +27,6 @@ pub fn two_factor_dialog(
     } else {
         let email2 = email.clone();
         let email3 = email.clone();
-        let captcha_token2 = captcha_token.clone();
-        let had_captcha_token = captcha_token.is_some();
 
         Dialog::around(
             LinearLayout::vertical()
@@ -37,27 +34,27 @@ pub fn two_factor_dialog(
                 .child(
                     EditView::new()
                         .on_submit(move |siv, _| {
-                            submit_two_factor(siv, email.clone(), captcha_token.clone())
+                            submit_two_factor(siv, email.clone())
                         })
                         .with_name(VIEW_NAME_AUTHENTICATOR_CODE),
                 ),
         )
         .title(format!("Two-factor Login ({profile_name})"))
         .button("Submit", move |siv| {
-            submit_two_factor(siv, email2.clone(), captcha_token2.clone())
+            submit_two_factor(siv, email2.clone())
         })
         .button("Cancel", move |siv| {
             let ud = siv.get_user_data().with_logging_in_state().unwrap();
             let ud = ud.into_logged_out();
             let pn = &ud.global_settings().profile;
-            let d = login_dialog(pn, Some(email3.to_string()), false, had_captcha_token);
+            let d = login_dialog(pn, Some(email3.to_string()), false);
             siv.clear_layers();
             siv.add_layer(d);
         })
     }
 }
 
-fn submit_two_factor(c: &mut Cursive, email: Arc<String>, personal_api_key: Option<Arc<String>>) {
+fn submit_two_factor(c: &mut Cursive, email: Arc<String>) {
     let code = c
         .call_on_name(VIEW_NAME_AUTHENTICATOR_CODE, |view: &mut EditView| {
             view.get_content()
@@ -87,11 +84,10 @@ fn submit_two_factor(c: &mut Cursive, email: Arc<String>, personal_api_key: Opti
                 &email,
                 master_pw_hash,
                 Some((TwoFactorProviderType::Authenticator, &code)),
-                personal_api_key.as_deref().map(|s| s.as_str()),
                 &profile_store,
             )
             .await
         },
-        move |siv, res| handle_login_response(siv, res, email2, false, false),
+        move |siv, res| handle_login_response(siv, res, email2, false),
     );
 }

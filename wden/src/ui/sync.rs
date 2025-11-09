@@ -51,7 +51,7 @@ pub fn do_sync(cursive: &mut Cursive, just_refreshed_token: bool) {
                 client.refresh_token(&token, api_key.as_deref()).await
             },
             move |siv, refresh_res| {
-                login::handle_login_response(siv, refresh_res, email, false, is_api_key_login);
+                login::handle_login_response(siv, refresh_res, email, is_api_key_login);
             },
         );
         // Login response handling above calls do_sync again, so nothing to do here
