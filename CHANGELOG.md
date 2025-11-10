@@ -2,6 +2,8 @@
 
 ## next
 
+- **Breaking change**: Remove support for Bitwarden login captchas. Bitwarden has removed this feature from their server. Wden's API key login feature (released in version 0.13.0) can be used if captchas are still used by a self-hosted instance.
+
 ## 0.13.3
 
 - Dependency updates, including security patches (https://github.com/advisories/GHSA-4p46-pwfr-66x6, https://github.com/advisories/GHSA-4fcv-w3qc-ppgg, https://github.com/advisories/GHSA-pg9f-39pc-qf8g)
