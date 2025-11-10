@@ -320,11 +320,6 @@ impl<'a> StatefulUserData<'a, LoggingIn> {
         let logging_in_data = get_state_data!(&self.user_data.state_data, AppStateData::LoggingIn);
         logging_in_data.master_password_hash.clone()
     }
-
-    pub fn email(&self) -> Arc<String> {
-        let logging_in_data = get_state_data!(&self.user_data.state_data, AppStateData::LoggingIn);
-        logging_in_data.email.clone()
-    }
 }
 
 impl<'a> StatefulUserData<'a, LoggingInLikeState> {
