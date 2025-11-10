@@ -177,12 +177,13 @@ impl VaultwardenClient {
         let sc = ServerConfiguration::single_host(self.base_url.clone());
         let cl = ApiClient::new(&sc, "", true);
 
-        let tok = cl.get_token(username, password, None).await?;
+        let tok = cl.get_token(username, password, None, None).await?;
         match tok {
             wden::bitwarden::api::TokenResponse::Success(token_response_success) => {
                 Ok(token_response_success)
             }
             wden::bitwarden::api::TokenResponse::TwoFactorRequired(_) => unreachable!(),
+            wden::bitwarden::api::TokenResponse::DeviceVerificationRequired => unreachable!(),
         }
     }
 }

@@ -19,6 +19,7 @@ use crate::{
         cipher::{self, MasterKey, MasterPasswordHash, PbkdfParameters},
     },
     profile::{GlobalSettings, ProfileStore},
+    ui::new_dev_verification::new_device_verify_dialog,
 };
 
 use super::{sync::do_sync, two_factor::two_factor_dialog, util::cursive_ext::CursiveExt};
@@ -132,6 +133,7 @@ fn submit_login(c: &mut Cursive) {
                     &email,
                     master_pw_hash.clone(),
                     None,
+                    None,
                     &profile_store,
                 )
                 .await
@@ -228,6 +230,7 @@ pub fn handle_login_response(
             if let Some(ud) = cursive.get_user_data().with_logging_in_like_state() {
                 ud.into_logged_out();
             }
+            cursive.pop_layer();
             cursive.add_layer(Dialog::text(err_msg).title("Login error").button(
                 "OK",
                 move |siv| {
@@ -277,8 +280,18 @@ pub fn handle_login_response(
                         .unwrap()
                         .global_settings()
                         .profile;
-                    let dialog =
-                        two_factor_dialog(types, email, p);
+                    let dialog = two_factor_dialog(types, email, p);
+                    cursive.add_layer(dialog);
+                }
+                bitwarden::api::TokenResponse::DeviceVerificationRequired => {
+                    cursive.pop_layer();
+                    let p = &cursive
+                        .get_user_data()
+                        .with_logging_in_state()
+                        .unwrap()
+                        .global_settings()
+                        .profile;
+                    let dialog = new_device_verify_dialog(email, p);
                     cursive.add_layer(dialog);
                 }
             }
@@ -325,6 +338,7 @@ pub async fn do_login(
     email: &str,
     master_pw_hash: Arc<MasterPasswordHash>,
     second_factor: Option<(TwoFactorProviderType, &str)>,
+    new_device_otp: Option<&str>,
     profile_store: &ProfileStore,
 ) -> Result<TokenResponse, anyhow::Error> {
     let mut token_res = if let Some((two_factor_type, two_factor_token)) = second_factor {
@@ -333,6 +347,7 @@ pub async fn do_login(
                 email,
                 &master_pw_hash.base64_encoded(),
                 Some((two_factor_type, two_factor_token, true)),
+                new_device_otp,
             )
             .await?
     } else {
@@ -352,6 +367,7 @@ pub async fn do_login(
                 email,
                 &master_pw_hash.base64_encoded(),
                 two_factor_param,
+                new_device_otp,
             )
             .await?
     };

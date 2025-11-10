@@ -13,6 +13,8 @@ use std::{collections::HashMap, convert::TryFrom};
 
 const APP_USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"),);
 
+const NEW_DEVICE_VERIFICATION_ERROR_MSG: &str = "new device verification required";
+
 #[allow(clippy::enum_variant_names)]
 enum DeviceType {
     WindowsCLI = 23,
@@ -110,6 +112,7 @@ impl ApiClient {
         username: &str,
         password: &str,
         two_factor: Option<(TwoFactorProviderType, &str, bool)>,
+        new_device_otp: Option<&str>,
     ) -> Result<TokenResponse, Error> {
         let device_type = (get_device_type() as i8).to_string();
         let mut body = HashMap::new();
@@ -134,6 +137,10 @@ impl ApiClient {
             }
         }
 
+        if let Some(otp) = new_device_otp {
+            body.insert("newDeviceOtp", otp);
+        }
+
         let url = self.identity_base_url.join("connect/token")?;
 
         let res = self
@@ -153,6 +160,14 @@ impl ApiClient {
         if res.status() == 400 {
             log::info!("{:?}", &res);
             let body = res.json::<HashMap<String, serde_json::Value>>().await?;
+            // The error models often include the error message,
+            // so try to get and show it.
+            let server_error_message = body
+                .get("ErrorModel")
+                .and_then(|em| em.as_object())
+                .and_then(|em| em.get("Message"))
+                .and_then(|m| m.as_str());
+
             if body.contains_key("TwoFactorProviders") {
                 let providers = body
                     .get("TwoFactorProviders")
@@ -160,24 +175,21 @@ impl ApiClient {
                     .map(|ps| {
                         ps.iter()
                             .filter_map(|p| {
-                                p.as_u64()
-                                    .and_then(|x| (x as u8).try_into().ok())
-                                    .or_else(|| p.as_str().and_then(|x| x.try_into().ok()))
+                                if let Some(provider_id) =
+                                    p.as_u64().and_then(|pid| u8::try_from(pid).ok())
+                                {
+                                    return TwoFactorProviderType::try_from(provider_id).ok();
+                                }
+                                p.as_str()?.try_into().ok()
                             })
                             .collect()
                     })
                     .ok_or_else(|| anyhow::anyhow!("Error parsing provider types"))?;
 
                 return Ok(TokenResponse::TwoFactorRequired(providers));
+            } else if server_error_message == Some(NEW_DEVICE_VERIFICATION_ERROR_MSG) {
+                return Ok(TokenResponse::DeviceVerificationRequired);
             } else {
-                // The error models often include the error message,
-                // so try to get and show it.
-                let server_error_message = body
-                    .get("ErrorModel")
-                    .and_then(|em| em.as_object())
-                    .and_then(|em| em.get("Message"))
-                    .and_then(|m| m.as_str());
-
                 return match server_error_message {
                     Some(msg) => Err(anyhow::anyhow!("{}", msg)),
                     None => Err(anyhow::anyhow!("Error logging in: {:?}", body)),
@@ -312,6 +324,7 @@ impl ApiClient {
 pub enum TokenResponse {
     Success(Box<TokenResponseSuccess>),
     TwoFactorRequired(Vec<TwoFactorProviderType>),
+    DeviceVerificationRequired,
 }
 
 #[derive(Deserialize, Debug, Clone)]

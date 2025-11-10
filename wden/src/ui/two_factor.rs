@@ -33,16 +33,12 @@ pub fn two_factor_dialog(
                 .child(TextView::new("Enter authenticator code:"))
                 .child(
                     EditView::new()
-                        .on_submit(move |siv, _| {
-                            submit_two_factor(siv, email.clone())
-                        })
+                        .on_submit(move |siv, _| submit_two_factor(siv, email.clone()))
                         .with_name(VIEW_NAME_AUTHENTICATOR_CODE),
                 ),
         )
         .title(format!("Two-factor Login ({profile_name})"))
-        .button("Submit", move |siv| {
-            submit_two_factor(siv, email2.clone())
-        })
+        .button("Submit", move |siv| submit_two_factor(siv, email2.clone()))
         .button("Cancel", move |siv| {
             let ud = siv.get_user_data().with_logging_in_state().unwrap();
             let ud = ud.into_logged_out();
@@ -84,6 +80,7 @@ fn submit_two_factor(c: &mut Cursive, email: Arc<String>) {
                 &email,
                 master_pw_hash,
                 Some((TwoFactorProviderType::Authenticator, &code)),
+                None,
                 &profile_store,
             )
             .await
