@@ -280,8 +280,9 @@ pub fn handle_login_response(
                         .unwrap()
                         .global_settings()
                         .profile;
-                    let dialog = two_factor_dialog(types, email, p);
+                    let (dialog, cb) = two_factor_dialog(types, email, p);
                     cursive.add_layer(dialog);
+                    cb(cursive);
                 }
                 bitwarden::api::TokenResponse::DeviceVerificationRequired => {
                     cursive.pop_layer();

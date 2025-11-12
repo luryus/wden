@@ -99,6 +99,25 @@ impl ApiClient {
         Ok(res.into())
     }
 
+    pub async fn request_email_2fa_code(&self, user_email: &str, master_password_hash: &str) -> Result<(), Error> {
+        let mut body = HashMap::new();
+        body.insert("email", user_email);
+        body.insert("masterPasswordHash", master_password_hash);
+        body.insert("deviceIdentifier", &self.device_identifier);
+
+        let url = self.api_base_url.join("two-factor/send-email-login")?;
+
+        self
+            .http_client
+            .post(url)
+            .json(&body)
+            .send()
+            .await?
+            .error_for_status()?;
+
+        Ok(())
+    }
+
     /// Make Bitwarden (OAuth) /identity/token api call for authenticating.
     ///
     /// Arguments:
