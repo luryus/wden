@@ -4,7 +4,7 @@ use cursive::{
     Cursive,
     event::Callback,
     traits::Nameable,
-    views::{Dialog, EditView, LinearLayout, TextView},
+    views::{Dialog, EditView, LinearLayout, PaddedView, SelectView, TextView},
 };
 
 use crate::bitwarden::api::{ApiClient, TwoFactorProviderType};
@@ -17,10 +17,20 @@ use super::{
 const VIEW_NAME_AUTHENTICATOR_CODE: &str = "authenticator_code";
 
 pub fn two_factor_dialog(
-    types: Vec<TwoFactorProviderType>,
+    mut types: Vec<TwoFactorProviderType>,
     email: Arc<String>,
     profile_name: &str,
 ) -> (Dialog, Callback) {
+    // Only keep supported types
+    types.retain(|x| {
+        x == &TwoFactorProviderType::Authenticator || x == &TwoFactorProviderType::Email
+    });
+
+    if types.len() > 1 {
+        let dialog = two_factor_type_selector_dialog(types, email.clone(), profile_name);
+        return (dialog, Callback::dummy());
+    }
+
     if types.contains(&TwoFactorProviderType::Authenticator) {
         let dialog = two_factor_dialog_authenticator(email, profile_name);
         (dialog, Callback::dummy())
@@ -32,6 +42,36 @@ pub fn two_factor_dialog(
         ).button("OK", move |siv| cancel_2fa(siv, Some(String::clone(&email))));
         (dialog, Callback::dummy())
     }
+}
+
+fn two_factor_type_selector_dialog(
+    types: Vec<TwoFactorProviderType>,
+    email: Arc<String>,
+    profile_name: &str,
+) -> Dialog {
+    let email2 = email.clone();
+
+    let select_view = SelectView::new()
+        .with_all(types.into_iter().map(|t| (format!("{t:?}"), t)))
+        .on_submit(move |siv, &t| {
+            let ud = siv.get_user_data().with_logging_in_state().unwrap();
+            let (dialog, cb) =
+                two_factor_dialog(vec![t], email.clone(), &ud.global_settings().profile);
+
+            siv.clear_layers();
+            siv.add_layer(dialog);
+            cb(siv);
+        });
+
+    Dialog::around(
+        LinearLayout::vertical()
+            .child(TextView::new("Choose 2FA method:"))
+            .child(PaddedView::lrtb(0, 0, 1, 0, select_view)),
+    )
+    .title(format!("Two factor Login ({profile_name})"))
+    .button("Cancel", move |siv| {
+        cancel_2fa(siv, Some(String::clone(&email2)))
+    })
 }
 
 fn two_factor_dialog_authenticator(email: Arc<String>, profile_name: &str) -> Dialog {
