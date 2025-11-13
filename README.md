@@ -16,7 +16,7 @@ This project is not associated with the Bitwarden project nor Bitwarden Inc.
 Usage: wden [OPTIONS]
 
 Options:
-  -p, --profile <PROFILE>  Sets the profile that will be used. Profile names can only include lowercase alphanumeric characters, dashes (-) and underscores (_) [default: default]
+  -p, --profile <PROFILE>  Sets the profile that will be used [default: default]
       --list-profiles      Instead of starting the application, list all stored profiles
   -h, --help               Print help (see more with '--help')
   -V, --version            Print version
@@ -31,8 +31,13 @@ Server options:
       --identity-server-url <IDENTITY_SERVER_URL>
           Sets the current profile to use the given identity server url. This needs to be set with --api-server-url
 
+API Keys:
+      --api-key-client-id <API_KEY_CLIENT_ID>          Client secret of Bitwarden API key
+      --api-key-client-secret <API_KEY_CLIENT_SECRET>  Client ID of Bitwarden API key
+      --api-key-login-email <API_KEY_LOGIN_EMAIL>      Email address of the API key account
+
 Advanced options:
-      --accept-invalid-certs  Accept invalid and untrusted (e.g. self-signed) certificates when connecting to the server. This option makes connections insecure, so avoid using it
+      --accept-invalid-certs  Danger: Accept invalid and untrusted (e.g. self-signed) certificates
 ```
 
 ### With Bitwarden Cloud
@@ -81,7 +86,7 @@ Configuration files, one for each profile, are stored under the user's config di
     - Bypasses clipboard history in Windows and KDE Plasma
 - View organization items
 - Fuzzy search
-- 2FA login (only authenticator code apps supported)
+- 2FA login (only authenticator code apps and email supported as 2FA methods)
 - Connect to self-hosted Bitwarden-compatible instances (configurable URLs)
 - Automatic vault locking after a configurable period
 - Multiple profiles (configurations)
@@ -89,6 +94,5 @@ Configuration files, one for each profile, are stored under the user's config di
 ## Todo
 
 - Folder support
-- Additional 2FA methods
 - Local vault caching / offline support?
 - Attachment support

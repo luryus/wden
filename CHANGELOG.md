@@ -3,6 +3,9 @@
 ## next
 
 - **Breaking change**: Remove support for Bitwarden login captchas. Bitwarden has removed this feature from their server. Wden's API key login feature (released in version 0.13.0) can be used if captchas are still used by a self-hosted instance.
+- Add support for Bitwarden's new device verification. Wden now requests a code sent to the account email when Bitwarden requires the new device to be verified.
+- Email is now supported as a two-factor authentication method
+- If both authenticator and email are enabled as 2FA method, the 2fa method to use can be chosen during login
 
 ## 0.13.3
 
