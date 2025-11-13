@@ -281,7 +281,9 @@ impl UserData {
         }
     }
 
-    pub fn with_logging_in_like_state(&mut self) -> Option<StatefulUserData<'_, LoggingInLikeState>> {
+    pub fn with_logging_in_like_state(
+        &mut self,
+    ) -> Option<StatefulUserData<'_, LoggingInLikeState>> {
         match &self.state_data {
             AppStateData::Refreshing(_) => Some(StatefulUserData::new(self)),
             AppStateData::LoggingIn(_) => Some(StatefulUserData::new(self)),

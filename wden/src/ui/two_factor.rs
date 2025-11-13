@@ -2,8 +2,9 @@ use std::sync::Arc;
 
 use cursive::{
     Cursive,
+    event::Callback,
     traits::Nameable,
-    views::{Dialog, EditView, LinearLayout, TextView},
+    views::{Dialog, EditView, LinearLayout, PaddedView, SelectView, TextView},
 };
 
 use crate::bitwarden::api::{ApiClient, TwoFactorProviderType};
@@ -16,45 +17,165 @@ use super::{
 const VIEW_NAME_AUTHENTICATOR_CODE: &str = "authenticator_code";
 
 pub fn two_factor_dialog(
+    mut types: Vec<TwoFactorProviderType>,
+    email: Arc<String>,
+    profile_name: &str,
+) -> (Dialog, Callback) {
+    // Only keep supported types
+    types.retain(|x| {
+        x == &TwoFactorProviderType::Authenticator || x == &TwoFactorProviderType::Email
+    });
+
+    if types.len() > 1 {
+        let dialog = two_factor_type_selector_dialog(types, email.clone(), profile_name);
+        return (dialog, Callback::dummy());
+    }
+
+    if types.contains(&TwoFactorProviderType::Authenticator) {
+        let dialog = two_factor_dialog_authenticator(email, profile_name);
+        (dialog, Callback::dummy())
+    } else if types.contains(&TwoFactorProviderType::Email) {
+        two_factor_dialog_email(email, profile_name)
+    } else {
+        let dialog = Dialog::text(
+            "Account requires two-factor authentication, but active two-factor methods are not supported.",
+        ).button("OK", move |siv| cancel_2fa(siv, Some(String::clone(&email))));
+        (dialog, Callback::dummy())
+    }
+}
+
+fn two_factor_type_selector_dialog(
     types: Vec<TwoFactorProviderType>,
     email: Arc<String>,
     profile_name: &str,
 ) -> Dialog {
-    if !types.contains(&TwoFactorProviderType::Authenticator) {
-        Dialog::info(
-            "Account requires two-factor authentication, but active two-factor methods are not supported.",
-        )
-    } else {
-        let email2 = email.clone();
-        let email3 = email.clone();
+    let email2 = email.clone();
 
-        Dialog::around(
+    let select_view = SelectView::new()
+        .with_all(types.into_iter().map(|t| (format!("{t:?}"), t)))
+        .on_submit(move |siv, &t| {
+            let ud = siv.get_user_data().with_logging_in_state().unwrap();
+            let (dialog, cb) =
+                two_factor_dialog(vec![t], email.clone(), &ud.global_settings().profile);
+
+            siv.clear_layers();
+            siv.add_layer(dialog);
+            cb(siv);
+        });
+
+    Dialog::around(
+        LinearLayout::vertical()
+            .child(TextView::new("Choose 2FA method:"))
+            .child(PaddedView::lrtb(0, 0, 1, 0, select_view)),
+    )
+    .title(format!("Two factor Login ({profile_name})"))
+    .button("Cancel", move |siv| {
+        cancel_2fa(siv, Some(String::clone(&email2)))
+    })
+}
+
+fn two_factor_dialog_authenticator(email: Arc<String>, profile_name: &str) -> Dialog {
+    let email2 = email.clone();
+    let email3 = email.clone();
+
+    Dialog::around(
+        LinearLayout::vertical()
+            .child(TextView::new("Enter authenticator code:"))
+            .child(
+                EditView::new()
+                    .on_submit(move |siv, _| {
+                        submit_two_factor(siv, TwoFactorProviderType::Authenticator, email.clone())
+                    })
+                    .with_name(VIEW_NAME_AUTHENTICATOR_CODE),
+            ),
+    )
+    .title(format!("Two-factor Login ({profile_name})"))
+    .button("Submit", move |siv| {
+        submit_two_factor(siv, TwoFactorProviderType::Authenticator, email2.clone())
+    })
+    .button("Cancel", move |siv| {
+        cancel_2fa(siv, Some(String::clone(&email3)))
+    })
+}
+
+/// Clears layers and returns back to the login screen, with the specified email
+/// pre-filled. Requires that the UI is in the logging in state, transitions to logged out state.
+fn cancel_2fa(cursive: &mut Cursive, email: Option<String>) {
+    let ud = cursive.get_user_data().with_logging_in_state().unwrap();
+    let ud = ud.into_logged_out();
+    let pn = &ud.global_settings().profile;
+    let d = login_dialog(pn, email, false);
+
+    cursive.clear_layers();
+    cursive.add_layer(d);
+}
+
+fn two_factor_dialog_email(email: Arc<String>, profile_name: &str) -> (Dialog, Callback) {
+    let title = format!("Two-factor Login ({profile_name})");
+
+    let init_dialog = Dialog::text("Requesting verification code...");
+
+    let cb = Callback::from_fn_once(move |siv: &mut Cursive| {
+        let ud = siv.get_user_data().with_logging_in_state().unwrap();
+        let global_settings = ud.global_settings();
+        let master_password_hash = ud.master_password_hash();
+
+        let email2 = Arc::clone(&email);
+        let email3 = Arc::clone(&email);
+        let email4 = Arc::clone(&email);
+        let email5 = Arc::clone(&email);
+        let email6 = Arc::clone(&email);
+
+        let actual_dialog = Dialog::around(
             LinearLayout::vertical()
-                .child(TextView::new("Enter authenticator code:"))
+                .child(TextView::new("Enter verification code sent to your email:"))
                 .child(
                     EditView::new()
                         .on_submit(move |siv, _| {
-                            submit_two_factor(siv, email.clone())
+                            submit_two_factor(siv, TwoFactorProviderType::Email, email2.clone())
                         })
                         .with_name(VIEW_NAME_AUTHENTICATOR_CODE),
                 ),
         )
-        .title(format!("Two-factor Login ({profile_name})"))
+        .title(title.clone())
         .button("Submit", move |siv| {
-            submit_two_factor(siv, email2.clone())
+            submit_two_factor(siv, TwoFactorProviderType::Email, email3.clone())
         })
         .button("Cancel", move |siv| {
-            let ud = siv.get_user_data().with_logging_in_state().unwrap();
-            let ud = ud.into_logged_out();
-            let pn = &ud.global_settings().profile;
-            let d = login_dialog(pn, Some(email3.to_string()), false);
-            siv.clear_layers();
-            siv.add_layer(d);
-        })
-    }
+            cancel_2fa(siv, Some(String::clone(&email4)))
+        });
+
+        siv.async_op(
+            async move {
+                let client = ApiClient::new(
+                    &global_settings.server_configuration,
+                    &global_settings.device_id,
+                    global_settings.accept_invalid_certs,
+                );
+
+                client
+                    .request_email_2fa_code(&email5, &master_password_hash.base64_encoded())
+                    .await
+            },
+            move |siv, res| {
+                siv.pop_layer();
+                match res {
+                    Ok(()) => siv.add_layer(actual_dialog),
+                    Err(e) => siv.add_layer(
+                        Dialog::text(format!("Failed to request verification code: {}", e))
+                            .button("OK", move |siv| {
+                                cancel_2fa(siv, Some(String::clone(&email6)))
+                            }),
+                    ),
+                }
+            },
+        );
+    });
+
+    (init_dialog, cb)
 }
 
-fn submit_two_factor(c: &mut Cursive, email: Arc<String>) {
+fn submit_two_factor(c: &mut Cursive, two_factor_type: TwoFactorProviderType, email: Arc<String>) {
     let code = c
         .call_on_name(VIEW_NAME_AUTHENTICATOR_CODE, |view: &mut EditView| {
             view.get_content()
@@ -83,7 +204,8 @@ fn submit_two_factor(c: &mut Cursive, email: Arc<String>) {
                 &client,
                 &email,
                 master_pw_hash,
-                Some((TwoFactorProviderType::Authenticator, &code)),
+                Some((two_factor_type, &code)),
+                None,
                 &profile_store,
             )
             .await

@@ -78,7 +78,7 @@ pub fn launch(
         &profile_name,
         profile_data.saved_email,
         profile_data.encrypted_api_key.is_some(),
-    )); 
+    ));
 
     run(siv);
 }
