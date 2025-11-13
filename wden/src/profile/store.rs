@@ -41,7 +41,8 @@ impl ProfileStore {
             .filter(|f| f.path().extension() == Some(json_ext.as_os_str()))
             .filter_map(|f| {
                 let d = Self::load_file(&f.path()).ok()?;
-                Some((f.file_name().into_string().unwrap(), d))
+                let name = f.path().file_stem()?.to_string_lossy().into();
+                Some((name, d))
             })
             .collect();
 

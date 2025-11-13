@@ -6,6 +6,7 @@
 - Add support for Bitwarden's new device verification. Wden now requests a code sent to the account email when Bitwarden requires the new device to be verified.
 - Email is now supported as a two-factor authentication method
 - If both authenticator and email are enabled as 2FA method, the 2fa method to use can be chosen during login
+- Fix profile names incorrectly being shown with `.json` suffix in profile list
 
 ## 0.13.3
 
