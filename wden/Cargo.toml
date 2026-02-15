@@ -37,7 +37,7 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 serde_repr = "0.1"
 tokio = { version = "1.48", features = ["full"] }
-reqwest = { version = "0.13", features = ["json", "gzip"] }
+reqwest = { version = "0.13", features = ["json", "gzip", "form"] }
 cursive = "0.21"
 cursive_table_view = { git = "https://github.com/luryus/cursive_table_view", version = "0.15.0", tag = "v0.15.0+disablesort.1" }
 cursive_secret_edit_view = { path = "../cursive_secret_edit_view" }
