@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use anyhow::Context;
 use cursive::{
     Cursive,
     theme::{BaseColor, Color},
@@ -7,17 +8,56 @@ use cursive::{
     view::Margins,
     views::{Dialog, EditView, LinearLayout, PaddedView, TextView},
 };
+use serde::{Deserialize, Serialize};
+use zeroize::{ZeroizeOnDrop, Zeroizing};
 
-use crate::bitwarden::cipher::{self, CipherError};
+use crate::{
+    bitwarden::{
+        api::TokenResponseSuccess,
+        cipher::{self, Cipher, CipherError, EncMacKeys},
+    }, ui::util::cursive_ext::CursiveErrorExt, util::slice_writer::SliceWriter
+};
 
 use super::{util::cursive_ext::CursiveExt, vault_table};
 
 const VIEW_NAME_PASSWORD: &str = "password";
 
-pub fn lock_vault(c: &mut Cursive) {
+const LOCK_DATA_SERIALIZED_MAX_SIZE: usize = 16_000;
+
+#[derive(Serialize, Deserialize, ZeroizeOnDrop)]
+pub struct EncryptedLockData {
+    search_filter: String,
+    token: TokenResponseSuccess,
+}
+
+impl EncryptedLockData {
+    pub fn encrypt(&self, keys: &EncMacKeys) -> anyhow::Result<Cipher> {
+        // Use a static size buffer to try to keep zeroizing effective
+        let mut buf = Zeroizing::new([0u8; LOCK_DATA_SERIALIZED_MAX_SIZE]);
+        let mut writer = SliceWriter::new(buf.as_mut_slice());
+        serde_json::to_writer(&mut writer, self)?;
+        let written = writer.written_len();
+
+        let data = &buf[..written];
+        let enc = Cipher::encrypt(data, keys)?;
+
+        Ok(enc)
+    }
+
+    pub fn decrypt_from(cipher: &Cipher, keys: &EncMacKeys) -> anyhow::Result<Self> {
+        let mut buf = Zeroizing::new([0u8; LOCK_DATA_SERIALIZED_MAX_SIZE]);
+        let decrypted_buf = cipher
+            .decrypt_to(&keys, buf.as_mut_slice())
+            .context("Decrypting locked data failed")?;
+
+        serde_json::from_slice(decrypted_buf).context("Deserializing lock data failed")
+    }
+}
+
+pub fn lock_vault(c: &mut Cursive) -> anyhow::Result<()> {
     if c.get_user_data().with_locked_state().is_some() {
         // Already locked
-        return;
+        return Ok(());
     }
 
     // Get the search term, we want to restore it after unlocking
@@ -26,12 +66,18 @@ pub fn lock_vault(c: &mut Cursive) {
     // Remove all layers
     c.clear_layers();
 
-    // Clear all keys from memory, and get stored email
     let ud = c
         .get_user_data()
         .with_unlocked_state()
-        .expect("The app state should be 'Unlocked' when trying to lock")
-        .into_locked(&search_term, collection_selection);
+        .expect("The app state should be 'Unlocked' when trying to lock");
+
+    let enc_lock_data = EncryptedLockData {
+        search_filter: search_term,
+        token: ud.get_token_object().clone(),
+    }.encrypt(&ud.decrypt_keys().context("Decrypting keys failed while locking")?)?;
+
+    // Clear all keys from memory, and get stored email
+    let ud = ud.into_locked(enc_lock_data, collection_selection);
     let global_settings = ud.global_settings();
     let profile = global_settings.profile.as_str();
     let email = ud.email();
@@ -41,6 +87,7 @@ pub fn lock_vault(c: &mut Cursive) {
     // Show unlock dialog
     let d = unlock_dialog(profile, &email);
     c.add_layer(d);
+    Ok(())
 }
 
 fn unlock_dialog(profile_name: &str, email: &str) -> Dialog {
@@ -77,7 +124,7 @@ fn submit_unlock(c: &mut Cursive) {
     let global_settings = user_data.global_settings();
     let pbkdf = user_data.pbkdf();
     let email = user_data.email();
-    let token_key = &user_data.token().key;
+    let token_key = user_data.encrypted_user_key();
     let api_key = user_data.api_key();
 
     let keys_res = derive_and_check_master_key(&email, &password, &pbkdf, token_key);
@@ -105,11 +152,15 @@ fn submit_unlock(c: &mut Cursive) {
             // Success, store keys, restore other data and continue
             let user_data = user_data.into_unlocking(master_key, api_key);
 
-            let search_term = user_data.decrypt_search_term().unwrap_or_default();
-            let collection_selection = user_data.collection_selection();
-            let _ = user_data.into_unlocked();
+            match user_data.decrypt_lock_data() {
+                Ok(mut lock_data) => {
+                    let collection_selection = user_data.collection_selection();
+                    let _ = user_data.into_unlocked(Arc::new(lock_data.token.clone()));
 
-            vault_table::show_vault_with_filters(c, search_term, collection_selection);
+                    vault_table::show_vault_with_filters(c, std::mem::take(&mut lock_data.search_filter), collection_selection);
+                },
+                Err(e) => e.fatal_err_dialog(c)
+            }
         }
     }
 }

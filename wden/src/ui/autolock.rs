@@ -43,7 +43,11 @@ async fn autolock_loop(cb_sink: CbSink, next_autolock_time: Arc<Mutex<Autolocker
         if let Some(t) = next_autolock_time.lock().unwrap().next_lock_time
             && Instant::now() > t
         {
-            cb_sink.send_msg(Box::new(lock_vault));
+            cb_sink.send_msg(Box::new(|siv| {
+                if let Err(e) = lock_vault(siv) {
+                    log::error!("Error locking: {}", e);
+                }
+            }));
         }
     }
 }

@@ -1,6 +1,6 @@
-use std::future::Future;
+use std::{error::Error, future::Future};
 
-use cursive::{CbSink, Cursive};
+use cursive::{CbSink, Cursive, views::Dialog};
 
 use crate::ui::data::UserData;
 
@@ -46,5 +46,20 @@ pub trait CursiveCallbackExt {
 impl CursiveCallbackExt for CbSink {
     fn send_msg(&self, f: Box<dyn FnOnce(&mut Cursive) + Send>) {
         self.send(f).expect("Sending cursive callback failed");
+    }
+}
+
+
+pub trait CursiveErrorExt {
+    fn fatal_err_dialog(&self, cursive: &mut Cursive);
+}
+
+impl<T: Error + ?Sized> CursiveErrorExt for T {
+    fn fatal_err_dialog(&self, cursive: &mut Cursive) {
+        log::warn!("Fatal error: {:?}", self);
+        let msg = format!("An unexpected error has occurred: {}. Exiting wden.", self);
+        let dialog = Dialog::text(&msg).button("OK", |siv| siv.quit());
+        cursive.clear_layers();
+        cursive.add_layer(dialog);
     }
 }

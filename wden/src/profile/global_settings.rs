@@ -10,4 +10,5 @@ pub struct GlobalSettings {
     pub accept_invalid_certs: bool,
     pub always_refresh_token_on_sync: bool,
     pub encrypted_api_key: Option<EncryptedApiKey>,
+    pub use_biometric_unlock: bool,
 }
