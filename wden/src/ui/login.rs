@@ -268,7 +268,7 @@ pub fn handle_login_response(
                         }
                     }
 
-                    ud.into_logged_in(Arc::new(*t));
+                    ud.into_syncing(Arc::new(*t));
 
                     do_sync(cursive, true);
                 }

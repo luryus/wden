@@ -21,11 +21,11 @@ use cursive::{
 use cursive_table_view::{TableView, TableViewItem};
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use simsearch::SimSearch;
-use zeroize::Zeroize;
+use zeroize::{ZeroizeOnDrop};
 
 use super::{
     collections::{CollectionSelection, show_collection_filter},
-    util::cursive_ext::CursiveExt,
+    util::cursive_ext::{CursiveExt, CursiveErrorExt},
 };
 use super::{
     data::{StatefulUserData, Unlocked},
@@ -142,8 +142,7 @@ enum VaultTableColumn {
     IsInOrganization,
 }
 
-#[derive(Clone, Debug, Zeroize)]
-#[zeroize(drop)]
+#[derive(Clone, Debug, ZeroizeOnDrop)]
 struct Row {
     id: String,
     name: String,
@@ -231,7 +230,9 @@ fn vault_view(
             do_sync(siv, false);
         })
         .on_event(Event::CtrlChar('l'), |siv| {
-            lock_vault(siv);
+            if let Err(e) = lock_vault(siv) {
+                e.fatal_err_dialog(siv);
+            }
         })
         .on_event('p', |siv| {
             copy_current_item_field(siv, Copyable::Password);

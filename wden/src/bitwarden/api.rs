@@ -7,6 +7,7 @@ use reqwest;
 use reqwest::Url;
 use serde::{Deserialize, Serialize};
 use serde_repr::Deserialize_repr;
+use zeroize::ZeroizeOnDrop;
 use std::convert::TryInto;
 use std::time::{Duration, Instant};
 use std::{collections::HashMap, convert::TryFrom};
@@ -308,7 +309,7 @@ impl ApiClient {
 
         let res = self.http_client.post(url).form(&body).send().await?;
 
-        let refresh_res = res
+        let mut refresh_res = res
             .error_for_status()?
             .json::<TokenResponseSuccess>()
             .await?;
@@ -316,8 +317,8 @@ impl ApiClient {
         // The token refresh response does not include all the
         // fields. Take the old token and replace the new fields.
         let mut res = token.clone();
-        res.access_token = refresh_res.access_token;
-        res.refresh_token = refresh_res.refresh_token;
+        res.access_token = std::mem::take(&mut refresh_res.access_token);
+        res.refresh_token = std::mem::take(&mut refresh_res.refresh_token);
         res.token_timestamp = refresh_res.token_timestamp;
         res.expires_in = refresh_res.expires_in;
 
@@ -349,7 +350,7 @@ pub enum TokenResponse {
     DeviceVerificationRequired,
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone, ZeroizeOnDrop)]
 pub struct TokenResponseSuccess {
     #[serde(alias = "Key")]
     pub key: Cipher,
@@ -363,9 +364,11 @@ pub struct TokenResponseSuccess {
     #[serde(alias = "twoFactorToken")]
     pub two_factor_token: Option<String>,
     #[serde(skip, default = "token_response_timestamp")]
+    #[zeroize(skip)]
     token_timestamp: Instant,
 
     #[serde(default, flatten)]
+    #[zeroize(skip)]
     // When authenticating with an API key, the token response also contains the Pbkdf parameters
     kdf_parameters: Option<PreloginResponse>,
 }
@@ -436,7 +439,7 @@ impl TryFrom<&str> for TwoFactorProviderType {
     }
 }
 
-#[derive(Deserialize_repr, Debug, Clone, Default)]
+#[derive(Deserialize_repr, Serialize, Debug, Clone, Default)]
 #[repr(u8)]
 enum KdfFunction {
     #[default]
@@ -453,7 +456,7 @@ impl From<KdfFunction> for KeyDerivationFunction {
     }
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 struct PreloginResponse {
     #[serde(alias = "kdf", default)]
     #[serde(alias = "Kdf")]

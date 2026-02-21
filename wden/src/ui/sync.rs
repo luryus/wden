@@ -15,9 +15,9 @@ pub fn do_sync(cursive: &mut Cursive, just_refreshed_token: bool) {
 
     // Clear any data remaining
     let user_data = if let Some(unlocked_user_data) = user_data.with_unlocked_state() {
-        unlocked_user_data.into_logged_in()
+        unlocked_user_data.into_syncing()
     } else {
-        user_data.with_logged_in_state().unwrap()
+        user_data.with_syncing_state().unwrap()
     };
 
     let global_settings = user_data.global_settings();
@@ -72,7 +72,7 @@ pub fn do_sync(cursive: &mut Cursive, just_refreshed_token: bool) {
         },
         |c, sync_res| match sync_res {
             Ok(sync_res) => {
-                let ud = c.get_user_data().with_logged_in_state().unwrap();
+                let ud = c.get_user_data().with_syncing_state().unwrap();
                 let vault_data = Arc::new(
                     sync_res
                         .ciphers
@@ -95,8 +95,9 @@ pub fn do_sync(cursive: &mut Cursive, just_refreshed_token: bool) {
                         .map(|c| (c.id.clone(), c))
                         .collect(),
                 );
+                let token = ud.token();
 
-                ud.into_unlocked(vault_data, organizations, collections);
+                ud.into_unlocked(token, vault_data, organizations, collections);
 
                 c.pop_layer();
                 show_vault(c);

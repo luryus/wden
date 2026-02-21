@@ -24,6 +24,8 @@ pub struct ProfileData {
     pub server_configuration: ServerConfiguration,
     #[serde(default)]
     pub encrypted_api_key: Option<EncryptedApiKey>,
+    #[serde(default)]
+    pub experimental_unlock_with_biometrics: bool
 }
 
 impl Default for ProfileData {
@@ -37,6 +39,7 @@ impl Default for ProfileData {
             device_id: format!("{}", Uuid::new_v4()),
             server_configuration: Default::default(),
             encrypted_api_key: None,
+            experimental_unlock_with_biometrics: false
         }
     }
 }
