@@ -15,7 +15,9 @@ use crate::{
     bitwarden::{
         api::TokenResponseSuccess,
         cipher::{self, Cipher, CipherError, EncMacKeys},
-    }, ui::util::cursive_ext::CursiveErrorExt, util::slice_writer::SliceWriter
+    },
+    ui::util::cursive_ext::CursiveErrorExt,
+    util::slice_writer::SliceWriter,
 };
 
 use super::{util::cursive_ext::CursiveExt, vault_table};
@@ -74,7 +76,11 @@ pub fn lock_vault(c: &mut Cursive) -> anyhow::Result<()> {
     let enc_lock_data = EncryptedLockData {
         search_filter: search_term,
         token: ud.get_token_object().clone(),
-    }.encrypt(&ud.decrypt_keys().context("Decrypting keys failed while locking")?)?;
+    }
+    .encrypt(
+        &ud.decrypt_keys()
+            .context("Decrypting keys failed while locking")?,
+    )?;
 
     // Clear all keys from memory, and get stored email
     let ud = ud.into_locked(enc_lock_data, collection_selection);
@@ -157,9 +163,13 @@ fn submit_unlock(c: &mut Cursive) {
                     let collection_selection = user_data.collection_selection();
                     let _ = user_data.into_unlocked(Arc::new(lock_data.token.clone()));
 
-                    vault_table::show_vault_with_filters(c, std::mem::take(&mut lock_data.search_filter), collection_selection);
-                },
-                Err(e) => e.fatal_err_dialog(c)
+                    vault_table::show_vault_with_filters(
+                        c,
+                        std::mem::take(&mut lock_data.search_filter),
+                        collection_selection,
+                    );
+                }
+                Err(e) => e.fatal_err_dialog(c),
             }
         }
     }

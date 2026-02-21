@@ -21,11 +21,11 @@ use cursive::{
 use cursive_table_view::{TableView, TableViewItem};
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use simsearch::SimSearch;
-use zeroize::{ZeroizeOnDrop};
+use zeroize::ZeroizeOnDrop;
 
 use super::{
     collections::{CollectionSelection, show_collection_filter},
-    util::cursive_ext::{CursiveExt, CursiveErrorExt},
+    util::cursive_ext::{CursiveErrorExt, CursiveExt},
 };
 use super::{
     data::{StatefulUserData, Unlocked},
