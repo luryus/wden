@@ -121,6 +121,7 @@ pub fn load_profile(
         accept_invalid_certs,
         always_refresh_token_on_sync: always_refresh_on_sync,
         encrypted_api_key: profile_data.encrypted_api_key.clone(),
+        use_biometric_unlock: profile_data.experimental_unlock_with_biometrics,
     };
 
     // Write new settings

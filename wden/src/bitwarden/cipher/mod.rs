@@ -59,6 +59,20 @@ pub enum Cipher {
     },
 }
 
+impl zeroize::Zeroize for Cipher {
+    fn zeroize(&mut self) {
+        match self {
+            Cipher::Empty => {},
+            Cipher::Value { enc_type, iv, ct, mac } => {
+                *enc_type = EncType::AesCbc256B64;
+                iv.zeroize();
+                ct.zeroize();
+                mac.zeroize();
+            },
+        }
+    }
+}
+
 impl fmt::Debug for Cipher {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
