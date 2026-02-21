@@ -1,14 +1,11 @@
-
 pub struct SliceWriter<'a> {
     buf: &'a mut [u8],
-    pos: usize
+    pos: usize,
 }
 
 impl<'a> SliceWriter<'a> {
     pub fn new(buf: &'a mut [u8]) -> Self {
-        Self {
-            buf, pos: 0
-        }
+        Self { buf, pos: 0 }
     }
 
     pub fn written_len(&self) -> usize {
@@ -21,11 +18,11 @@ impl<'a> std::io::Write for SliceWriter<'a> {
         let remaining = self.buf.len().saturating_sub(self.pos);
         let len = remaining.min(buf.len());
         let copy_buf = &buf[..len];
-        self.buf[self.pos..self.pos+len].copy_from_slice(copy_buf);
+        self.buf[self.pos..self.pos + len].copy_from_slice(copy_buf);
 
         self.pos += len;
         assert!(self.pos <= self.buf.len());
-        
+
         Ok(len)
     }
 
