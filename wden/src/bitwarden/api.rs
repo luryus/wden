@@ -7,10 +7,10 @@ use reqwest;
 use reqwest::Url;
 use serde::{Deserialize, Serialize};
 use serde_repr::Deserialize_repr;
-use zeroize::ZeroizeOnDrop;
 use std::convert::TryInto;
 use std::time::{Duration, Instant};
 use std::{collections::HashMap, convert::TryFrom};
+use zeroize::ZeroizeOnDrop;
 
 const APP_USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"),);
 

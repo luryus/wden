@@ -49,7 +49,6 @@ impl CursiveCallbackExt for CbSink {
     }
 }
 
-
 pub trait CursiveErrorExt {
     fn fatal_err_dialog(&self, cursive: &mut Cursive);
 }

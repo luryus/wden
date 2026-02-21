@@ -332,10 +332,7 @@ impl<'a> StatefulUserData<'a, LoggingIn> {
 }
 
 impl<'a> StatefulUserData<'a, LoggingInLikeState> {
-    pub fn into_syncing(
-        self,
-        token: Arc<TokenResponseSuccess>,
-    ) -> StatefulUserData<'a, Syncing> {
+    pub fn into_syncing(self, token: Arc<TokenResponseSuccess>) -> StatefulUserData<'a, Syncing> {
         let state_data =
             std::mem::replace(&mut self.user_data.state_data, AppStateData::Intermediate);
 
@@ -346,7 +343,10 @@ impl<'a> StatefulUserData<'a, LoggingInLikeState> {
         };
 
         self.user_data.state_data = AppStateData::Syncing(Syncing {
-            logged_in_data: LoggedIn { refreshing_data, encrypted_user_key: token.key.clone() },
+            logged_in_data: LoggedIn {
+                refreshing_data,
+                encrypted_user_key: token.key.clone(),
+            },
             token,
         });
 
@@ -380,7 +380,7 @@ impl<'a> StatefulUserData<'a, Syncing> {
             .api_key
             .clone()
     }
-    
+
     pub fn token(&self) -> Arc<TokenResponseSuccess> {
         get_state_data!(&self.user_data.state_data, AppStateData::Syncing)
             .token
@@ -415,7 +415,8 @@ impl<'a> StatefulUserData<'a, Syncing> {
             std::mem::replace(&mut self.user_data.state_data, AppStateData::Intermediate);
         let syncing_data = get_state_data!(state_data, AppStateData::Syncing);
 
-        self.user_data.state_data = AppStateData::Refreshing(syncing_data.logged_in_data.refreshing_data);
+        self.user_data.state_data =
+            AppStateData::Refreshing(syncing_data.logged_in_data.refreshing_data);
 
         StatefulUserData::new(self.user_data)
     }
