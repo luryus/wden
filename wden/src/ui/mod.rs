@@ -14,5 +14,6 @@ mod sync;
 mod two_factor;
 mod util;
 mod vault_table;
+mod biometric;
 
 pub use launch::launch;
