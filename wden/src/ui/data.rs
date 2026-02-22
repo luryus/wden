@@ -5,7 +5,7 @@ use crate::{
         cipher::{self, Cipher, EncMacKeys, MasterKey, MasterPasswordHash, PbkdfParameters},
     },
     profile::{GlobalSettings, ProfileStore},
-    ui::lock::EncryptedLockData,
+    ui::lock::EncryptedLockData, util::keystore::PlatformKeystore,
 };
 use anyhow::Context;
 use cipher::decrypt_symmetric_keys;
@@ -160,6 +160,8 @@ pub struct Locked {
     organizations: Arc<HashMap<String, Organization>>,
     collections: Arc<HashMap<String, Collection>>,
     encrypted_lock_data: cipher::Cipher,
+    user_pw_encrypted_lock_key: Cipher,
+    keystore: Option<Box<dyn PlatformKeystore>>,
     collection_selection: CollectionSelection,
     api_key: Option<Arc<ApiKey>>,
 }
@@ -170,6 +172,8 @@ pub struct Unlocking {
     organizations: Arc<HashMap<String, Organization>>,
     collections: Arc<HashMap<String, Collection>>,
     encrypted_lock_data: cipher::Cipher,
+    user_pw_encrypted_lock_key: Cipher,
+    keystore: Option<Box<dyn PlatformKeystore>>,
     collection_selection: CollectionSelection,
 }
 
@@ -426,6 +430,8 @@ impl<'a> StatefulUserData<'a, Unlocked> {
     pub fn into_locked(
         self,
         encrypted_lock_data: Cipher,
+        user_pw_encrypted_lock_key: Cipher,
+        keystore: Option<Box<dyn PlatformKeystore>>,
         collection_selection: CollectionSelection,
     ) -> StatefulUserData<'a, Locked> {
         let state_data =
@@ -446,6 +452,8 @@ impl<'a> StatefulUserData<'a, Unlocked> {
             organizations: unlocked_data.organizations,
             collections: unlocked_data.collections,
             encrypted_lock_data,
+            user_pw_encrypted_lock_key,
+            keystore,
             collection_selection,
             api_key: unlocked_data.logged_in_data.refreshing_data.api_key,
         };
@@ -517,7 +525,8 @@ impl<'a> StatefulUserData<'a, Unlocking> {
             .decrypt_keys()
             .context("Decrypting keys failed")?;
 
-        EncryptedLockData::decrypt_from(&d.encrypted_lock_data, &keys)
+        let lock_keys = EncMacKeys::decrypt_from(&d.user_pw_encrypted_lock_key, &keys)?;
+        EncryptedLockData::decrypt_from(&d.encrypted_lock_data, &lock_keys)
     }
 
     pub fn collection_selection(&self) -> CollectionSelection {
@@ -567,6 +576,10 @@ impl<'a> StatefulUserData<'a, Locked> {
         &get_state_data!(&self.user_data.state_data, AppStateData::Locked).encrypted_user_key
     }
 
+    pub fn has_biometric_keys(&self) -> bool {
+        get_state_data!(&self.user_data.state_data, AppStateData::Locked).keystore.is_some()
+    }
+
     pub fn into_unlocking(
         self,
         master_key: Arc<MasterKey>,
@@ -591,6 +604,8 @@ impl<'a> StatefulUserData<'a, Locked> {
             collections: locked_data.collections,
             encrypted_lock_data: locked_data.encrypted_lock_data,
             collection_selection: locked_data.collection_selection,
+            keystore: locked_data.keystore,
+            user_pw_encrypted_lock_key: locked_data.user_pw_encrypted_lock_key,
         };
 
         self.user_data.state_data = AppStateData::Unlocking(unlocking_data);

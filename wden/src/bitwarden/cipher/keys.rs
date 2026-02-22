@@ -5,6 +5,7 @@ use hkdf::Hkdf;
 use rsa::{RsaPublicKey, pkcs8::DecodePrivateKey};
 use sha2::Sha256;
 use zeroize::{ZeroizeOnDrop, Zeroizing};
+use rand::RngCore;
 
 use super::{Cipher, CipherError, PbkdfParameters, get_pbkdf};
 
@@ -94,6 +95,47 @@ impl EncMacKeys {
     pub fn mac(&self) -> &MacKey {
         &self.1
     }
+
+    pub fn secure_generate() -> Self {
+        let mut enc = EncryptionKey::new();
+        let mut mac = MacKey::new();
+
+        let mut rng = rand::thread_rng();
+        rng.fill_bytes(&mut enc.0.as_mut_slice());
+        rng.fill_bytes(&mut mac.0.as_mut_slice());
+
+        Self(enc, mac)
+    }
+
+    pub const fn total_len() -> usize {
+        2 * CREDENTIAL_LEN
+    }
+
+    pub fn store_to_slice(&self, buf: &mut [u8]) -> Result<(), CipherError> {
+        if buf.len() < Self::total_len() {
+            return Err(CipherError::InvalidKeyLength);
+        }
+
+        buf[..32].copy_from_slice(self.enc().data());
+        buf[32..].copy_from_slice(self.mac().data());
+
+        Ok(())
+    }
+
+    // Serializes this EncMacKey, and encrypts it into a cipher using another EncMacKeys.
+    // The result is decryptable and the keys can be extracted with 
+    pub fn encrypt_serialized(&self, encrypt_with: &EncMacKeys) -> Result<Cipher, CipherError> {
+        let mut data = Zeroizing::new([0u8; Self::total_len()]);
+        self.store_to_slice(data.as_mut_slice())?;
+        Cipher::encrypt(data.as_slice(), &encrypt_with)
+    }
+
+    pub fn decrypt_from(cipher: &Cipher, decryption_keys: &EncMacKeys) -> Result<Self, CipherError> {
+        let len = cipher.ct_len();
+        let mut buf = Zeroizing::new(vec![0u8; len].into_boxed_slice());
+        let dec_cipher = cipher.decrypt_to(decryption_keys, &mut buf)?;
+        extract_enc_mac_keys(dec_cipher)
+    }
 }
 
 // Private key is in DER format
@@ -142,22 +184,14 @@ pub fn decrypt_symmetric_keys(
     master_key: &MasterKey,
 ) -> Result<EncMacKeys, CipherError> {
     let keys = expand_master_key(master_key);
-
-    let len = key_cipher.ct_len();
-    let mut buf = Zeroizing::new(vec![0u8; len].into_boxed_slice());
-    let dec_cipher = key_cipher.decrypt_to(&keys, &mut buf)?;
-
-    extract_enc_mac_keys(dec_cipher)
+    EncMacKeys::decrypt_from(key_cipher, &keys)
 }
 
 pub fn decrypt_item_keys(
     keys: &EncMacKeys,
     item_key_cipher: &Cipher,
 ) -> Result<EncMacKeys, CipherError> {
-    let len = item_key_cipher.ct_len();
-    let mut buf = Zeroizing::new(vec![0u8; len].into_boxed_slice());
-    let dec_cipher = item_key_cipher.decrypt_to(keys, &mut buf)?;
-    extract_enc_mac_keys(dec_cipher)
+    EncMacKeys::decrypt_from(item_key_cipher, keys)
 }
 
 pub fn decrypt_org_keys(
