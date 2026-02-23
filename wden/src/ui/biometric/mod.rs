@@ -1,6 +1,6 @@
 use cursive::Cursive;
 
-pub fn start_verify_biometric_auth<F: FnOnce(&mut Cursive, bool) -> () + Send + 'static>(
+pub fn start_verify_biometric_auth<F: FnOnce(&mut Cursive, bool) + Send + 'static>(
     cursive: &mut Cursive,
     callback: F,
 ) -> anyhow::Result<()> {
@@ -27,7 +27,7 @@ mod linux_biometric {
         }
     }
 
-    pub fn start_verify_biometric_auth<F: FnOnce(&mut Cursive, bool) -> () + Send + 'static>(
+    pub fn start_verify_biometric_auth<F: FnOnce(&mut Cursive, bool) + Send + 'static>(
         cursive: &mut Cursive,
         callback: F,
     ) -> anyhow::Result<()> {
@@ -63,7 +63,7 @@ mod linux_biometric {
             }
         }
 
-        fn prompt_blind(&mut self, msg: &std::ffi::CStr) -> Result<std::ffi::CString, ()> {
+        fn prompt_blind(&mut self, _msg: &std::ffi::CStr) -> Result<std::ffi::CString, ()> {
             Ok(CString::default())
         }
 

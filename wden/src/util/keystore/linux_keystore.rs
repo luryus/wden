@@ -1,3 +1,5 @@
+use std::cell::RefCell;
+
 use super::PlatformKeystore;
 
 use anyhow::Context;
@@ -8,14 +10,14 @@ pub struct LinuxKeystore {
     lock_key: Option<Key>,
 }
 
-pub fn get_linux_keystore() -> anyhow::Result<Box<dyn PlatformKeystore>> {
+pub fn get_linux_keystore() -> anyhow::Result<Box<RefCell<dyn PlatformKeystore>>> {
     let keyring =
         KeyRing::from_special_id(KeyRingIdentifier::Process, true).context("KeyRing init fail")?;
 
-    Ok(Box::new(LinuxKeystore {
+    Ok(Box::new(RefCell::new(LinuxKeystore {
         keyring,
         lock_key: None,
-    }))
+    })))
 }
 
 impl PlatformKeystore for LinuxKeystore {
@@ -41,4 +43,3 @@ impl PlatformKeystore for LinuxKeystore {
         Ok(&buf[..count])
     }
 }
-
