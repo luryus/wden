@@ -5,7 +5,7 @@ use sha1::Digest;
 use wden::bitwarden::{
     self,
     api::{CipherData, CipherItem, LoginItemUri, SecureNoteItem},
-    cipher::{Cipher, CipherError, EncMacKeys, extract_enc_mac_keys},
+    cipher::{Cipher, CipherError, EncMacKeys},
 };
 
 use super::api::{
@@ -189,7 +189,7 @@ pub fn organizations(
                 Cipher::encrypt_pub_key(org_share_key.as_slice(), &user_pub_key).unwrap();
 
             let org_priv_key = rsa::RsaPrivateKey::new(&mut rsa::rand_core::OsRng, 2048).unwrap();
-            let org_enc_mac_keys = extract_enc_mac_keys(org_share_key.as_slice()).unwrap();
+            let org_enc_mac_keys = EncMacKeys::from_slice(org_share_key.as_slice()).unwrap();
             let org_priv_key_encoded = org_priv_key.to_pkcs8_der().unwrap();
             let enc_org_priv_key =
                 Cipher::encrypt(org_priv_key_encoded.as_bytes(), &org_enc_mac_keys).unwrap();

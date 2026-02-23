@@ -5,7 +5,8 @@ use crate::{
         cipher::{self, Cipher, EncMacKeys, MasterKey, MasterPasswordHash, PbkdfParameters},
     },
     profile::{GlobalSettings, ProfileStore},
-    ui::lock::EncryptedLockData, util::keystore::PlatformKeystore,
+    ui::lock::EncryptedLockData,
+    util::keystore::PlatformKeystore,
 };
 use anyhow::Context;
 use cipher::decrypt_symmetric_keys;
@@ -13,6 +14,7 @@ use maybe_owned::MaybeOwned;
 use rayon::iter::{ParallelBridge, ParallelIterator};
 
 use std::{
+    cell::RefCell,
     collections::HashMap,
     fmt::Display,
     marker::PhantomData,
@@ -161,7 +163,7 @@ pub struct Locked {
     collections: Arc<HashMap<String, Collection>>,
     encrypted_lock_data: cipher::Cipher,
     user_pw_encrypted_lock_key: Cipher,
-    keystore: Option<Box<dyn PlatformKeystore>>,
+    keystore: Option<Box<RefCell<dyn PlatformKeystore>>>,
     collection_selection: CollectionSelection,
     api_key: Option<Arc<ApiKey>>,
 }
@@ -173,7 +175,6 @@ pub struct Unlocking {
     collections: Arc<HashMap<String, Collection>>,
     encrypted_lock_data: cipher::Cipher,
     user_pw_encrypted_lock_key: Cipher,
-    keystore: Option<Box<dyn PlatformKeystore>>,
     collection_selection: CollectionSelection,
 }
 
@@ -431,7 +432,7 @@ impl<'a> StatefulUserData<'a, Unlocked> {
         self,
         encrypted_lock_data: Cipher,
         user_pw_encrypted_lock_key: Cipher,
-        keystore: Option<Box<dyn PlatformKeystore>>,
+        keystore: Option<Box<RefCell<dyn PlatformKeystore>>>,
         collection_selection: CollectionSelection,
     ) -> StatefulUserData<'a, Locked> {
         let state_data =
@@ -515,6 +516,11 @@ impl<'a> StatefulUserData<'a, Unlocked> {
         let d = get_state_data!(&self.user_data.state_data, AppStateData::Unlocked);
         &d.token
     }
+
+    pub fn master_key(&self) -> &MasterKey {
+        let d = get_state_data!(&self.user_data.state_data, AppStateData::Unlocked);
+        &d.logged_in_data.refreshing_data.master_key
+    }
 }
 
 impl<'a> StatefulUserData<'a, Unlocking> {
@@ -577,7 +583,20 @@ impl<'a> StatefulUserData<'a, Locked> {
     }
 
     pub fn has_biometric_keys(&self) -> bool {
-        get_state_data!(&self.user_data.state_data, AppStateData::Locked).keystore.is_some()
+        get_state_data!(&self.user_data.state_data, AppStateData::Locked)
+            .keystore
+            .is_some()
+    }
+
+    pub fn keystore(&self) -> Option<&RefCell<dyn PlatformKeystore>> {
+        get_state_data!(&self.user_data.state_data, AppStateData::Locked)
+            .keystore
+            .as_ref()
+            .map(|x| x.as_ref())
+    }
+
+    pub fn encrypted_lock_data(&self) -> &Cipher {
+        &get_state_data!(&self.user_data.state_data, AppStateData::Locked).encrypted_lock_data
     }
 
     pub fn into_unlocking(
@@ -604,7 +623,6 @@ impl<'a> StatefulUserData<'a, Locked> {
             collections: locked_data.collections,
             encrypted_lock_data: locked_data.encrypted_lock_data,
             collection_selection: locked_data.collection_selection,
-            keystore: locked_data.keystore,
             user_pw_encrypted_lock_key: locked_data.user_pw_encrypted_lock_key,
         };
 
