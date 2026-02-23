@@ -2,16 +2,17 @@ use std::pin::Pin;
 
 use base64::prelude::*;
 use hkdf::Hkdf;
+use rand::RngCore;
 use rsa::{RsaPublicKey, pkcs8::DecodePrivateKey};
+use serde::{Deserialize, Serialize, de::Visitor};
 use sha2::Sha256;
 use zeroize::{ZeroizeOnDrop, Zeroizing};
-use rand::RngCore;
 
 use super::{Cipher, CipherError, PbkdfParameters, get_pbkdf};
 
 const CREDENTIAL_LEN: usize = 256 / 8;
 
-#[derive(ZeroizeOnDrop)]
+#[derive(ZeroizeOnDrop, Clone)]
 pub struct MasterKey(Pin<Box<[u8; CREDENTIAL_LEN]>>);
 impl MasterKey {
     pub(super) fn new() -> Self {
@@ -39,6 +40,60 @@ impl MasterKey {
     #[cfg(test)]
     pub(super) fn base64_encoded(&self) -> Zeroizing<String> {
         BASE64_STANDARD.encode(self.0.as_slice()).into()
+    }
+}
+
+impl Serialize for MasterKey {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_bytes(self.0.as_slice())
+    }
+}
+
+impl<'de> Deserialize<'de> for MasterKey {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        deserializer.deserialize_bytes(MasterKeyBytesVisitor)
+    }
+}
+
+struct MasterKeyBytesVisitor;
+impl<'de> Visitor<'de> for MasterKeyBytesVisitor {
+    type Value = MasterKey;
+
+    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(formatter, "exactly {} bytes", CREDENTIAL_LEN)
+    }
+
+    fn visit_bytes<E>(self, v: &[u8]) -> Result<Self::Value, E>
+    where
+        E: serde::de::Error,
+    {
+        if v.len() != CREDENTIAL_LEN {
+            Err(E::invalid_length(v.len(), &self))
+        } else {
+            let mut master_key = MasterKey::new();
+            master_key.buf_mut().copy_from_slice(v);
+            Ok(master_key)
+        }
+    }
+
+    fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+    where
+        A: serde::de::SeqAccess<'de>,
+    {
+        let mut master_key = MasterKey::new();
+        let buf = master_key.buf_mut();
+        for (i, byte) in buf.iter_mut().enumerate() {
+            *byte = seq
+                .next_element()?
+                .ok_or_else(|| serde::de::Error::invalid_length(i, &self))?;
+        }
+        Ok(master_key)
     }
 }
 
@@ -101,8 +156,8 @@ impl EncMacKeys {
         let mut mac = MacKey::new();
 
         let mut rng = rand::thread_rng();
-        rng.fill_bytes(&mut enc.0.as_mut_slice());
-        rng.fill_bytes(&mut mac.0.as_mut_slice());
+        rng.fill_bytes(enc.0.as_mut_slice());
+        rng.fill_bytes(mac.0.as_mut_slice());
 
         Self(enc, mac)
     }
@@ -122,19 +177,42 @@ impl EncMacKeys {
         Ok(())
     }
 
+    pub fn from_slice(buf: &[u8]) -> Result<Self, CipherError> {
+        if buf.len() != Self::total_len() {
+            return Err(CipherError::InvalidKeyLength);
+        }
+
+        let mut enc_key = EncryptionKey::new();
+        let mut mac_key = MacKey::new();
+
+        enc_key
+            .0
+            .as_mut_slice()
+            .copy_from_slice(&buf[..CREDENTIAL_LEN]);
+        mac_key
+            .0
+            .as_mut_slice()
+            .copy_from_slice(&buf[CREDENTIAL_LEN..]);
+
+        Ok(EncMacKeys(enc_key, mac_key))
+    }
+
     // Serializes this EncMacKey, and encrypts it into a cipher using another EncMacKeys.
-    // The result is decryptable and the keys can be extracted with 
+    // The result is decryptable and the keys can be extracted with
     pub fn encrypt_serialized(&self, encrypt_with: &EncMacKeys) -> Result<Cipher, CipherError> {
         let mut data = Zeroizing::new([0u8; Self::total_len()]);
         self.store_to_slice(data.as_mut_slice())?;
-        Cipher::encrypt(data.as_slice(), &encrypt_with)
+        Cipher::encrypt(data.as_slice(), encrypt_with)
     }
 
-    pub fn decrypt_from(cipher: &Cipher, decryption_keys: &EncMacKeys) -> Result<Self, CipherError> {
+    pub fn decrypt_from(
+        cipher: &Cipher,
+        decryption_keys: &EncMacKeys,
+    ) -> Result<Self, CipherError> {
         let len = cipher.ct_len();
         let mut buf = Zeroizing::new(vec![0u8; len].into_boxed_slice());
         let dec_cipher = cipher.decrypt_to(decryption_keys, &mut buf)?;
-        extract_enc_mac_keys(dec_cipher)
+        Self::from_slice(dec_cipher)
     }
 }
 
@@ -199,22 +277,7 @@ pub fn decrypt_org_keys(
     org_key_cipher: &Cipher,
 ) -> Result<EncMacKeys, CipherError> {
     let dec_cipher = org_key_cipher.decrypt_with_private_key(private_key)?;
-    extract_enc_mac_keys(&dec_cipher)
-}
-
-pub fn extract_enc_mac_keys(full_key: &[u8]) -> Result<EncMacKeys, CipherError> {
-    // Enc key and mac key should both be 32 bytes
-    if full_key.len() != 2 * CREDENTIAL_LEN {
-        return Err(CipherError::InvalidKeyLength);
-    }
-
-    let mut enc_key = EncryptionKey::new();
-    let mut mac_key = MacKey::new();
-
-    enc_key.0.as_mut_slice().copy_from_slice(&full_key[..32]);
-    mac_key.0.as_mut_slice().copy_from_slice(&full_key[32..]);
-
-    Ok(EncMacKeys(enc_key, mac_key))
+    EncMacKeys::from_slice(&dec_cipher)
 }
 
 pub(super) fn expand_master_key(master_key: &MasterKey) -> EncMacKeys {

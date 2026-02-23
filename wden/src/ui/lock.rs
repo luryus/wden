@@ -14,7 +14,7 @@ use zeroize::{ZeroizeOnDrop, Zeroizing};
 use crate::{
     bitwarden::{
         api::TokenResponseSuccess,
-        cipher::{self, Cipher, CipherError, EncMacKeys},
+        cipher::{self, Cipher, CipherError, EncMacKeys, MasterKey},
     },
     ui::{biometric, util::cursive_ext::CursiveErrorExt},
     util::{keystore, slice_writer::SliceWriter},
@@ -30,6 +30,7 @@ const LOCK_DATA_SERIALIZED_MAX_SIZE: usize = 16_000;
 pub struct EncryptedLockData {
     search_filter: String,
     token: TokenResponseSuccess,
+    master_key: Option<MasterKey>,
 }
 
 impl EncryptedLockData {
@@ -49,7 +50,7 @@ impl EncryptedLockData {
     pub fn decrypt_from(cipher: &Cipher, keys: &EncMacKeys) -> anyhow::Result<Self> {
         let mut buf = Zeroizing::new([0u8; LOCK_DATA_SERIALIZED_MAX_SIZE]);
         let decrypted_buf = cipher
-            .decrypt_to(&keys, buf.as_mut_slice())
+            .decrypt_to(keys, buf.as_mut_slice())
             .context("Decrypting locked data failed")?;
 
         serde_json::from_slice(decrypted_buf).context("Deserializing lock data failed")
@@ -75,27 +76,29 @@ pub fn lock_vault(c: &mut Cursive) -> anyhow::Result<()> {
 
     // Generate a new key and encrypt the lock data with it. This intermediate key
     // allows us to support both password-based and biometric unlock.
-    
+    let use_biometric = ud.global_settings().use_biometric_unlock;
+
     let lock_key = EncMacKeys::secure_generate();
     let enc_lock_data = EncryptedLockData {
         search_filter: search_term,
         token: ud.get_token_object().clone(),
+        master_key: use_biometric.then_some(ud.master_key().clone()),
     }
     .encrypt(&lock_key)?;
 
     // Then serialize and encrypt the lock key with the user's own key, this can be used
     // for password unlock
-    let user_keys = ud.decrypt_keys().context("Decrypting user keys failed while locking")?;
-    let user_encrypted_lock_key = lock_key.encrypt_serialized(&user_keys)
+    let user_keys = ud
+        .decrypt_keys()
+        .context("Decrypting user keys failed while locking")?;
+    let user_encrypted_lock_key = lock_key
+        .encrypt_serialized(&user_keys)
         .context("Encrypting lock key with user keys failed")?;
 
-    let keystore = if ud.global_settings().use_biometric_unlock  {
+    let keystore = if ud.global_settings().use_biometric_unlock {
         // Store the unlock key to the system keystore where it can be retrieved later for biometric unlock
-        let res = keystore::get_platform_keystore().and_then(|mut ks| {
-            let mut buf = Zeroizing::new([0u8; EncMacKeys::total_len()]);
-            lock_key.store_to_slice(buf.as_mut_slice())?;
-
-            ks.store_key(buf.as_slice())?;
+        let res = keystore::get_platform_keystore().and_then(|ks| {
+            ks.borrow_mut().store_enc_mac_keys(&lock_key)?;
             Ok(ks)
         });
 
@@ -111,7 +114,12 @@ pub fn lock_vault(c: &mut Cursive) -> anyhow::Result<()> {
     };
 
     // Clear all keys from memory, and get stored email
-    let ud = ud.into_locked(enc_lock_data, user_encrypted_lock_key, keystore, collection_selection);
+    let ud = ud.into_locked(
+        enc_lock_data,
+        user_encrypted_lock_key,
+        keystore,
+        collection_selection,
+    );
     let global_settings = ud.global_settings();
     let profile = global_settings.profile.as_str();
     let email = ud.email();
@@ -155,6 +163,9 @@ fn unlock_dialog(profile_name: &str, email: &str, biometric: bool) -> Dialog {
 fn start_biometric_unlock(c: &mut Cursive) {
     let res = biometric::start_verify_biometric_auth(c, |siv, success| {
         log::warn!("Unlock bio: success {}", success);
+        if success {
+            unlock_with_biometric_keys(siv);
+        }
     });
     if let Err(e) = res {
         e.fatal_err_dialog(c);
@@ -230,4 +241,33 @@ fn derive_and_check_master_key(
     // Verify that the password was correct by checking if token key can be decrypted
     let _ = cipher::decrypt_symmetric_keys(token_key, &master_key)?;
     Ok(master_key)
+}
+
+fn unlock_with_biometric_keys(cursive: &mut Cursive) {
+    cursive.pop_layer();
+    cursive.add_layer(Dialog::text("Unlocking..."));
+
+    // Get stuff from user data
+    let user_data = cursive.get_user_data().with_locked_state().unwrap();
+    let api_key = user_data.api_key();
+    let keystore = user_data
+        .keystore()
+        .expect("BUG: Keystore was not set while unlocking biometrics");
+
+    let lock_key = keystore.borrow_mut().retrieve_enc_mac_keys().unwrap();
+    let mut lock_data =
+        EncryptedLockData::decrypt_from(user_data.encrypted_lock_data(), &lock_key).unwrap();
+
+    let master_key = Arc::new(lock_data.master_key.take().unwrap());
+
+    let user_data = user_data.into_unlocking(master_key, api_key);
+
+    let collection_selection = user_data.collection_selection();
+    let _ = user_data.into_unlocked(Arc::new(lock_data.token.clone()));
+
+    vault_table::show_vault_with_filters(
+        cursive,
+        std::mem::take(&mut lock_data.search_filter),
+        collection_selection,
+    );
 }
