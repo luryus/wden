@@ -6,7 +6,7 @@ use cursive::{
     theme::{BaseColor, Color},
     traits::Nameable,
     view::Margins,
-    views::{Dialog, EditView, LinearLayout, PaddedView, TextView},
+    views::{Dialog, EditView, LinearLayout, NamedView, PaddedView, TextView},
 };
 use serde::{Deserialize, Serialize};
 use zeroize::{ZeroizeOnDrop, Zeroizing};
@@ -23,6 +23,8 @@ use crate::{
 use super::{util::cursive_ext::CursiveExt, vault_table};
 
 const VIEW_NAME_PASSWORD: &str = "password";
+const VIEW_NAME_BIOMETRIC_ERROR: &str = "biometric_error";
+const VIEW_NAME_UNLOCK_DIALOG: &str = "unlock_dialog";
 
 const LOCK_DATA_SERIALIZED_MAX_SIZE: usize = 16_000;
 
@@ -133,7 +135,7 @@ pub fn lock_vault(c: &mut Cursive) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn unlock_dialog(profile_name: &str, email: &str, biometric: bool) -> Dialog {
+fn unlock_dialog(profile_name: &str, email: &str, biometric: bool) -> NamedView<Dialog> {
     let pw_editview = EditView::new()
         .secret()
         .on_submit(|siv, _| submit_unlock(siv))
@@ -146,25 +148,34 @@ fn unlock_dialog(profile_name: &str, email: &str, biometric: bool) -> Dialog {
             ))
             .child(PaddedView::new(Margins::tb(1, 1), pw_editview))
             .child(
-                TextView::new(format!("Signed in user: {email}"))
+                TextView::new(format!("Signed in as: {email}"))
                     .style(Color::Light(BaseColor::Black)),
+            )
+            .child(
+                TextView::new(String::default())
+                    .style(Color::Dark(BaseColor::Red))
+                    .with_name(VIEW_NAME_BIOMETRIC_ERROR),
             ),
     )
     .title(format!("Vault locked ({profile_name})"));
 
     if biometric {
-        dialog = dialog.button("Biometric", start_biometric_unlock)
+        dialog = dialog.button("Biometric unlock", start_biometric_unlock)
     }
     dialog = dialog.button("Unlock", submit_unlock);
 
-    dialog
+    dialog.with_name(VIEW_NAME_UNLOCK_DIALOG)
 }
 
 fn start_biometric_unlock(c: &mut Cursive) {
     let res = biometric::start_verify_biometric_auth(c, |siv, success| {
-        log::warn!("Unlock bio: success {}", success);
         if success {
             unlock_with_biometric_keys(siv);
+        } else {
+            let mut error_label = siv.find_name::<TextView>(VIEW_NAME_BIOMETRIC_ERROR).unwrap();
+            error_label.set_content("Error unlocking the vault using biometrics.\nPlease unlock using the master password.");
+            let mut unlock_dialog = siv.find_name::<Dialog>(VIEW_NAME_UNLOCK_DIALOG).unwrap();
+            unlock_dialog.remove_button(0);
         }
     });
     if let Err(e) = res {
