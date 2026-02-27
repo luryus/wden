@@ -32,9 +32,7 @@ pub fn login_dialog(
     saved_email: Option<String>,
     api_key_login: bool,
 ) -> Dialog {
-    if api_key_login && saved_email.is_none() {
-        panic!("Bug: email not present while trying to log in with api keys");
-    }
+    debug_assert!(!api_key_login || saved_email.is_some(), "Bug: email not present while trying to log in with api keys");
 
     let submit_callback: Arc<dyn Fn(&mut Cursive) + Send + Sync> = if api_key_login {
         let saved_email = saved_email.clone().unwrap();
@@ -124,22 +122,19 @@ fn submit_login(c: &mut Cursive) {
                 &global_settings.device_id,
                 global_settings.accept_invalid_certs,
             );
-            async {
-                let (master_key, master_pw_hash, pbkdf) =
-                    do_prelogin(&client, &email, &password).await?;
+            let (master_key, master_pw_hash, pbkdf) =
+                do_prelogin(&client, &email, &password).await?;
 
-                do_login(
-                    &client,
-                    &email,
-                    master_pw_hash.clone(),
-                    None,
-                    None,
-                    &profile_store,
-                )
-                .await
-                .map(|t| (t, master_key, master_pw_hash, email, pbkdf))
-            }
+            do_login(
+                &client,
+                &email,
+                master_pw_hash.clone(),
+                None,
+                None,
+                &profile_store,
+            )
             .await
+            .map(|t| (t, master_key, master_pw_hash, email, pbkdf))
         },
         move |siv, res| {
             match res {
