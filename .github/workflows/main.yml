@@ -29,7 +29,7 @@ jobs:
         export VERSION="$GITHUB_REF_NAME"
         parse-changelog CHANGELOG.md "$VERSION" > release-changelog.md
     
-    - uses: actions/upload-artifact@v5
+    - uses: actions/upload-artifact@v7
       with:
         name: release-changelog
         path: release-changelog.md
@@ -67,7 +67,7 @@ jobs:
           cp target/release/wden "out/wden-${target_triple}"
         fi
 
-    - uses: actions/upload-artifact@v5
+    - uses: actions/upload-artifact@v7
       with:
         name: wden-bin-${{ matrix.os }}
         path: out/
