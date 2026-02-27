@@ -230,8 +230,8 @@ impl<'a, T> StatefulUserData<'a, T> {
         }
     }
 
-    pub fn global_settings(&self) -> Arc<GlobalSettings> {
-        self.user_data.global_settings.clone()
+    pub fn global_settings(&self) -> &Arc<GlobalSettings> {
+        &self.user_data.global_settings
     }
 
     pub fn profile_store(&self) -> Arc<ProfileStore> {
@@ -326,13 +326,16 @@ impl<'a> StatefulUserData<'a, LoggedOut> {
 }
 
 impl<'a> StatefulUserData<'a, LoggingIn> {
+    fn state(&self) -> &LoggingIn {
+        get_state_data!(&self.user_data.state_data, AppStateData::LoggingIn)
+    }
+
     pub fn into_logged_out(self) -> StatefulUserData<'a, LoggedOut> {
         into_logged_out_impl(self.user_data)
     }
 
     pub fn master_password_hash(&self) -> Arc<MasterPasswordHash> {
-        let logging_in_data = get_state_data!(&self.user_data.state_data, AppStateData::LoggingIn);
-        logging_in_data.master_password_hash.clone()
+        self.state().master_password_hash.clone()
     }
 }
 
@@ -370,26 +373,20 @@ fn into_logged_out_impl(user_data: &mut UserData) -> StatefulUserData<'_, Logged
 }
 
 impl<'a> StatefulUserData<'a, Syncing> {
-    pub fn email(&self) -> Arc<String> {
+    fn state(&self) -> &Syncing {
         get_state_data!(&self.user_data.state_data, AppStateData::Syncing)
-            .logged_in_data
-            .refreshing_data
-            .email
-            .clone()
+    }
+
+    pub fn email(&self) -> &Arc<String> {
+        &self.state().logged_in_data.refreshing_data.email
     }
 
     pub fn api_key(&self) -> Option<Arc<ApiKey>> {
-        get_state_data!(&self.user_data.state_data, AppStateData::Syncing)
-            .logged_in_data
-            .refreshing_data
-            .api_key
-            .clone()
+        self.state().logged_in_data.refreshing_data.api_key.clone()
     }
 
     pub fn token(&self) -> Arc<TokenResponseSuccess> {
-        get_state_data!(&self.user_data.state_data, AppStateData::Syncing)
-            .token
-            .clone()
+        self.state().token.clone()
     }
 
     pub fn into_unlocked(
@@ -428,6 +425,10 @@ impl<'a> StatefulUserData<'a, Syncing> {
 }
 
 impl<'a> StatefulUserData<'a, Unlocked> {
+    fn state(&self) -> &Unlocked {
+        get_state_data!(&self.user_data.state_data, AppStateData::Unlocked)
+    }
+
     pub fn into_locked(
         self,
         encrypted_lock_data: Cipher,
@@ -483,61 +484,56 @@ impl<'a> StatefulUserData<'a, Unlocked> {
     }
 
     pub fn decrypt_keys(&self) -> Option<EncMacKeys> {
-        let d = get_state_data!(&self.user_data.state_data, AppStateData::Unlocked);
-        d.logged_in_data.decrypt_keys()
+        self.state().logged_in_data.decrypt_keys()
     }
 
-    pub fn vault_data(&self) -> Arc<HashMap<String, CipherItem>> {
-        let d = get_state_data!(&self.user_data.state_data, AppStateData::Unlocked);
-        d.vault_data.clone()
+    pub fn vault_data(&self) -> &Arc<HashMap<String, CipherItem>> {
+        &self.state().vault_data
     }
 
-    pub fn collections(&self) -> Arc<HashMap<String, Collection>> {
-        let d = get_state_data!(&self.user_data.state_data, AppStateData::Unlocked);
-        d.collections.clone()
+    pub fn collections(&self) -> &Arc<HashMap<String, Collection>> {
+        &self.state().collections
     }
 
     pub fn get_keys_for_item(&self, item: &CipherItem) -> Option<EncMacKeys> {
-        let d = get_state_data!(&self.user_data.state_data, AppStateData::Unlocked);
-        d.get_keys_for_item(item)
+        self.state().get_keys_for_item(item)
     }
 
     pub fn get_keys_for_collection(&self, collection: &Collection) -> Option<EncMacKeys> {
-        let d = get_state_data!(&self.user_data.state_data, AppStateData::Unlocked);
-        d.get_keys_for_collection(collection)
+        self.state().get_keys_for_collection(collection)
     }
 
     pub fn get_org_keys_for_vault(&self) -> HashMap<&String, EncMacKeys> {
-        let d = get_state_data!(&self.user_data.state_data, AppStateData::Unlocked);
-        d.get_org_keys_for_vault()
+        self.state().get_org_keys_for_vault()
     }
 
     pub fn get_token_object(&self) -> &TokenResponseSuccess {
-        let d = get_state_data!(&self.user_data.state_data, AppStateData::Unlocked);
-        &d.token
+        &self.state().token
     }
 
     pub fn master_key(&self) -> &MasterKey {
-        let d = get_state_data!(&self.user_data.state_data, AppStateData::Unlocked);
-        &d.logged_in_data.refreshing_data.master_key
+        &self.state().logged_in_data.refreshing_data.master_key
     }
 }
 
 impl<'a> StatefulUserData<'a, Unlocking> {
+    fn state(&self) -> &Unlocking {
+        get_state_data!(&self.user_data.state_data, AppStateData::Unlocking)
+    }
+
     pub fn decrypt_lock_data(&self) -> anyhow::Result<EncryptedLockData> {
-        let d = get_state_data!(&self.user_data.state_data, AppStateData::Unlocking);
-        let keys = d
+        let s = self.state();
+        let keys = s
             .logged_in_data
             .decrypt_keys()
             .context("Decrypting keys failed")?;
 
-        let lock_keys = EncMacKeys::decrypt_from(&d.user_pw_encrypted_lock_key, &keys)?;
-        EncryptedLockData::decrypt_from(&d.encrypted_lock_data, &lock_keys)
+        let lock_keys = EncMacKeys::decrypt_from(&s.user_pw_encrypted_lock_key, &keys)?;
+        EncryptedLockData::decrypt_from(&s.encrypted_lock_data, &lock_keys)
     }
 
     pub fn collection_selection(&self) -> CollectionSelection {
-        let d = get_state_data!(&self.user_data.state_data, AppStateData::Unlocking);
-        d.collection_selection.clone()
+        self.state().collection_selection.clone()
     }
 
     pub fn into_unlocked(self, token: Arc<TokenResponseSuccess>) -> StatefulUserData<'a, Unlocked> {
@@ -560,43 +556,36 @@ impl<'a> StatefulUserData<'a, Unlocking> {
 }
 
 impl<'a> StatefulUserData<'a, Locked> {
-    pub fn email(&self) -> Arc<String> {
+    fn state(&self) -> &Locked {
         get_state_data!(&self.user_data.state_data, AppStateData::Locked)
-            .email
-            .clone()
     }
 
-    pub fn pbkdf(&self) -> Arc<PbkdfParameters> {
-        get_state_data!(&self.user_data.state_data, AppStateData::Locked)
-            .pbkdf
-            .clone()
+    pub fn email(&self) -> &Arc<String> {
+        &self.state().email
+    }
+
+    pub fn pbkdf(&self) -> &Arc<PbkdfParameters> {
+        &self.state().pbkdf
     }
 
     pub fn api_key(&self) -> Option<Arc<ApiKey>> {
-        get_state_data!(&self.user_data.state_data, AppStateData::Locked)
-            .api_key
-            .clone()
+        self.state().api_key.clone()
     }
 
     pub fn encrypted_user_key(&self) -> &Cipher {
-        &get_state_data!(&self.user_data.state_data, AppStateData::Locked).encrypted_user_key
+        &self.state().encrypted_user_key
     }
 
     pub fn has_biometric_keys(&self) -> bool {
-        get_state_data!(&self.user_data.state_data, AppStateData::Locked)
-            .keystore
-            .is_some()
+        self.state().keystore.is_some()
     }
 
     pub fn keystore(&self) -> Option<&RefCell<dyn PlatformKeystore>> {
-        get_state_data!(&self.user_data.state_data, AppStateData::Locked)
-            .keystore
-            .as_ref()
-            .map(|x| x.as_ref())
+        self.state().keystore.as_ref().map(|x| x.as_ref())
     }
 
     pub fn encrypted_lock_data(&self) -> &Cipher {
-        &get_state_data!(&self.user_data.state_data, AppStateData::Locked).encrypted_lock_data
+        &self.state().encrypted_lock_data
     }
 
     pub fn into_unlocking(

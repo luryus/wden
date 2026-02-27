@@ -58,7 +58,7 @@ fn submit_dev_verification(c: &mut Cursive, email: Arc<String>) {
 
     let ud = c.get_user_data().with_logging_in_state().unwrap();
 
-    let global_settings = ud.global_settings();
+    let global_settings = ud.global_settings().clone();
     let profile_store = ud.profile_store();
     let master_pw_hash = ud.master_password_hash();
     let email2 = email.clone();

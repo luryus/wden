@@ -114,7 +114,7 @@ fn submit_login(c: &mut Cursive) {
     c.add_layer(Dialog::text("Signing in..."));
 
     let ud = c.get_user_data().with_logged_out_state().unwrap();
-    let global_settings = ud.global_settings();
+    let global_settings = ud.global_settings().clone();
     let profile_store = ud.profile_store();
 
     c.async_op(
@@ -162,7 +162,7 @@ fn submit_api_key_login(c: &mut Cursive, email: String) {
     let email2 = email.clone();
 
     let ud = c.get_user_data().with_logged_out_state().unwrap();
-    let global_settings = ud.global_settings();
+    let global_settings = ud.global_settings().clone();
 
     let password = c
         .call_on_name(VIEW_NAME_PASSWORD, |view: &mut SecretEditView| {
@@ -274,24 +274,16 @@ pub fn handle_login_response(
                 }
                 bitwarden::api::TokenResponse::TwoFactorRequired(types) => {
                     cursive.pop_layer();
-                    let p = &cursive
-                        .get_user_data()
-                        .with_logging_in_state()
-                        .unwrap()
-                        .global_settings()
-                        .profile;
+                    let ud = cursive.get_user_data().with_logging_in_state().unwrap();
+                    let p = &ud.global_settings().profile;
                     let (dialog, cb) = two_factor_dialog(types, email, p);
                     cursive.add_layer(dialog);
                     cb(cursive);
                 }
                 bitwarden::api::TokenResponse::DeviceVerificationRequired => {
                     cursive.pop_layer();
-                    let p = &cursive
-                        .get_user_data()
-                        .with_logging_in_state()
-                        .unwrap()
-                        .global_settings()
-                        .profile;
+                    let ud = cursive.get_user_data().with_logging_in_state().unwrap();
+                    let p = &ud.global_settings().profile;
                     let dialog = new_device_verify_dialog(email, p);
                     cursive.add_layer(dialog);
                 }
