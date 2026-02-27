@@ -16,5 +16,14 @@ pub fn start_verify_biometric_auth<F: FnOnce(&mut Cursive, bool) + Send + 'stati
     }
 }
 
+pub fn is_biometric_unlock_supported() -> bool {
+    if cfg!(target_os = "linux") {
+        linux_biometric::is_biometric_unlock_supported()
+    } else {
+        false
+    }
+
+}
+
 #[cfg(target_os = "linux")]
 mod linux_biometric;

@@ -78,7 +78,7 @@ pub fn lock_vault(c: &mut Cursive) -> anyhow::Result<()> {
 
     // Generate a new key and encrypt the lock data with it. This intermediate key
     // allows us to support both password-based and biometric unlock.
-    let use_biometric = ud.global_settings().use_biometric_unlock;
+    let use_biometric = ud.global_settings().use_biometric_unlock && biometric::is_biometric_unlock_supported();
 
     let lock_key = EncMacKeys::secure_generate();
     let enc_lock_data = EncryptedLockData {
@@ -97,7 +97,7 @@ pub fn lock_vault(c: &mut Cursive) -> anyhow::Result<()> {
         .encrypt_serialized(&user_keys)
         .context("Encrypting lock key with user keys failed")?;
 
-    let keystore = if ud.global_settings().use_biometric_unlock {
+    let keystore = if use_biometric {
         // Store the unlock key to the system keystore where it can be retrieved later for biometric unlock
         let res = keystore::get_platform_keystore().and_then(|ks| {
             ks.borrow_mut().store_enc_mac_keys(&lock_key)?;
@@ -125,12 +125,10 @@ pub fn lock_vault(c: &mut Cursive) -> anyhow::Result<()> {
     let global_settings = ud.global_settings();
     let profile = global_settings.profile.as_str();
     let email = ud.email();
-    let biometric = ud.has_biometric_keys();
-
     // Vault data is left in place, but it's all encrypted
 
     // Show unlock dialog
-    let d = unlock_dialog(profile, &email, biometric);
+    let d = unlock_dialog(profile, &email, ud.has_biometric_keys());
     c.add_layer(d);
     Ok(())
 }
