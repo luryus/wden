@@ -51,6 +51,17 @@ pub fn start_verify_biometric_auth<F: FnOnce(&mut Cursive, bool) + Send + 'stati
     Ok(())
 }
 
+pub fn is_biometric_unlock_supported() -> bool {
+    // Assume a standard pam config. Check if the pam config file
+    // for wden is defined. There's not really a better way to check this without
+    // trying an auth cycle.
+    const PAM_CONFIG_FILE: &str = "/etc/pam.d/wden";
+    let Ok(metadata) = std::fs::metadata(PAM_CONFIG_FILE) else {
+        return false;
+    };
+    metadata.is_file()
+}
+
 impl Conversation for CursiveConversation {
     fn prompt_echo(&mut self, msg: &std::ffi::CStr) -> Result<std::ffi::CString, ()> {
         self.check_cancelled()?;
