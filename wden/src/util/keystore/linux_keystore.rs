@@ -40,6 +40,9 @@ impl PlatformKeystore for LinuxKeystore {
     fn retrieve_key_to<'a>(&mut self, mut buf: &'a mut [u8]) -> anyhow::Result<&'a [u8]> {
         let key = self.lock_key.take().context("Lock key not present")?;
         let count = key.read(&mut buf).context("Data read failed")?;
+        if let Err(e) = key.invalidate() {
+            log::warn!("Failed to invalidate lock key from keyring after retrieval: {:?}", e);
+        }
         Ok(&buf[..count])
     }
 }
