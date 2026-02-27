@@ -117,7 +117,7 @@ fn two_factor_dialog_email(email: Arc<String>, profile_name: &str) -> (Dialog, C
 
     let cb = Callback::from_fn_once(move |siv: &mut Cursive| {
         let ud = siv.get_user_data().with_logging_in_state().unwrap();
-        let global_settings = ud.global_settings();
+        let global_settings = ud.global_settings().clone();
         let master_password_hash = ud.master_password_hash();
 
         let email2 = Arc::clone(&email);
@@ -188,7 +188,7 @@ fn submit_two_factor(c: &mut Cursive, two_factor_type: TwoFactorProviderType, em
 
     let ud = c.get_user_data().with_logging_in_state().unwrap();
 
-    let global_settings = ud.global_settings();
+    let global_settings = ud.global_settings().clone();
     let profile_store = ud.profile_store();
     let master_pw_hash = ud.master_password_hash();
     let email2 = email.clone();

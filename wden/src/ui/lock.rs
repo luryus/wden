@@ -78,7 +78,8 @@ pub fn lock_vault(c: &mut Cursive) -> anyhow::Result<()> {
 
     // Generate a new key and encrypt the lock data with it. This intermediate key
     // allows us to support both password-based and biometric unlock.
-    let use_biometric = ud.global_settings().use_biometric_unlock && biometric::is_biometric_unlock_supported();
+    let use_biometric =
+        ud.global_settings().use_biometric_unlock && biometric::is_biometric_unlock_supported();
 
     let lock_key = EncMacKeys::secure_generate();
     let enc_lock_data = EncryptedLockData {
@@ -170,7 +171,9 @@ fn start_biometric_unlock(c: &mut Cursive) {
         if success {
             unlock_with_biometric_keys(siv);
         } else {
-            let mut error_label = siv.find_name::<TextView>(VIEW_NAME_BIOMETRIC_ERROR).unwrap();
+            let mut error_label = siv
+                .find_name::<TextView>(VIEW_NAME_BIOMETRIC_ERROR)
+                .unwrap();
             error_label.set_content("Error unlocking the vault using biometrics.\nPlease unlock using the master password.");
             let mut unlock_dialog = siv.find_name::<Dialog>(VIEW_NAME_UNLOCK_DIALOG).unwrap();
             unlock_dialog.remove_button(0);
@@ -191,9 +194,9 @@ fn submit_unlock(c: &mut Cursive) {
 
     // Get stuff from user data
     let user_data = c.get_user_data().with_locked_state().unwrap();
-    let global_settings = user_data.global_settings();
+    let global_settings = user_data.global_settings().clone();
     let pbkdf = user_data.pbkdf();
-    let email = user_data.email();
+    let email = user_data.email().clone();
     let token_key = user_data.encrypted_user_key();
     let api_key = user_data.api_key();
     let biometric = user_data.has_biometric_keys();
@@ -259,24 +262,42 @@ fn unlock_with_biometric_keys(cursive: &mut Cursive) {
     // Get stuff from user data
     let user_data = cursive.get_user_data().with_locked_state().unwrap();
     let api_key = user_data.api_key();
-    let keystore = user_data
-        .keystore()
-        .expect("BUG: Keystore was not set while unlocking biometrics");
 
-    let lock_key = keystore.borrow_mut().retrieve_enc_mac_keys().unwrap();
-    let mut lock_data =
-        EncryptedLockData::decrypt_from(user_data.encrypted_lock_data(), &lock_key).unwrap();
+    let res = (|| -> anyhow::Result<_> {
+        let keystore = user_data
+            .keystore()
+            .context("Keystore was not set while unlocking biometrics")?;
+        let lock_key = keystore
+            .borrow_mut()
+            .retrieve_enc_mac_keys()
+            .context("Retrieving biometric key failed")?;
+        let mut lock_data =
+            EncryptedLockData::decrypt_from(user_data.encrypted_lock_data(), &lock_key)
+                .context("Decrypting lock data failed")?;
+        let master_key = lock_data
+            .master_key
+            .take()
+            .context("Master key was not stored in lock data")?;
+        Ok((lock_data, master_key))
+    })();
 
-    let master_key = Arc::new(lock_data.master_key.take().unwrap());
+    match res {
+        Err(e) => {
+            log::warn!("Biometric unlock failed: {e:?}");
+            e.fatal_err_dialog(cursive);
+        }
+        Ok((mut lock_data, master_key)) => {
+            let master_key = Arc::new(master_key);
+            let user_data = user_data.into_unlocking(master_key, api_key);
 
-    let user_data = user_data.into_unlocking(master_key, api_key);
+            let collection_selection = user_data.collection_selection();
+            let _ = user_data.into_unlocked(Arc::new(lock_data.token.clone()));
 
-    let collection_selection = user_data.collection_selection();
-    let _ = user_data.into_unlocked(Arc::new(lock_data.token.clone()));
-
-    vault_table::show_vault_with_filters(
-        cursive,
-        std::mem::take(&mut lock_data.search_filter),
-        collection_selection,
-    );
+            vault_table::show_vault_with_filters(
+                cursive,
+                std::mem::take(&mut lock_data.search_filter),
+                collection_selection,
+            );
+        }
+    }
 }

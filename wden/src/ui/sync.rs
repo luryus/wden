@@ -20,8 +20,8 @@ pub fn do_sync(cursive: &mut Cursive, just_refreshed_token: bool) {
         user_data.with_syncing_state().unwrap()
     };
 
-    let global_settings = user_data.global_settings();
-    let email = user_data.email();
+    let global_settings = user_data.global_settings().clone();
+    let email = user_data.email().clone();
     let token = user_data.token();
     let api_key = user_data.api_key();
 
