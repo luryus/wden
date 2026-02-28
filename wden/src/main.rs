@@ -14,6 +14,15 @@ use wden::{
     },
     profile::ProfileStore,
 };
+use zeroizing_alloc::ZeroAlloc;
+
+// Setup zeroizing global allocator to wipe sensitive data from memory when dropped
+// While the zeroize crate is used for zeroing sensitive data, using a global allocator that zeros memory
+// can handle Strings and buffers that are allocated by libraries and other places where zeroize can't
+// be used.
+#[global_allocator]
+static ALLOC: ZeroAlloc<std::alloc::System> = ZeroAlloc(std::alloc::System);
+
 
 fn validate_profile_name(value: String) -> Result<String, &'static str> {
     if value
