@@ -23,10 +23,28 @@ pub trait PlatformKeystore {
 }
 
 pub fn get_platform_keystore() -> anyhow::Result<Box<RefCell<dyn PlatformKeystore>>> {
-    linux_keystore::get_linux_keystore()
+    #[cfg(target_os = "linux")]
+    {
+        linux_keystore::get_linux_keystore()
+    }
+
+    #[cfg(windows)]
+    {
+        windows_keystore::get_windows_keystore()
+    }
+
+    #[cfg(not(any(target_os = "linux", windows)))]
+    {
+        anyhow::bail!("Platform keystore not supported on this OS")
+    }
 }
 
 #[cfg(target_os = "linux")]
 mod linux_keystore;
 #[cfg(target_os = "linux")]
 pub type PlatformKeystoreImpl = linux_keystore::LinuxKeystore;
+
+#[cfg(windows)]
+mod windows_keystore;
+#[cfg(windows)]
+pub type PlatformKeystoreImpl = windows_keystore::WindowsKeystore;
