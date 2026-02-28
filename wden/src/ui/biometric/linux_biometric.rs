@@ -9,7 +9,7 @@ use pam::Conversation;
 
 use crate::ui::util::cursive_ext::{CursiveCallbackExt, CursiveExt};
 
-pub struct CursiveConversation {
+struct CursiveConversation {
     cb_sink: cursive::CbSink,
     username: CString,
     cancelled: Arc<AtomicBool>,
