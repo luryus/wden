@@ -36,7 +36,7 @@ pub async fn setup() -> anyhow::Result<IntegrationTestContext> {
         &mut client,
         PBKDF2_USER_EMAIL,
         PBKDF2_USER_MASTER_PW_HASH,
-        PBKDF2_USER_PASSWORD,
+        PBKDF2_USER_PASSWORD.as_bytes(),
     )
     .await?;
 

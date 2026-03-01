@@ -62,7 +62,7 @@ fn main() -> Result<(), anyhow::Error> {
         }),
     };
 
-    let master_key = kdf.create_master_key(&opts.username, &opts.password)?;
+    let master_key = kdf.create_master_key(&opts.username, &opts.password.as_bytes())?;
 
     let symmetric_key_cipher = opts.symmetric_key_cipher.parse()?;
     let keys = cipher::decrypt_symmetric_keys(&symmetric_key_cipher, &master_key)?;

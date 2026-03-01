@@ -201,7 +201,7 @@ fn submit_unlock(c: &mut Cursive) {
     let api_key = user_data.api_key();
     let biometric = user_data.has_biometric_keys();
 
-    let keys_res = derive_and_check_master_key(&email, &password, &pbkdf, token_key);
+    let keys_res = derive_and_check_master_key(&email, password.as_bytes(), &pbkdf, token_key);
 
     match keys_res {
         Err(e) => {
@@ -245,7 +245,7 @@ fn submit_unlock(c: &mut Cursive) {
 
 fn derive_and_check_master_key(
     email: &Arc<String>,
-    password: &Arc<String>,
+    password: &[u8],
     pbkdf: &Arc<cipher::PbkdfParameters>,
     token_key: &cipher::Cipher,
 ) -> Result<Arc<cipher::MasterKey>, CipherError> {
