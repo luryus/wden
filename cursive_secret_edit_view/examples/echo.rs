@@ -10,7 +10,7 @@ fn main() {
 
     let edit = SecretEditView::default().on_edit(|siv, _| {
         let ev = siv.find_name::<SecretEditView>("edit").unwrap();
-        let con = ev.get_content().to_string();
+        let con = std::str::from_utf8(ev.get_content_bytes()).unwrap().to_string();
         siv.find_name::<TextView>("label").unwrap().set_content(con);
     });
 
