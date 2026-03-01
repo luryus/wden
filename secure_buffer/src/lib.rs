@@ -1,6 +1,7 @@
 use std::sync::{Mutex, OnceLock};
 
 use region::Protection;
+use tinyvec::SliceVec;
 use zeroize::Zeroize;
 
 const BUFFER_CAPACITY: usize = 256;
@@ -122,5 +123,36 @@ fn mark_memory_dontdump(allocation: &mut region::Allocation) {
                 libc::MADV_DONTDUMP,
             );
         }
+    }
+}
+
+pub struct SecureBufferVec<'a, const SIZE: usize> {
+    _buf: SecureBuffer<'static, SIZE>,
+    vec: SliceVec<'a, u8>,
+}
+
+impl<'a, const SIZE: usize> SecureBufferVec<'a, SIZE> {
+    pub fn new() -> Self {
+        let mut buf = get_secure_buffer();
+
+        let buf_ptr = buf.as_mut_slice().as_mut_ptr();
+        let len = buf.len();
+        
+        // SAFETY: A SecureBuffer's backing data never moves and the slice
+        // is valid for the entire lifetime of the SecureBufferVec
+        let vec_backing_slice = unsafe { 
+            std::slice::from_raw_parts_mut(buf_ptr, len)
+        };
+        let vec = SliceVec::from_slice_len(vec_backing_slice, 0);
+
+        Self { _buf: buf, vec }
+    }
+
+    pub fn vec(&self) -> &SliceVec<'a, u8> {
+        &self.vec
+    }
+
+    pub fn vec_mut(&mut self) -> &mut SliceVec<'a, u8> {
+        &mut self.vec
     }
 }
