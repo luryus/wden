@@ -20,9 +20,8 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR TH
 OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-mod array_string_ext;
+mod slice_vec_ext;
 
-use arrayvec::ArrayString;
 use cursive_core::{
     Cursive, Printer, Rect, Vec2, View, With,
     direction::Direction,
@@ -32,12 +31,11 @@ use cursive_core::{
     utils::lines::simple::{simple_prefix, simple_suffix},
     view::CannotFocus,
 };
-use std::pin::Pin;
+use secure_buffer::SecureBufferVec;
 use std::sync::{Arc, Mutex};
 use unicode_segmentation::UnicodeSegmentation;
-use zeroize::Zeroizing;
 
-use array_string_ext::ArrayStringExt;
+use slice_vec_ext::SliceVecExt;
 
 /// Closure type for callbacks when the content is modified.
 ///
@@ -51,7 +49,7 @@ pub type OnSubmit = dyn Fn(&mut Cursive) + Send + Sync;
 
 pub struct SecretEditView {
     /// Current content.
-    content: Pin<Box<Zeroizing<ArrayString<256>>>>,
+    content: SecureBufferVec<'static, 256>,
 
     /// Cursor position in the content, in bytes.
     cursor: usize,
@@ -92,7 +90,7 @@ impl SecretEditView {
     /// Creates a new, empty edit view.
     pub fn new() -> Self {
         SecretEditView {
-            content: Box::pin(Zeroizing::new(ArrayString::new())),
+            content: SecureBufferVec::new(),
             cursor: 0,
             offset: 0,
             last_length: 0, // scrollable: false,
@@ -246,16 +244,16 @@ impl SecretEditView {
     /// Returns a callback in response to content change.
     ///
     /// You should run this callback with a `&mut Cursive`.
-    pub fn set_content<S: Into<Zeroizing<String>>>(&mut self, content: S) -> Callback {
+    pub fn set_content<S: Into<String>>(&mut self, content: S) -> Callback {
         let content = content.into();
         let len = content.len();
 
-        if len > self.content.capacity() {
+        if len > self.content.vec().capacity() {
             return Callback::dummy();
         }
 
-        self.content.clear();
-        self.content.push_str(&content);
+        self.content.vec_mut().clear();
+        self.content.vec_mut().extend_from_slice(content.as_bytes());
 
         self.offset = 0;
         self.set_cursor(len);
@@ -264,8 +262,8 @@ impl SecretEditView {
     }
 
     /// Get the current text.
-    pub fn get_content(&self) -> &str {
-        &self.content
+    pub fn get_content_bytes(&self) -> &[u8] {
+        &self.content.vec()
     }
 
     /// Sets the current content to the given value.
@@ -274,14 +272,14 @@ impl SecretEditView {
     ///
     /// Does not run the `on_edit` callback.
     #[must_use]
-    pub fn content<S: Into<Zeroizing<String>>>(mut self, content: S) -> Self {
+    pub fn content<S: Into<String>>(mut self, content: S) -> Self {
         self.set_content(content);
         self
     }
 
     /// Sets the cursor position.
     pub fn set_cursor(&mut self, cursor: usize) {
-        assert!(cursor <= self.content.len());
+        assert!(cursor <= self.content.vec().len());
         self.cursor = cursor;
 
         self.keep_cursor_in_view();
@@ -293,11 +291,13 @@ impl SecretEditView {
     ///
     /// You should run this callback with a `&mut Cursive`.
     pub fn insert(&mut self, ch: char) -> Callback {
-        if self.content.try_insert(self.cursor, ch).is_err() {
-            // Backing string is full, cannot insert anything.
+        let mut buf = [0u8; 4];
+        let bytes = ch.encode_utf8(&mut buf).as_bytes();
+        if self.content.vec_mut().try_insert(self.cursor, bytes).is_err() {
+            // Backing buffer is full, cannot insert anything.
             return Callback::dummy();
         }
-        self.cursor += ch.len_utf8();
+        self.cursor += bytes.len();
 
         self.keep_cursor_in_view();
 
@@ -310,7 +310,14 @@ impl SecretEditView {
     ///
     /// You should run this callback with a `&mut Cursive`.
     pub fn remove(&mut self) -> Callback {
-        self.content.remove(self.cursor);
+        if self.cursor >= self.content.vec().len() {
+            // Nothing to remove
+            return Callback::dummy();
+        }
+
+        // Find the length of the char at the cursor, and remove it.
+        let rem_len = utf8_char_len(self.content.vec()[self.cursor]);
+        self.content.vec_mut().drain(self.cursor..self.cursor + rem_len);
 
         self.keep_cursor_in_view();
 
@@ -333,6 +340,8 @@ impl SecretEditView {
         // so keep offset in [last_length-cursor,cursor]
         // Also call this on resize,
         // but right now it is an event like any other
+        let content_str = str::from_utf8(&self.content.vec()).unwrap();
+
         if self.cursor < self.offset {
             self.offset = self.cursor;
         } else {
@@ -353,7 +362,7 @@ impl SecretEditView {
             // Then sum the byte lengths.
 
             let suffix_length =
-                simple_suffix(&self.content[self.offset..self.cursor], available).length;
+                simple_suffix(&content_str[self.offset..self.cursor], available).length;
 
             assert!(suffix_length <= self.cursor);
             self.offset = self.cursor - suffix_length;
@@ -362,12 +371,13 @@ impl SecretEditView {
         }
 
         // If we have too much space
-        if self.content.len() - self.offset < self.last_length {
+        let visible_width = content_str[self.offset..].graphemes(true).count();
+        if visible_width < self.last_length {
             assert!(self.last_length >= 1);
-            let suffix_length = simple_suffix(&self.content, self.last_length - 1).length;
+            let suffix_length = simple_suffix(&content_str, self.last_length - 1).length;
 
-            assert!(self.content.len() >= suffix_length);
-            self.offset = self.content.len() - suffix_length;
+            assert!(content_str.len() >= suffix_length);
+            self.offset = content_str.len() - suffix_length;
         }
     }
 }
@@ -380,7 +390,9 @@ impl View for SecretEditView {
             self.last_length, printer.size.x
         );
 
-        let width = self.content.graphemes(true).count();
+        let content_str = str::from_utf8(&self.content.vec()).unwrap();
+
+        let width = content_str.graphemes(true).count();
         printer.with_style(self.style, |printer| {
             let effect = if self.enabled && printer.enabled {
                 Effect::Reverse
@@ -395,7 +407,7 @@ impl View for SecretEditView {
                     let filler_len = printer.size.x - width;
                     printer.print_hline((width, 0), filler_len, self.filler.as_str());
                 } else {
-                    let width = self.content[self.offset..]
+                    let width = content_str[self.offset..]
                         .graphemes(true)
                         .count()
                         .min(self.last_length);
@@ -410,12 +422,12 @@ impl View for SecretEditView {
 
             // Now print cursor
             if printer.focused {
-                let c: &str = if self.cursor == self.content.len() {
+                let c: &str = if self.cursor == content_str.len() {
                     &self.filler
                 } else {
                     "*"
                 };
-                let offset = self.content[self.offset..self.cursor]
+                let offset = content_str[self.offset..self.cursor]
                     .graphemes(true)
                     .count();
                 printer.print((offset, 0), c);
@@ -435,6 +447,7 @@ impl View for SecretEditView {
         if !self.enabled {
             return EventResult::Ignored;
         }
+        let content_str = str::from_utf8(&self.content.vec()).unwrap();
         match event {
             Event::Char(ch) => {
                 return EventResult::Consumed(Some(self.insert(ch)));
@@ -443,11 +456,11 @@ impl View for SecretEditView {
             Event::Key(Key::Home) => self.set_cursor(0),
             Event::Key(Key::End) => {
                 // When possible, NLL to the rescue!
-                let len = self.content.len();
+                let len = content_str.len();
                 self.set_cursor(len);
             }
             Event::Key(Key::Left) if self.cursor > 0 => {
-                let len = self.content[..self.cursor]
+                let len = content_str[..self.cursor]
                     .graphemes(true)
                     .next_back()
                     .unwrap()
@@ -455,8 +468,8 @@ impl View for SecretEditView {
                 let cursor = self.cursor - len;
                 self.set_cursor(cursor);
             }
-            Event::Key(Key::Right) if self.cursor < self.content.len() => {
-                let len = self.content[self.cursor..]
+            Event::Key(Key::Right) if self.cursor < content_str.len() => {
+                let len = content_str[self.cursor..]
                     .graphemes(true)
                     .next()
                     .unwrap()
@@ -465,7 +478,7 @@ impl View for SecretEditView {
                 self.set_cursor(cursor);
             }
             Event::Key(Key::Backspace) if self.cursor > 0 => {
-                let len = self.content[..self.cursor]
+                let len = content_str[..self.cursor]
                     .graphemes(true)
                     .next_back()
                     .unwrap()
@@ -473,7 +486,7 @@ impl View for SecretEditView {
                 self.cursor -= len;
                 return EventResult::Consumed(Some(self.remove()));
             }
-            Event::Key(Key::Del) if self.cursor < self.content.len() => {
+            Event::Key(Key::Del) if self.cursor < content_str.len() => {
                 return EventResult::Consumed(Some(self.remove()));
             }
             Event::Key(Key::Enter) if self.on_submit.is_some() => {
@@ -489,7 +502,7 @@ impl View for SecretEditView {
             } if position.fits_in_rect(offset, (self.last_length, 1)) => {
                 if let Some(position) = position.checked_sub(offset) {
                     self.cursor = self.offset
-                        + simple_prefix(&self.content[self.offset..], position.x).length;
+                        + simple_prefix(&content_str[self.offset..], position.x).length;
                 }
             }
             _ => return EventResult::Ignored,
@@ -506,5 +519,15 @@ impl View for SecretEditView {
         let x = self.cursor;
 
         Rect::from_size((x, 0), (char_width, 1))
+    }
+}
+
+fn utf8_char_len(b: u8) -> usize {
+    match b.leading_ones() {
+        0 => 1, // 0xxxxxxx - ASCII
+        2 => 2, // 110xxxxx
+        3 => 3, // 1110xxxx
+        4 => 4, // 11110xxx
+        _ => 1, // continuation byte or invalid
     }
 }
