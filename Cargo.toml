@@ -1,5 +1,5 @@
 [workspace]
-members = ["wden", "cursive_secret_edit_view"]
+members = ["wden", "cursive_secret_edit_view", "secure_buffer"]
 resolver = "2"
 
 [profile.release]

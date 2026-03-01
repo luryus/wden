@@ -1,0 +1,11 @@
+[package]
+name = "secure_buffer"
+edition = "2024"
+version = "0.1.0"
+
+[dependencies]
+zeroize = { version = "1.7" }
+region = "3.0.2"
+
+[target.'cfg(target_os="linux")'.dependencies]
+libc = "0.2"
