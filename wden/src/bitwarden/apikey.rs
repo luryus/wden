@@ -47,7 +47,7 @@ impl ApiKey {
         &self,
         profile: &str,
         email: &str,
-        password: &str,
+        password: &[u8],
     ) -> anyhow::Result<EncryptedApiKey> {
         let serialized = self.serialize_to_bytes()?;
         let keys = get_encryption_keys(profile, email, password, &DEFAULT_PBKDF_PARAMS)?;
@@ -63,7 +63,7 @@ impl ApiKey {
         enc_api_key: &EncryptedApiKey,
         profile: &str,
         email: &str,
-        password: &str,
+        password: &[u8],
     ) -> Result<ApiKey, anyhow::Error> {
         let keys = get_encryption_keys(profile, email, password, &enc_api_key.pbkdf_params)?;
         let serialized_api_key = enc_api_key.encrypted_key.decrypt(&keys)?;
@@ -79,7 +79,7 @@ fn encryption_key_salt(profile: &str, email: &str) -> String {
 fn get_encryption_keys(
     profile: &str,
     email: &str,
-    password: &str,
+    password: &[u8],
     pbkdf_params: &PbkdfParameters,
 ) -> Result<cipher::EncMacKeys, cipher::CipherError> {
     let salt = encryption_key_salt(profile, email);

@@ -519,7 +519,7 @@ mod tests {
     fn test_create_master_password_hash() {
         let master_key = MasterKey::from_base64(testdata::USER_MASTER_KEY_PBKDF2_B64)
             .expect("Master key decoding failed");
-        let pass_hash = create_master_password_hash(&master_key, testdata::USER_PASSWORD);
+        let pass_hash = create_master_password_hash(&master_key, testdata::USER_PASSWORD.as_bytes());
         assert_eq!(
             pass_hash.base64_encoded().as_str(),
             testdata::USER_MASTER_PASSWORD_HASH_B64
@@ -532,7 +532,7 @@ mod tests {
             hash_iterations: testdata::USER_PBKDF2_ITERATIONS,
         };
         let key = pbkdf2
-            .create_master_key(testdata::USER_EMAIL, testdata::USER_PASSWORD)
+            .create_master_key(testdata::USER_EMAIL, testdata::USER_PASSWORD.as_bytes())
             .expect("Hashing failed");
         assert_eq!(
             key.base64_encoded().as_str(),
@@ -548,7 +548,7 @@ mod tests {
             parallelism: testdata::USER_ARGON2ID_PARALLELISM,
         };
         let key = argon2id
-            .create_master_key(testdata::USER_EMAIL, testdata::USER_PASSWORD)
+            .create_master_key(testdata::USER_EMAIL, testdata::USER_PASSWORD.as_bytes())
             .expect("Hashing failed");
         assert_eq!(
             key.base64_encoded().as_str(),

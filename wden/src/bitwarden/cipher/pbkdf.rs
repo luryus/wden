@@ -10,10 +10,10 @@ pub trait Pbkdf {
     fn create_master_key(
         &self,
         user_email: &str,
-        user_password: &str,
+        user_password: &[u8],
     ) -> Result<MasterKey, CipherError>;
 
-    fn derive_enc_mac_keys(&self, password: &str, salt: &str) -> Result<EncMacKeys, CipherError> {
+    fn derive_enc_mac_keys(&self, password: &[u8], salt: &str) -> Result<EncMacKeys, CipherError> {
         let master_key = self.create_master_key(salt, password)?;
         Ok(super::expand_master_key(&master_key))
     }
@@ -56,11 +56,11 @@ impl Pbkdf for Pbkdf2 {
     fn create_master_key(
         &self,
         user_email: &str,
-        user_password: &str,
+        user_password: &[u8],
     ) -> Result<MasterKey, CipherError> {
         let mut res = MasterKey::new();
         pbkdf2::pbkdf2_hmac::<Sha256>(
-            user_password.as_bytes(),
+            user_password,
             // Email is always lowercased
             user_email.to_lowercase().as_bytes(),
             self.hash_iterations,
@@ -90,7 +90,7 @@ impl Pbkdf for Argon2id {
     fn create_master_key(
         &self,
         user_email: &str,
-        user_password: &str,
+        user_password: &[u8],
     ) -> Result<MasterKey, CipherError> {
         let salt = Self::hashed_salt(user_email.to_lowercase().as_bytes());
 
@@ -104,7 +104,7 @@ impl Pbkdf for Argon2id {
         let kdf = argon2::Argon2::new(argon2::Algorithm::Argon2id, argon2::Version::V0x13, params);
 
         let mut res = MasterKey::new();
-        kdf.hash_password_into(user_password.as_bytes(), &salt, res.buf_mut())
+        kdf.hash_password_into(user_password, &salt, res.buf_mut())
             .map_err(CipherError::KdfError)?;
         Ok(res)
     }

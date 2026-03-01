@@ -6,7 +6,7 @@ pub async fn init_vault_data(
     client: &mut VaultwardenClient,
     email: &str,
     pw_hash: &str,
-    password: &str,
+    password: &[u8],
 ) -> anyhow::Result<()> {
     let mut token = client.get_token(email, pw_hash).await?;
     client.set_access_token(std::mem::take(&mut token.access_token));

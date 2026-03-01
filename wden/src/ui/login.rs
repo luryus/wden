@@ -9,7 +9,7 @@ use cursive::{
     views::{Dialog, EditView, LinearLayout, PaddedView, TextView},
 };
 use cursive_secret_edit_view::SecretEditView;
-use zeroize::Zeroizing;
+use secure_buffer::SecureBufferVec;
 
 use crate::{
     bitwarden::{
@@ -32,7 +32,10 @@ pub fn login_dialog(
     saved_email: Option<String>,
     api_key_login: bool,
 ) -> Dialog {
-    debug_assert!(!api_key_login || saved_email.is_some(), "Bug: email not present while trying to log in with api keys");
+    debug_assert!(
+        !api_key_login || saved_email.is_some(),
+        "Bug: email not present while trying to log in with api keys"
+    );
 
     let submit_callback: Arc<dyn Fn(&mut Cursive) + Send + Sync> = if api_key_login {
         let saved_email = saved_email.clone().unwrap();
@@ -96,17 +99,7 @@ fn submit_login(c: &mut Cursive) {
     let email = Arc::new(String::clone(&email));
     let email2 = email.clone();
 
-    let password = c
-        .call_on_name(VIEW_NAME_PASSWORD, |view: &mut SecretEditView| {
-            // SecretEditView only gives the content out as a reference
-            // to prevent (accidentally) leaking the data in memory.
-            // Copy it to another zeroizing string.
-            let content = view.get_content();
-            let mut buf = Zeroizing::new(String::with_capacity(content.len() + 1));
-            buf.push_str(content);
-            buf
-        })
-        .unwrap();
+    let pw_secure_buf = read_password_value(c).unwrap();
 
     c.pop_layer();
     c.add_layer(Dialog::text("Signing in..."));
@@ -123,7 +116,7 @@ fn submit_login(c: &mut Cursive) {
                 global_settings.accept_invalid_certs,
             );
             let (master_key, master_pw_hash, pbkdf) =
-                do_prelogin(&client, &email, &password).await?;
+                do_prelogin(&client, &email, &pw_secure_buf.vec()).await?;
 
             do_login(
                 &client,
@@ -152,6 +145,20 @@ fn submit_login(c: &mut Cursive) {
     )
 }
 
+fn read_password_value(cursive: &mut Cursive) -> Option<SecureBufferVec<'static, 256>> {
+    cursive.call_on_name(VIEW_NAME_PASSWORD, |view: &mut SecretEditView| {
+        let input_pw = view.get_content_bytes();
+        assert!(
+            input_pw.len() <= 256,
+            "Password length exceeds maximum expected length"
+        );
+
+        let mut pw_buf = SecureBufferVec::<256>::new();
+        pw_buf.vec_mut().extend_from_slice(input_pw);
+        pw_buf
+    })
+}
+
 fn submit_api_key_login(c: &mut Cursive, email: String) {
     let email = Arc::new(email);
     let email2 = email.clone();
@@ -159,17 +166,7 @@ fn submit_api_key_login(c: &mut Cursive, email: String) {
     let ud = c.get_user_data().with_logged_out_state().unwrap();
     let global_settings = ud.global_settings().clone();
 
-    let password = c
-        .call_on_name(VIEW_NAME_PASSWORD, |view: &mut SecretEditView| {
-            // SecretEditView only gives the content out as a reference
-            // to prevent (accidentally) leaking the data in memory.
-            // Copy it to another zeroizing string.
-            let content = view.get_content();
-            let mut buf = Zeroizing::new(String::with_capacity(content.len() + 1));
-            buf.push_str(content);
-            buf
-        })
-        .unwrap();
+    let password = read_password_value(c).unwrap();
 
     c.pop_layer();
     c.add_layer(Dialog::text("Signing in..."));
@@ -182,8 +179,8 @@ fn submit_api_key_login(c: &mut Cursive, email: String) {
                 global_settings.accept_invalid_certs,
             );
             async {
-                let api_key = do_api_key_prelogin(&email, &password, &global_settings).await?;
-                do_login_with_api_key(&client, &email, &password, &api_key)
+                let api_key = do_api_key_prelogin(&email, &password.vec(), &global_settings).await?;
+                do_login_with_api_key(&client, &email, &password.vec(), &api_key)
                     .await
                     .map(|(t, mk, kdf)| (t, mk, kdf, email, Arc::new(api_key)))
             }
@@ -290,7 +287,7 @@ pub fn handle_login_response(
 async fn do_prelogin(
     client: &ApiClient,
     email: &str,
-    password: &str,
+    password: &[u8],
 ) -> Result<
     (
         Arc<MasterKey>,
@@ -311,7 +308,7 @@ async fn do_prelogin(
 
 async fn do_api_key_prelogin(
     email: &str,
-    password: &str,
+    password: &[u8],
     global_settings: &GlobalSettings,
 ) -> Result<ApiKey, anyhow::Error> {
     let enc_api_key = global_settings
@@ -374,7 +371,7 @@ pub async fn do_login(
 pub async fn do_login_with_api_key(
     client: &ApiClient,
     email: &str,
-    password: &str,
+    password: &[u8],
     api_key: &ApiKey,
 ) -> Result<(TokenResponse, Arc<MasterKey>, Arc<PbkdfParameters>), anyhow::Error> {
     let token_res = client.get_token_with_api_key(api_key).await?;
