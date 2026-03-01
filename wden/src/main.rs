@@ -272,7 +272,7 @@ async fn store_api_keys(
         spinner.set_message("Validating password");
         spinner.enable_steady_tick(Duration::from_millis(200));
 
-        let check_res = cipher::create_master_key(&email, &password, &pbkdf_params)
+        let check_res = cipher::create_master_key(&email, password.as_bytes(), &pbkdf_params)
             .and_then(|mk| cipher::decrypt_symmetric_keys(&token_res.key, &mk));
 
         spinner.finish_and_clear();
@@ -288,7 +288,7 @@ async fn store_api_keys(
     spinner.set_message("Encrypting API key");
     spinner.enable_steady_tick(Duration::from_millis(200));
 
-    let enc_api_key = api_key.encrypt(&global_settings.profile, &email, &password)?;
+    let enc_api_key = api_key.encrypt(&global_settings.profile, &email, password.as_bytes())?;
     profile_store
         .edit(|d| {
             d.saved_email = Some(email);
