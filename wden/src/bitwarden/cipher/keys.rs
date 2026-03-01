@@ -1,9 +1,8 @@
-use std::pin::Pin;
-
 use base64::prelude::*;
 use hkdf::Hkdf;
 use rand::RngCore;
 use rsa::{RsaPublicKey, pkcs8::DecodePrivateKey};
+use secure_buffer::{SecureBuffer, get_secure_buffer};
 use serde::{Deserialize, Serialize, de::Visitor};
 use sha2::Sha256;
 use zeroize::{ZeroizeOnDrop, Zeroizing};
@@ -12,11 +11,10 @@ use super::{Cipher, CipherError, PbkdfParameters, get_pbkdf};
 
 const CREDENTIAL_LEN: usize = 256 / 8;
 
-#[derive(ZeroizeOnDrop, Clone)]
-pub struct MasterKey(Pin<Box<[u8; CREDENTIAL_LEN]>>);
+pub struct MasterKey(SecureBuffer<'static, CREDENTIAL_LEN>);
 impl MasterKey {
     pub(super) fn new() -> Self {
-        MasterKey(Box::pin([0; CREDENTIAL_LEN]))
+        MasterKey(get_secure_buffer())
     }
 
     pub(super) fn buf_mut(&mut self) -> &mut [u8] {
@@ -40,6 +38,14 @@ impl MasterKey {
     #[cfg(test)]
     pub(super) fn base64_encoded(&self) -> Zeroizing<String> {
         BASE64_STANDARD.encode(self.0.as_slice()).into()
+    }
+}
+
+impl Clone for MasterKey {
+    fn clone(&self) -> Self {
+        let mut new_key = Self::new();
+        new_key.buf_mut().copy_from_slice(self.0.as_slice());
+        new_key
     }
 }
 
@@ -97,11 +103,10 @@ impl<'de> Visitor<'de> for MasterKeyBytesVisitor {
     }
 }
 
-#[derive(Clone, ZeroizeOnDrop)]
-pub struct MasterPasswordHash(Pin<Box<[u8; CREDENTIAL_LEN]>>);
+pub struct MasterPasswordHash(SecureBuffer<'static, CREDENTIAL_LEN>);
 impl MasterPasswordHash {
     fn new() -> Self {
-        MasterPasswordHash(Box::pin([0; CREDENTIAL_LEN]))
+        MasterPasswordHash(get_secure_buffer())
     }
 
     pub fn base64_encoded(&self) -> Zeroizing<String> {
@@ -115,11 +120,10 @@ impl Default for MasterPasswordHash {
     }
 }
 
-#[derive(ZeroizeOnDrop)]
-pub struct EncryptionKey(Pin<Box<[u8; CREDENTIAL_LEN]>>);
+pub struct EncryptionKey(SecureBuffer<'static, CREDENTIAL_LEN>);
 impl EncryptionKey {
     fn new() -> Self {
-        Self(Box::pin([0u8; CREDENTIAL_LEN]))
+        Self(get_secure_buffer())
     }
 
     pub(super) fn data(&self) -> &[u8] {
@@ -127,11 +131,10 @@ impl EncryptionKey {
     }
 }
 
-#[derive(ZeroizeOnDrop)]
-pub struct MacKey(Pin<Box<[u8; CREDENTIAL_LEN]>>);
+pub struct MacKey(SecureBuffer<'static, CREDENTIAL_LEN>);
 impl MacKey {
     fn new() -> Self {
-        Self(Box::pin([0u8; CREDENTIAL_LEN]))
+        Self(get_secure_buffer())
     }
 
     pub(super) fn data(&self) -> &[u8] {
@@ -200,7 +203,8 @@ impl EncMacKeys {
     // Serializes this EncMacKey, and encrypts it into a cipher using another EncMacKeys.
     // The result is decryptable and the keys can be extracted with
     pub fn encrypt_serialized(&self, encrypt_with: &EncMacKeys) -> Result<Cipher, CipherError> {
-        let mut data = Zeroizing::new([0u8; Self::total_len()]);
+        const LEN: usize = EncMacKeys::total_len();
+        let mut data = get_secure_buffer::<LEN>();
         self.store_to_slice(data.as_mut_slice())?;
         Cipher::encrypt(data.as_slice(), encrypt_with)
     }
@@ -209,9 +213,9 @@ impl EncMacKeys {
         cipher: &Cipher,
         decryption_keys: &EncMacKeys,
     ) -> Result<Self, CipherError> {
-        let len = cipher.ct_len();
-        let mut buf = Zeroizing::new(vec![0u8; len].into_boxed_slice());
-        let dec_cipher = cipher.decrypt_to(decryption_keys, &mut buf)?;
+        const LEN: usize = EncMacKeys::total_len();
+        let mut data = get_secure_buffer::<LEN>();
+        let dec_cipher = cipher.decrypt_to(decryption_keys, data.as_mut_slice())?;
         Self::from_slice(dec_cipher)
     }
 }
@@ -237,7 +241,7 @@ impl DerPrivateKey {
 
 pub fn create_master_key(
     user_email: &str,
-    user_password: &str,
+    user_password: &[u8],
     pbkdf_params: &PbkdfParameters,
 ) -> Result<MasterKey, CipherError> {
     get_pbkdf(pbkdf_params).create_master_key(user_email, user_password)
@@ -245,12 +249,12 @@ pub fn create_master_key(
 
 pub fn create_master_password_hash(
     master_key: &MasterKey,
-    user_password: &str,
+    user_password: &[u8],
 ) -> MasterPasswordHash {
     let mut res = MasterPasswordHash::new();
     pbkdf2::pbkdf2_hmac::<Sha256>(
         master_key.0.as_slice(),
-        user_password.as_bytes(),
+        user_password,
         1,
         res.0.as_mut_slice(),
     );

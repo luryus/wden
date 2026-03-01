@@ -32,6 +32,7 @@ const LOCK_DATA_SERIALIZED_MAX_SIZE: usize = 16_000;
 pub struct EncryptedLockData {
     search_filter: String,
     token: TokenResponseSuccess,
+    #[zeroize(skip)] // MasterKey zeroizes itself
     master_key: Option<MasterKey>,
 }
 
@@ -85,7 +86,7 @@ pub fn lock_vault(c: &mut Cursive) -> anyhow::Result<()> {
     let enc_lock_data = EncryptedLockData {
         search_filter: search_term,
         token: ud.get_token_object().clone(),
-        master_key: use_biometric.then_some(ud.master_key().clone()),
+        master_key: use_biometric.then(|| ud.master_key().clone()),
     }
     .encrypt(&lock_key)?;
 
@@ -185,6 +186,7 @@ fn start_biometric_unlock(c: &mut Cursive) {
 }
 
 fn submit_unlock(c: &mut Cursive) {
+    // TODO: switch to secure input
     let password = c
         .call_on_name(VIEW_NAME_PASSWORD, |view: &mut EditView| view.get_content())
         .unwrap();
