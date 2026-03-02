@@ -49,7 +49,7 @@ pub type OnSubmit = dyn Fn(&mut Cursive) + Send + Sync;
 
 pub struct SecretEditView {
     /// Current content.
-    content: SecureBufferVec<'static, 256>,
+    content: SecureBufferVec<256>,
 
     /// Cursor position in the content, in bytes.
     cursor: usize,
@@ -252,8 +252,10 @@ impl SecretEditView {
             return Callback::dummy();
         }
 
-        self.content.vec_mut().clear();
-        self.content.vec_mut().extend_from_slice(content.as_bytes());
+        self.content.with_vec_mut(|vec| {
+            vec.clear();
+            vec.extend_from_slice(content.as_bytes());
+        });
 
         self.offset = 0;
         self.set_cursor(len);
@@ -293,7 +295,11 @@ impl SecretEditView {
     pub fn insert(&mut self, ch: char) -> Callback {
         let mut buf = [0u8; 4];
         let bytes = ch.encode_utf8(&mut buf).as_bytes();
-        if self.content.vec_mut().try_insert(self.cursor, bytes).is_err() {
+        if self
+            .content
+            .with_vec_mut(|vec| vec.try_insert(self.cursor, bytes))
+            .is_err()
+        {
             // Backing buffer is full, cannot insert anything.
             return Callback::dummy();
         }
@@ -317,7 +323,9 @@ impl SecretEditView {
 
         // Find the length of the char at the cursor, and remove it.
         let rem_len = utf8_char_len(self.content.vec()[self.cursor]);
-        self.content.vec_mut().drain(self.cursor..self.cursor + rem_len);
+        self.content.with_vec_mut(|vec| {
+            vec.drain(self.cursor..self.cursor + rem_len);
+        });
 
         self.keep_cursor_in_view();
 
@@ -501,8 +509,8 @@ impl View for SecretEditView {
                 offset,
             } if position.fits_in_rect(offset, (self.last_length, 1)) => {
                 if let Some(position) = position.checked_sub(offset) {
-                    self.cursor = self.offset
-                        + simple_prefix(&content_str[self.offset..], position.x).length;
+                    self.cursor =
+                        self.offset + simple_prefix(&content_str[self.offset..], position.x).length;
                 }
             }
             _ => return EventResult::Ignored,
