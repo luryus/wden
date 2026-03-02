@@ -404,13 +404,6 @@ impl Cipher {
             }
         }
     }
-
-    fn ct_len(&self) -> usize {
-        match self {
-            Cipher::Empty => 0,
-            Cipher::Value { ct, .. } => ct.len(),
-        }
-    }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -519,7 +512,8 @@ mod tests {
     fn test_create_master_password_hash() {
         let master_key = MasterKey::from_base64(testdata::USER_MASTER_KEY_PBKDF2_B64)
             .expect("Master key decoding failed");
-        let pass_hash = create_master_password_hash(&master_key, testdata::USER_PASSWORD.as_bytes());
+        let pass_hash =
+            create_master_password_hash(&master_key, testdata::USER_PASSWORD.as_bytes());
         assert_eq!(
             pass_hash.base64_encoded().as_str(),
             testdata::USER_MASTER_PASSWORD_HASH_B64
