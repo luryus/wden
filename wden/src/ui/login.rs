@@ -145,7 +145,7 @@ fn submit_login(c: &mut Cursive) {
     )
 }
 
-fn read_password_value(cursive: &mut Cursive) -> Option<SecureBufferVec<'static, 256>> {
+fn read_password_value(cursive: &mut Cursive) -> Option<SecureBufferVec<256>> {
     cursive.call_on_name(VIEW_NAME_PASSWORD, |view: &mut SecretEditView| {
         let input_pw = view.get_content_bytes();
         assert!(
@@ -154,7 +154,7 @@ fn read_password_value(cursive: &mut Cursive) -> Option<SecureBufferVec<'static,
         );
 
         let mut pw_buf = SecureBufferVec::<256>::new();
-        pw_buf.vec_mut().extend_from_slice(input_pw);
+        pw_buf.with_vec_mut(|vec| vec.extend_from_slice(input_pw));
         pw_buf
     })
 }
