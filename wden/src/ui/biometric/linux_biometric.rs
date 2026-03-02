@@ -1,6 +1,9 @@
 use std::{
     ffi::CString,
-    sync::{ Arc, atomic::{AtomicBool, Ordering}, },
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
 };
 
 use anyhow::Context;

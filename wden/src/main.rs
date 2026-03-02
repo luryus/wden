@@ -23,7 +23,6 @@ use zeroizing_alloc::ZeroAlloc;
 #[global_allocator]
 static ALLOC: ZeroAlloc<std::alloc::System> = ZeroAlloc(std::alloc::System);
 
-
 fn validate_profile_name(value: String) -> Result<String, &'static str> {
     if value
         .chars()

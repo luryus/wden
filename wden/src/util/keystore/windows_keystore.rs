@@ -3,7 +3,7 @@ use std::cell::RefCell;
 use anyhow::Context;
 use windows::Win32::Foundation::{HLOCAL, LocalFree};
 use windows::Win32::Security::Cryptography::{
-    CryptProtectData, CryptUnprotectData, CRYPT_INTEGER_BLOB,
+    CRYPT_INTEGER_BLOB, CryptProtectData, CryptUnprotectData,
 };
 use zeroize::Zeroizing;
 
