@@ -1,5 +1,6 @@
 use std::sync::{Mutex, OnceLock};
 
+use ouroboros::self_referencing;
 use region::Protection;
 use tinyvec::SliceVec;
 use zeroize::Zeroize;
@@ -126,33 +127,34 @@ fn mark_memory_dontdump(allocation: &mut region::Allocation) {
     }
 }
 
-pub struct SecureBufferVec<'a, const SIZE: usize> {
-    _buf: SecureBuffer<'static, SIZE>,
-    vec: SliceVec<'a, u8>,
+pub struct SecureBufferVec<const SIZE: usize>(SecureBufferVecInternal<SIZE>);
+
+#[self_referencing]
+struct SecureBufferVecInternal<const SIZE: usize> {
+    buf: SecureBuffer<'static, SIZE>,
+
+    #[borrows(mut buf)]
+    #[covariant]
+    vec: SliceVec<'this, u8>,
 }
 
-impl<'a, const SIZE: usize> SecureBufferVec<'a, SIZE> {
+impl<const SIZE: usize> SecureBufferVec<SIZE> {
     pub fn new() -> Self {
-        let mut buf = get_secure_buffer();
+        let buf = get_secure_buffer();
 
-        let buf_ptr = buf.as_mut_slice().as_mut_ptr();
-        let len = buf.len();
-        
-        // SAFETY: A SecureBuffer's backing data never moves and the slice
-        // is valid for the entire lifetime of the SecureBufferVec
-        let vec_backing_slice = unsafe { 
-            std::slice::from_raw_parts_mut(buf_ptr, len)
-        };
-        let vec = SliceVec::from_slice_len(vec_backing_slice, 0);
-
-        Self { _buf: buf, vec }
+        let internal =
+            SecureBufferVecInternal::new(buf, |b| SliceVec::from_slice_len(b.as_mut_slice(), 0));
+        Self(internal)
     }
 
-    pub fn vec(&self) -> &SliceVec<'a, u8> {
-        &self.vec
+    pub fn vec(&self) -> &SliceVec<'_, u8> {
+        &self.0.borrow_vec()
     }
 
-    pub fn vec_mut(&mut self) -> &mut SliceVec<'a, u8> {
-        &mut self.vec
+    pub fn with_vec_mut<ReturnType>(
+        &mut self,
+        cb: impl FnOnce(&mut SliceVec<'_, u8>) -> ReturnType,
+    ) -> ReturnType {
+        self.0.with_vec_mut(cb)
     }
 }
