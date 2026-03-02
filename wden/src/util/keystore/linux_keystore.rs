@@ -41,7 +41,10 @@ impl PlatformKeystore for LinuxKeystore {
         let key = self.lock_key.take().context("Lock key not present")?;
         let count = key.read(&mut buf).context("Data read failed")?;
         if let Err(e) = key.invalidate() {
-            log::warn!("Failed to invalidate lock key from keyring after retrieval: {:?}", e);
+            log::warn!(
+                "Failed to invalidate lock key from keyring after retrieval: {:?}",
+                e
+            );
         }
         Ok(&buf[..count])
     }

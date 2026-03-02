@@ -13,11 +13,9 @@ pub fn start_verify_biometric_auth<F: FnOnce(&mut Cursive, bool) + Send + 'stati
     // Run the Windows Hello prompt asynchronously so it doesn't block the UI.
     cursive.async_op(
         async move {
-            let result = UserConsentVerifier::RequestVerificationAsync(
-                &"Unlock wden vault".into(),
-            )
-            .context("RequestVerificationAsync call failed")?
-            .await?;
+            let result = UserConsentVerifier::RequestVerificationAsync(&"Unlock wden vault".into())
+                .context("RequestVerificationAsync call failed")?
+                .await?;
 
             Ok::<bool, anyhow::Error>(result == UserConsentVerificationResult::Verified)
         },
