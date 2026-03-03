@@ -322,7 +322,8 @@ impl SecretEditView {
         }
 
         // Find the length of the char at the cursor, and remove it.
-        let rem_len = utf8_char_len(self.content.vec()[self.cursor]);
+        let rem_len = utf8_char_len(self.content.vec()[self.cursor])
+            .expect("Cursor was not at a char boundary");
         self.content.with_vec_mut(|vec| {
             vec.drain(self.cursor..self.cursor + rem_len);
         });
@@ -530,12 +531,12 @@ impl View for SecretEditView {
     }
 }
 
-fn utf8_char_len(b: u8) -> usize {
+fn utf8_char_len(b: u8) -> Option<usize> {
     match b.leading_ones() {
-        0 => 1, // 0xxxxxxx - ASCII
-        2 => 2, // 110xxxxx
-        3 => 3, // 1110xxxx
-        4 => 4, // 11110xxx
-        _ => 1, // continuation byte or invalid
+        0 => Some(1), // 0xxxxxxx - ASCII
+        2 => Some(2), // 110xxxxx
+        3 => Some(3), // 1110xxxx
+        4 => Some(4), // 11110xxx
+        _ => None,    // continuation byte or invalid
     }
 }

@@ -41,10 +41,6 @@ pub fn get_platform_keystore() -> anyhow::Result<Box<RefCell<dyn PlatformKeystor
 
 #[cfg(target_os = "linux")]
 mod linux_keystore;
-#[cfg(target_os = "linux")]
-pub type PlatformKeystoreImpl = linux_keystore::LinuxKeystore;
 
 #[cfg(windows)]
 mod windows_keystore;
-#[cfg(windows)]
-pub type PlatformKeystoreImpl = windows_keystore::WindowsKeystore;
