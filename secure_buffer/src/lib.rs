@@ -1,4 +1,4 @@
-use std::sync::{Mutex, OnceLock};
+use std::sync::{Condvar, Mutex, OnceLock};
 
 use ouroboros::self_referencing;
 use region::Protection;
@@ -6,7 +6,8 @@ use tinyvec::SliceVec;
 use zeroize::Zeroize;
 
 const BUFFER_CAPACITY: usize = 256;
-static POOL: OnceLock<Mutex<SecureBufferPool>> = OnceLock::new();
+pub const MAX_LEN: usize = BUFFER_CAPACITY;
+static POOL: OnceLock<(Mutex<SecureBufferPool>, Condvar)> = OnceLock::new();
 
 struct SecureBufferPool {
     allocation: region::Allocation,
@@ -19,9 +20,10 @@ unsafe impl Send for SecureBufferPool {}
 
 impl SecureBufferPool {
     fn new() -> Self {
-        let size = region::page::size();
+        // Use two pages, that feels nice and warm
+        let size = 2 * region::page::size();
 
-        let mut allocation = region::alloc(region::page::size(), Protection::READ_WRITE)
+        let mut allocation = region::alloc(size, Protection::READ_WRITE)
             .expect("Couldn't allocate a page for SecureBufferPool");
         let lock_guard = region::lock::<u8>(allocation.as_ptr(), allocation.len())
             .expect("Couldn't lock secure memory page");
@@ -76,16 +78,28 @@ pub struct SecureBuffer<'pool, const SIZE: usize> {
     pool_idx: usize,
 }
 
-pub fn get_secure_buffer<const SIZE: usize>() -> SecureBuffer<'static, SIZE> {
-    let pool = POOL.get_or_init(|| Mutex::new(SecureBufferPool::new()));
-    let mut pool_guard = pool.lock().expect("Failed to lock SecureBufferPool");
-    let buf = pool_guard
-        .allocate::<SIZE>()
-        .expect("No free buffer slots available in SecureBufferPool");
-    // SAFETY: The pool allocation lives in a `static`, so the buffer memory is valid for 'static.
-    // The pool's free_slots bookkeeping ensures no two live SecureBuffers alias the same slot.
-    // The lifetime extension is sound here because we have the context the pool impl lacks.
-    unsafe { std::mem::transmute::<SecureBuffer<'_, SIZE>, SecureBuffer<'static, SIZE>>(buf) }
+impl<const SIZE: usize> SecureBuffer<'static, SIZE> {
+    pub fn new() -> Self {
+        let (pool, condvar) =
+            POOL.get_or_init(|| (Mutex::new(SecureBufferPool::new()), Condvar::new()));
+
+        let mut pool_guard = pool.lock().expect("Failed to lock SecureBufferPool");
+        loop {
+            if let Some(buf) = pool_guard.allocate::<SIZE>() {
+                // SAFETY: The pool allocation lives in a `static`, so the buffer memory is valid for 'static.
+                // The pool's free_slots bookkeeping ensures no two live SecureBuffers alias the same slot.
+                // The lifetime extension is sound here because we have the context the pool impl lacks.
+                return unsafe {
+                    std::mem::transmute::<SecureBuffer<'_, SIZE>, SecureBuffer<'static, SIZE>>(buf)
+                };
+            } else {
+                // Wait for a buffer to be deallocated
+                pool_guard = condvar
+                    .wait(pool_guard)
+                    .expect("Failed to wait on condition variable");
+            }
+        }
+    }
 }
 
 impl<'a, const SIZE: usize> SecureBuffer<'a, SIZE> {
@@ -107,9 +121,10 @@ impl<'a, const SIZE: usize> Drop for SecureBuffer<'a, SIZE> {
         self.buffer.zeroize();
         // SAFETY: The buffer's pool_idx is valid and corresponds to the correct slot in the pool.
         // The pool's free_slots bookkeeping ensures no two live SecureBuffers alias the same slot.
-        let pool = POOL.get().expect("SecureBufferPool not initialized");
+        let (pool, condvar) = POOL.get().expect("SecureBufferPool not initialized");
         let mut pool_guard = pool.lock().expect("Failed to lock SecureBufferPool");
         pool_guard.deallocate(self.pool_idx);
+        condvar.notify_one();
     }
 }
 
@@ -140,8 +155,7 @@ struct SecureBufferVecInternal<const SIZE: usize> {
 
 impl<const SIZE: usize> SecureBufferVec<SIZE> {
     pub fn new() -> Self {
-        let buf = get_secure_buffer();
-
+        let buf = SecureBuffer::new();
         let internal =
             SecureBufferVecInternal::new(buf, |b| SliceVec::from_slice_len(b.as_mut_slice(), 0));
         Self(internal)
