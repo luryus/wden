@@ -129,6 +129,8 @@ struct Opts {
 
 #[tokio::main]
 async fn main() {
+    setup_rayon_thread_pool();
+
     let opts: Opts = Opts::parse();
 
     if opts.list_profiles {
@@ -171,6 +173,16 @@ async fn main() {
         opts.accept_invalid_certs,
         opts.always_refresh_token_on_sync,
     );
+}
+
+/// Limit rayon to min(nproc, 20) threads to avoid there being too many threads
+/// decrypting keys. The amount of concurrent decrypted keys is limited by the 
+/// size of SecureBufferPool.
+fn setup_rayon_thread_pool()  {
+    rayon::ThreadPoolBuilder::new()
+        .num_threads(std::cmp::min(std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4), 20))
+        .build_global()
+        .expect("Failed to initialize rayon thread pool");
 }
 
 #[derive(Tabled)]
