@@ -2,6 +2,12 @@
 
 ## next
 
+- Added experimental support for unlocking the vault with biometric auth (Windows Hello / PAM). For details, see [doc/biometric_unlock.md](doc/biometric_unlock.md)
+- Improved key handling and memory hygiene in many ways
+  - Only store decrypted keys and other secrets in memory that's not swapped to disk
+  - Use a zeroizing allocator that should help keep sensitive data out of memory
+  - When the vault is locked, encrypt everything in memory (previously access tokens were kept unencrypted in memory)
+
 ## 0.14.0
 
 - **Breaking change**: Remove support for Bitwarden login captchas. Bitwarden has removed this feature from their server. Wden's API key login feature (released in version 0.13.0) can be used if captchas are still used by a self-hosted instance.
