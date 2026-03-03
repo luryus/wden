@@ -16,12 +16,16 @@ struct SecureBufferPool {
     free_slots: Vec<bool>,
 }
 
+// SAFETY: The buffer pool's internal allocations can be used from any thread.
 unsafe impl Send for SecureBufferPool {}
 
 impl SecureBufferPool {
     fn new() -> Self {
-        // Use two pages, that feels nice and warm
-        let size = 2 * region::page::size();
+        // Reserve 4 pages
+        // - this amount of mlock should be supported by default on both Linux and Windows
+        // - with 4 kB pages, this allows for 64 buffers of 256 bytes each, which should be
+        //   "enough for anyone"
+        let size = 4 * region::page::size();
 
         let mut allocation = region::alloc(size, Protection::READ_WRITE)
             .expect("Couldn't allocate a page for SecureBufferPool");
@@ -87,6 +91,7 @@ impl<const SIZE: usize> SecureBuffer<'static, SIZE> {
         loop {
             if let Some(buf) = pool_guard.allocate::<SIZE>() {
                 // SAFETY: The pool allocation lives in a `static`, so the buffer memory is valid for 'static.
+                // The pool itself never releases its memory and the pool is never dropped.
                 // The pool's free_slots bookkeeping ensures no two live SecureBuffers alias the same slot.
                 // The lifetime extension is sound here because we have the context the pool impl lacks.
                 return unsafe {

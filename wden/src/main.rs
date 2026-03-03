@@ -176,11 +176,17 @@ async fn main() {
 }
 
 /// Limit rayon to min(nproc, 20) threads to avoid there being too many threads
-/// decrypting keys. The amount of concurrent decrypted keys is limited by the 
-/// size of SecureBufferPool.
-fn setup_rayon_thread_pool()  {
+/// decrypting keys. The amount of concurrent decrypted keys is limited by the
+/// size of SecureBufferPool which is limited by the amount of locked memory
+/// allowed by the OS. I feel like 20 threads should be enough for decrypting anyway.
+fn setup_rayon_thread_pool() {
     rayon::ThreadPoolBuilder::new()
-        .num_threads(std::cmp::min(std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4), 20))
+        .num_threads(std::cmp::min(
+            std::thread::available_parallelism()
+                .map(|n| n.get())
+                .unwrap_or(4),
+            20,
+        ))
         .build_global()
         .expect("Failed to initialize rayon thread pool");
 }
