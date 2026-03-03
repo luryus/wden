@@ -265,7 +265,7 @@ impl SecretEditView {
 
     /// Get the current text.
     pub fn get_content_bytes(&self) -> &[u8] {
-        &self.content.vec()
+        self.content.vec()
     }
 
     /// Sets the current content to the given value.
@@ -349,7 +349,7 @@ impl SecretEditView {
         // so keep offset in [last_length-cursor,cursor]
         // Also call this on resize,
         // but right now it is an event like any other
-        let content_str = str::from_utf8(&self.content.vec()).unwrap();
+        let content_str = str::from_utf8(self.content.vec()).unwrap();
 
         if self.cursor < self.offset {
             self.offset = self.cursor;
@@ -383,7 +383,7 @@ impl SecretEditView {
         let visible_width = content_str[self.offset..].graphemes(true).count();
         if visible_width < self.last_length {
             assert!(self.last_length >= 1);
-            let suffix_length = simple_suffix(&content_str, self.last_length - 1).length;
+            let suffix_length = simple_suffix(content_str, self.last_length - 1).length;
 
             assert!(content_str.len() >= suffix_length);
             self.offset = content_str.len() - suffix_length;
@@ -399,7 +399,7 @@ impl View for SecretEditView {
             self.last_length, printer.size.x
         );
 
-        let content_str = str::from_utf8(&self.content.vec()).unwrap();
+        let content_str = str::from_utf8(self.content.vec()).unwrap();
 
         let width = content_str.graphemes(true).count();
         printer.with_style(self.style, |printer| {
@@ -456,7 +456,7 @@ impl View for SecretEditView {
         if !self.enabled {
             return EventResult::Ignored;
         }
-        let content_str = str::from_utf8(&self.content.vec()).unwrap();
+        let content_str = str::from_utf8(self.content.vec()).unwrap();
         match event {
             Event::Char(ch) => {
                 return EventResult::Consumed(Some(self.insert(ch)));

@@ -130,7 +130,7 @@ pub fn lock_vault(c: &mut Cursive) -> anyhow::Result<()> {
     // Vault data is left in place, but it's all encrypted
 
     // Show unlock dialog
-    let d = unlock_dialog(profile, &email, ud.has_biometric_keys());
+    let d = unlock_dialog(profile, email, ud.has_biometric_keys());
     c.add_layer(d);
     Ok(())
 }
@@ -203,7 +203,7 @@ fn submit_unlock(c: &mut Cursive) {
     let api_key = user_data.api_key();
     let biometric = user_data.has_biometric_keys();
 
-    let keys_res = derive_and_check_master_key(&email, password.as_bytes(), &pbkdf, token_key);
+    let keys_res = derive_and_check_master_key(&email, password.as_bytes(), pbkdf, token_key);
 
     match keys_res {
         Err(e) => {

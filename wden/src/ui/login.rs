@@ -116,7 +116,7 @@ fn submit_login(c: &mut Cursive) {
                 global_settings.accept_invalid_certs,
             );
             let (master_key, master_pw_hash, pbkdf) =
-                do_prelogin(&client, &email, &pw_secure_buf.vec()).await?;
+                do_prelogin(&client, &email, pw_secure_buf.vec()).await?;
 
             do_login(
                 &client,
@@ -180,8 +180,8 @@ fn submit_api_key_login(c: &mut Cursive, email: String) {
             );
             async {
                 let api_key =
-                    do_api_key_prelogin(&email, &password.vec(), &global_settings).await?;
-                do_login_with_api_key(&client, &email, &password.vec(), &api_key)
+                    do_api_key_prelogin(&email, password.vec(), &global_settings).await?;
+                do_login_with_api_key(&client, &email, password.vec(), &api_key)
                     .await
                     .map(|(t, mk, kdf)| (t, mk, kdf, email, Arc::new(api_key)))
             }

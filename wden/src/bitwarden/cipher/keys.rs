@@ -14,7 +14,7 @@ const CREDENTIAL_LEN: usize = 256 / 8;
 pub struct MasterKey(SecureBuffer<'static, CREDENTIAL_LEN>);
 impl MasterKey {
     pub(super) fn new() -> Self {
-        MasterKey(SecureBuffer::new())
+        MasterKey(SecureBuffer::from_pool())
     }
 
     pub(super) fn buf_mut(&mut self) -> &mut [u8] {
@@ -106,7 +106,7 @@ impl<'de> Visitor<'de> for MasterKeyBytesVisitor {
 pub struct MasterPasswordHash(SecureBuffer<'static, CREDENTIAL_LEN>);
 impl MasterPasswordHash {
     fn new() -> Self {
-        MasterPasswordHash(SecureBuffer::new())
+        MasterPasswordHash(SecureBuffer::from_pool())
     }
 
     pub fn base64_encoded(&self) -> Zeroizing<String> {
@@ -123,7 +123,7 @@ impl Default for MasterPasswordHash {
 pub struct EncryptionKey(SecureBuffer<'static, CREDENTIAL_LEN>);
 impl EncryptionKey {
     fn new() -> Self {
-        Self(SecureBuffer::new())
+        Self(SecureBuffer::from_pool())
     }
 
     pub(super) fn data(&self) -> &[u8] {
@@ -134,7 +134,7 @@ impl EncryptionKey {
 pub struct MacKey(SecureBuffer<'static, CREDENTIAL_LEN>);
 impl MacKey {
     fn new() -> Self {
-        Self(SecureBuffer::new())
+        Self(SecureBuffer::from_pool())
     }
 
     pub(super) fn data(&self) -> &[u8] {
@@ -204,7 +204,7 @@ impl EncMacKeys {
     // The result is decryptable and the keys can be extracted with
     pub fn encrypt_serialized(&self, encrypt_with: &EncMacKeys) -> Result<Cipher, CipherError> {
         const LEN: usize = EncMacKeys::total_len();
-        let mut data = SecureBuffer::<LEN>::new();
+        let mut data = SecureBuffer::<LEN>::from_pool();
         self.store_to_slice(data.as_mut_slice())?;
         Cipher::encrypt(data.as_slice(), encrypt_with)
     }
@@ -214,7 +214,7 @@ impl EncMacKeys {
         decryption_keys: &EncMacKeys,
     ) -> Result<Self, CipherError> {
         const LEN: usize = secure_buffer::MAX_LEN;
-        let mut data = SecureBuffer::<LEN>::new();
+        let mut data = SecureBuffer::<LEN>::from_pool();
         let dec_cipher = cipher.decrypt_to(decryption_keys, data.as_mut_slice())?;
         Self::from_slice(dec_cipher)
     }
