@@ -83,7 +83,7 @@ pub struct SecureBuffer<'pool, const SIZE: usize> {
 }
 
 impl<const SIZE: usize> SecureBuffer<'static, SIZE> {
-    pub fn new() -> Self {
+    pub fn from_pool() -> Self {
         let (pool, condvar) =
             POOL.get_or_init(|| (Mutex::new(SecureBufferPool::new()), Condvar::new()));
 
@@ -109,7 +109,7 @@ impl<const SIZE: usize> SecureBuffer<'static, SIZE> {
 
 impl<'a, const SIZE: usize> SecureBuffer<'a, SIZE> {
     pub fn as_slice(&self) -> &[u8] {
-        &self.buffer
+        self.buffer
     }
 
     pub fn as_mut_slice(&mut self) -> &mut [u8] {
@@ -118,6 +118,10 @@ impl<'a, const SIZE: usize> SecureBuffer<'a, SIZE> {
 
     pub fn len(&self) -> usize {
         self.buffer.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.buffer.is_empty()
     }
 }
 
@@ -158,16 +162,22 @@ struct SecureBufferVecInternal<const SIZE: usize> {
     vec: SliceVec<'this, u8>,
 }
 
+impl<const SIZE: usize> Default for SecureBufferVec<SIZE> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<const SIZE: usize> SecureBufferVec<SIZE> {
     pub fn new() -> Self {
-        let buf = SecureBuffer::new();
+        let buf = SecureBuffer::from_pool();
         let internal =
             SecureBufferVecInternal::new(buf, |b| SliceVec::from_slice_len(b.as_mut_slice(), 0));
         Self(internal)
     }
 
     pub fn vec(&self) -> &SliceVec<'_, u8> {
-        &self.0.borrow_vec()
+        self.0.borrow_vec()
     }
 
     pub fn with_vec_mut<ReturnType>(
