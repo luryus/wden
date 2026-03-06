@@ -1,44 +1,35 @@
-use std::{
-    ffi::CString,
-    sync::{
-        Arc,
-        atomic::{AtomicBool, Ordering},
-    },
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
 };
 
 use anyhow::Context;
 use cursive::{Cursive, view::Nameable, views::Dialog};
-use pam::Conversation;
+use simple_pam_auth::SimplePamAuthClientBuilder;
 
 use crate::ui::util::cursive_ext::{CursiveCallbackExt, CursiveExt};
-
-struct CursiveConversation {
-    cb_sink: cursive::CbSink,
-    username: CString,
-    cancelled: Arc<AtomicBool>,
-}
-
-impl CursiveConversation {
-    pub fn new(cb_sink: cursive::CbSink, username: CString) -> Self {
-        Self {
-            cb_sink,
-            username,
-            cancelled: Arc::new(AtomicBool::new(false)),
-        }
-    }
-}
 
 pub fn start_verify_biometric_auth<F: FnOnce(&mut Cursive, bool) + Send + 'static>(
     cursive: &mut Cursive,
     callback: F,
 ) -> anyhow::Result<()> {
-    let mut client = pam::Client::with_conversation(
-        "wden",
-        CursiveConversation::new(cursive.cb_sink().clone(), get_username()?),
-    )
-    .context("Client creation fail")?;
+    let username = get_username()?;
 
-    client.close_on_drop = true;
+    let cancelled = Arc::new(AtomicBool::new(false));
+    let cb_sink = cursive.cb_sink().clone();
+
+    let cb = move |_is_error: bool, msg: &str| {
+        let c = Arc::clone(&cancelled);
+        if c.load(Ordering::Relaxed) {
+            return;
+        }
+        replace_pam_msg_dialog(&cb_sink, c, msg);
+    };
+
+    let mut client = SimplePamAuthClientBuilder::new("wden")
+        .username(&username)
+        .msg_callback(cb)
+        .build()?;
 
     cursive.async_op(async move { client.authenticate() }, |siv, res| {
         pop_pam_msg_dialog(siv);
@@ -65,64 +56,26 @@ pub fn is_biometric_unlock_supported() -> bool {
     metadata.is_file()
 }
 
-impl Conversation for CursiveConversation {
-    fn prompt_echo(&mut self, msg: &std::ffi::CStr) -> Result<std::ffi::CString, ()> {
-        self.check_cancelled()?;
-        // respond to "login: " with the current username
-        if msg.to_bytes().starts_with(b"login:") {
-            Ok(self.username.clone())
-        } else {
-            Ok(CString::default())
-        }
-    }
-
-    fn prompt_blind(&mut self, _msg: &std::ffi::CStr) -> Result<std::ffi::CString, ()> {
-        self.check_cancelled()?;
-        Ok(CString::default())
-    }
-
-    fn info(&mut self, msg: &std::ffi::CStr) {
-        if self.check_cancelled().is_err() {
-            return;
-        };
-        self.replace_pam_msg_dialog(msg);
-    }
-
-    fn error(&mut self, msg: &std::ffi::CStr) {
-        if self.check_cancelled().is_err() {
-            return;
-        };
-        self.replace_pam_msg_dialog(msg);
-    }
+fn replace_pam_msg_dialog(
+    cb_sink: &cursive::CbSink,
+    cancel_flag: Arc<AtomicBool>,
+    msg: impl Into<String>,
+) {
+    let msg = msg.into();
+    cb_sink.send_msg(Box::new(move |siv| {
+        pop_pam_msg_dialog(siv);
+        let dialog = Dialog::text(msg).button("Cancel", move |siv| {
+            siv.pop_layer();
+            cancel_flag.store(true, Ordering::Relaxed);
+        });
+        siv.add_layer(dialog.with_name("pam_dialog"));
+    }));
 }
 
-impl CursiveConversation {
-    fn replace_pam_msg_dialog(&mut self, msg: &std::ffi::CStr) {
-        let msg = msg.to_string_lossy().to_string();
-        let cancel_flag = Arc::clone(&self.cancelled);
-        self.cb_sink.send_msg(Box::new(move |siv| {
-            pop_pam_msg_dialog(siv);
-            let dialog = Dialog::text(msg).button("Cancel", move |siv| {
-                siv.pop_layer();
-                cancel_flag.store(true, Ordering::Relaxed);
-            });
-            siv.add_layer(dialog.with_name("pam_dialog"));
-        }));
-    }
-
-    fn check_cancelled(&self) -> Result<(), ()> {
-        if self.cancelled.load(Ordering::Relaxed) {
-            Err(())
-        } else {
-            Ok(())
-        }
-    }
-}
-
-fn get_username() -> anyhow::Result<CString> {
+fn get_username() -> anyhow::Result<String> {
     let user = nix::unistd::User::from_uid(nix::unistd::Uid::current())?;
     let user = user.context("User info not found with current uid")?;
-    Ok(CString::new(user.name)?)
+    Ok(user.name)
 }
 
 fn pop_pam_msg_dialog(siv: &mut Cursive) {

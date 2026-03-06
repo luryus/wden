@@ -1,5 +1,5 @@
 [workspace]
-members = ["wden", "cursive_secret_edit_view", "secure_buffer"]
+members = ["wden", "cursive_secret_edit_view", "secure_buffer", "simple_pam_auth"]
 resolver = "2"
 
 [profile.release]

@@ -177,7 +177,9 @@ fn start_biometric_unlock(c: &mut Cursive) {
                 .unwrap();
             error_label.set_content("Error unlocking the vault using biometrics.\nPlease unlock using the master password.");
             let mut unlock_dialog = siv.find_name::<Dialog>(VIEW_NAME_UNLOCK_DIALOG).unwrap();
-            unlock_dialog.remove_button(0);
+            if unlock_dialog.buttons_len() > 1 {
+                unlock_dialog.remove_button(0);
+            }
         }
     });
     if let Err(e) = res {
