@@ -359,6 +359,7 @@ fn encrypt_card(
         organization_id: org_id.map(|x| x.to_owned()),
         key: None,
         favorite: false,
+        attachments: vec![],
         data: CipherData::Card(Box::new(bitwarden::api::CardItem {
             brand,
             cardholder_name: cardholder,
@@ -410,6 +411,7 @@ fn encrypt_login(
         organization_id: org_id.map(|x| x.to_owned()),
         key: None,
         favorite: false,
+        attachments: vec![],
         data: CipherData::Login(Box::new(bitwarden::api::LoginItem {
             username,
             password,
@@ -445,6 +447,7 @@ fn encrypt_note(
         organization_id: org_id.map(|x| x.to_owned()),
         key: None,
         favorite: false,
+        attachments: vec![],
         data: CipherData::SecureNote(Box::new(SecureNoteItem {
             secure_note_type: 0,
         })),

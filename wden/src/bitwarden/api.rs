@@ -342,6 +342,44 @@ impl ApiClient {
 
         Ok(res)
     }
+
+    pub async fn download_attachment(
+        &self,
+        cipher_id: &str,
+        attachment_id: &str,
+    ) -> Result<Vec<u8>, Error> {
+        assert!(self.access_token.is_some());
+        // First, get the attachment metadata which contains the download URL
+        let url = self
+            .api_base_url
+            .join(&format!("ciphers/{cipher_id}/attachment/{attachment_id}"))?;
+        let meta: AttachmentDownloadResponse = self
+            .http_client
+            .get(url)
+            .bearer_auth(self.access_token.as_ref().unwrap())
+            .send()
+            .await?
+            .error_for_status()?
+            .json()
+            .await?;
+
+        // Then download the actual file from the URL
+        let data = self
+            .http_client
+            .get(&meta.url)
+            .send()
+            .await?
+            .error_for_status()?
+            .bytes()
+            .await?;
+
+        Ok(data.to_vec())
+    }
+}
+
+#[derive(Deserialize)]
+struct AttachmentDownloadResponse {
+    url: String,
 }
 
 pub enum TokenResponse {
@@ -572,6 +610,9 @@ pub struct CipherItemInternal {
     organization_id: Option<String>,
     #[serde(alias = "Key")]
     key: Option<Cipher>,
+    #[serde(default)]
+    #[serde(alias = "Attachments")]
+    attachments: Option<Vec<Attachment>>,
     #[serde(alias = "lastKnownRevisionDate")]
     #[serde(alias = "LastKnownRevisionDate")]
     last_known_revision_date: Option<String>,
@@ -597,6 +638,7 @@ impl From<CipherItemInternal> for CipherItem {
             favorite: cii.favorite,
             collection_ids: cii.collection_ids,
             organization_id: cii.organization_id,
+            attachments: cii.attachments.unwrap_or_default(),
             data: match cii.cipher_type {
                 1 => CipherData::Login(Box::new(cii.login.unwrap())),
                 2 => CipherData::SecureNote(Box::new(cii.secure_note.unwrap())),
@@ -618,6 +660,22 @@ pub struct CipherItem {
     pub favorite: bool,
     pub collection_ids: Vec<String>,
     pub organization_id: Option<String>,
+    pub attachments: Vec<Attachment>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct Attachment {
+    #[serde(alias = "Id")]
+    pub id: String,
+    /// Human-readable file size, e.g. "14.2 KB" (provided by server as plaintext)
+    #[serde(alias = "SizeName")]
+    pub size_name: Option<String>,
+    #[serde(default)]
+    #[serde(alias = "FileName")]
+    pub file_name: Cipher,
+    #[serde(alias = "Key")]
+    pub key: Option<Cipher>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
