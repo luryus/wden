@@ -1,3 +1,4 @@
+mod attachment_download;
 mod autolock;
 mod biometric;
 mod clipboard;
