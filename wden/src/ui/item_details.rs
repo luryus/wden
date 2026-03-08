@@ -50,6 +50,24 @@ pub fn item_detail_dialog(
         _ => LinearLayout::vertical(),
     };
 
+    // Add attachments section if present
+    let mut dialog_contents = dialog_contents;
+    if !item.attachments.is_empty() {
+        dialog_contents.add_child(TextView::new("Attachments"));
+        for attachment in &item.attachments {
+            let name = attachment.file_name.decrypt_to_string(&keys);
+            let label = match &attachment.size_name {
+                Some(size) => format!("  {name} ({size})"),
+                None => format!("  {name}"),
+            };
+            dialog_contents.add_child(PaddedView::new(
+                Margins::tb(0, 0),
+                TextView::new(label).style(*VALUE_STYLE),
+            ));
+        }
+        dialog_contents.add_child(TextView::new(""));
+    }
+
     let mut key_hint_linear_layout = LinearLayout::vertical();
 
     if let CipherData::Login(_) = &item.data {
@@ -59,6 +77,12 @@ pub fn item_detail_dialog(
             .add_child(TextView::new("<u> Copy username").style(Color::Light(BaseColor::Black)));
         key_hint_linear_layout.add_child(
             TextView::new("<s> Toggle password visibility").style(Color::Light(BaseColor::Black)),
+        );
+    }
+
+    if !item.attachments.is_empty() {
+        key_hint_linear_layout.add_child(
+            TextView::new("<d> Download attachment").style(Color::Light(BaseColor::Black)),
         );
     }
 
@@ -91,6 +115,13 @@ pub fn item_detail_dialog(
             let mut pw_textview: ViewRef<PaddedView<SecretTextView>> =
                 siv.find_name("password_textview").unwrap();
             pw_textview.get_inner_mut().toggle_hidden();
+        });
+    }
+
+    if !item.attachments.is_empty() {
+        let item_id = item.id.clone();
+        ev.set_on_event('d', move |siv| {
+            super::attachment_download::start_attachment_download(siv, &item_id);
         });
     }
 
