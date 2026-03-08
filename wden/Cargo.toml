@@ -40,7 +40,7 @@ tokio = { version = "1.48", features = ["full"] }
 reqwest = { version = "0.13", features = ["json", "gzip", "form"] }
 cursive = "0.21"
 cursive_table_view = { git = "https://github.com/luryus/cursive_table_view", version = "0.15.0", tag = "v0.15.0+disablesort.1" }
-cursive_secret_edit_view = { path = "../cursive_secret_edit_view" }
+cursive_secret_edit_view = { path = "../crates/cursive_secret_edit_view" }
 log = "0.4"
 lazy_static = "1.4"
 clap = { version="4", features = ["derive"] }
@@ -57,7 +57,7 @@ console = "0.16.0"
 rpassword = "7.3.1"
 rayon = "1.10.0"
 zeroizing-alloc = "0.1.0"
-secure_buffer = { path = "../secure_buffer" }
+secure_buffer = { path = "../crates/secure_buffer" }
 
 [target.'cfg(windows)'.dependencies]
 clipboard-win = { version = "5.4", features = ["std"] }
@@ -72,7 +72,7 @@ x11rb = "0.13"
 # Use native_lib because the rust implementation currently does not work with KDE
 wl-clipboard-rs = { version = "0.9", features = ["native_lib"] }
 linux-keyutils = { version = "0.2", features = ["std"] }
-simple_pam_auth = { path = "../simple_pam_auth" }
+simple_pam_auth = { path = "../crates/simple_pam_auth" }
 nix = { version = "0.31", features = ["user"] }
 
 [dev-dependencies]
