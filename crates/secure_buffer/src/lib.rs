@@ -149,6 +149,13 @@ fn mark_memory_dontdump(allocation: &mut region::Allocation) {
             );
         }
     }
+
+    #[cfg(not(target_os = "linux"))]
+    {
+        // Other platforms (Windows at the moment) don't support this.
+        // Read the allocation parameter to prevent a compiler warning.
+        let _ = allocation;
+    }
 }
 
 pub struct SecureBufferVec<const SIZE: usize>(SecureBufferVecInternal<SIZE>);
