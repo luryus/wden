@@ -1,3 +1,5 @@
+#![cfg(target_os = "linux")]
+
 use std::{
     error::Error,
     ffi::{CStr, CString},
