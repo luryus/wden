@@ -41,6 +41,7 @@ reqwest = { version = "0.13", features = ["json", "gzip", "form"] }
 cursive = "0.21"
 cursive_table_view = { git = "https://github.com/luryus/cursive_table_view", version = "0.15.0", tag = "v0.15.0+disablesort.1" }
 cursive_secret_edit_view = { path = "../crates/cursive_secret_edit_view" }
+cursive_file_browser = { path = "../crates/cursive_file_browser" }
 log = "0.4"
 lazy_static = "1.4"
 clap = { version="4", features = ["derive"] }

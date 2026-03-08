@@ -1,5 +1,5 @@
 [workspace]
-members = ["wden", "crates/cursive_secret_edit_view", "crates/secure_buffer", "crates/simple_pam_auth"]
+members = ["wden", "crates/cursive_secret_edit_view", "crates/cursive_file_browser", "crates/secure_buffer", "crates/simple_pam_auth"]
 resolver = "2"
 
 [profile.release]

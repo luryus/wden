@@ -1,0 +1,16 @@
+[package]
+name = "cursive_file_browser"
+edition = "2024"
+version = "0.1.0"
+
+[dependencies]
+cursive_core = { version = "0.4" }
+directories-next = "2.0"
+log = "0.4"
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.62", features = ["Win32_Storage_FileSystem"] }
+
+[dev-dependencies]
+cursive = { version = "0.21" }
+tempfile = "3"
