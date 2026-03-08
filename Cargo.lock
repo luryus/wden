@@ -818,6 +818,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "cursive_file_browser"
+version = "0.1.0"
+dependencies = [
+ "cursive",
+ "cursive_core",
+ "directories-next",
+ "log",
+ "windows",
+]
+
+[[package]]
 name = "cursive_secret_edit_view"
 version = "0.1.0"
 dependencies = [
@@ -4091,6 +4102,7 @@ dependencies = [
  "clipboard-win",
  "console",
  "cursive",
+ "cursive_file_browser",
  "cursive_secret_edit_view",
  "cursive_table_view",
  "directories-next",
