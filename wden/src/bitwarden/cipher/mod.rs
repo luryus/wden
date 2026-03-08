@@ -447,6 +447,46 @@ impl FromStr for EncType {
     }
 }
 
+/// Decrypt attachment data in binary format.
+///
+/// Bitwarden exclusively uses AesCbc256HmacSha256 (enc type 2) for
+/// attachment encryption, so only that type is supported here.
+///
+/// The binary format is:
+/// - Byte 0: encryption type (1 byte, value = 2)
+/// - Bytes 1..17: IV (16 bytes)
+/// - Bytes 17..49: MAC (32 bytes)
+/// - Bytes 49..: ciphertext
+pub fn decrypt_attachment_data(
+    encrypted_data: &[u8],
+    attachment_key: &EncMacKeys,
+) -> Result<Vec<u8>, CipherError> {
+    if encrypted_data.len() < 49 {
+        return Err(CipherError::InvalidCipherStringFormat);
+    }
+
+    let enc_type = encrypted_data[0];
+    if enc_type != EncType::AesCbc256HmacSha256B64 as u8 {
+        return Err(CipherError::UnknownCipherEncryptionType(
+            enc_type.to_string(),
+        ));
+    }
+
+    let iv = &encrypted_data[1..17];
+    let mac = &encrypted_data[17..49];
+    let ct = &encrypted_data[49..];
+
+    // Build a Cipher value and use the existing decryption logic
+    let cipher = Cipher::Value {
+        enc_type: EncType::AesCbc256HmacSha256B64,
+        iv: iv.to_vec(),
+        ct: ct.to_vec(),
+        mac: mac.to_vec(),
+    };
+
+    cipher.decrypt(attachment_key)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
