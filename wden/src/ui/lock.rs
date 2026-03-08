@@ -193,6 +193,13 @@ fn submit_unlock(c: &mut Cursive) {
         .call_on_name(VIEW_NAME_PASSWORD, |view: &mut EditView| view.get_content())
         .unwrap();
 
+    // Check if the current dialog still has the biometric button before replacing it.
+    // If biometric auth failed earlier, the button was removed and we shouldn't re-add it.
+    let biometric = c
+        .find_name::<Dialog>(VIEW_NAME_UNLOCK_DIALOG)
+        .map(|d| d.buttons_len() > 1)
+        .unwrap_or(false);
+
     c.pop_layer();
     c.add_layer(Dialog::text("Unlocking..."));
 
@@ -203,7 +210,6 @@ fn submit_unlock(c: &mut Cursive) {
     let email = user_data.email().clone();
     let token_key = user_data.encrypted_user_key();
     let api_key = user_data.api_key();
-    let biometric = user_data.has_biometric_keys();
 
     let keys_res = derive_and_check_master_key(&email, password.as_bytes(), pbkdf, token_key);
 
