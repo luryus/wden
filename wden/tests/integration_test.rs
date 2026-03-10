@@ -72,6 +72,7 @@ pub(crate) async fn test_normal_flows_pbkdf2() -> anyhow::Result<()> {
         common::testdata::ORG_2_COLL_3_LOGIN_1.name,
         common::testdata::ORG_2_COLL_3_LOGIN_2.name,
         common::testdata::ORG_2_COLL_3_LOGIN_3.name,
+        common::testdata::PERSONAL_LOGIN_WITH_ATTACHMENT.name,
     ];
     for n in item_names {
         assert!(!screen.find_occurences(n).is_empty());
@@ -110,7 +111,92 @@ pub(crate) async fn test_normal_flows_pbkdf2() -> anyhow::Result<()> {
     assert!(!screen.find_occurences("*****").is_empty());
 
     input.send(Some(Event::Char('s')))?;
-    wait_until_string_visible(common::testdata::ORG_1_COLL_1_LOGIN_1.password, output)?;
+    let screen =
+        wait_until_string_visible(common::testdata::ORG_1_COLL_1_LOGIN_1.password, output)?;
+
+    // Close the item detail dialog by clicking the Close button
+    let pos = screen.find_occurences("Close").first().unwrap().min();
+    click_position(pos, input)?;
+
+    // Open the item with an attachment
+    let screen = wait_until_string_visible(
+        common::testdata::PERSONAL_LOGIN_WITH_ATTACHMENT.name,
+        output,
+    )?;
+    let pos = screen
+        .find_occurences(common::testdata::PERSONAL_LOGIN_WITH_ATTACHMENT.name)
+        .first()
+        .unwrap()
+        .min();
+    click_position(pos, input)?;
+    click_position(pos, input)?;
+
+    // Verify attachment info is shown in item details
+    let screen = wait_until_string_visible("Download attachment", output)?;
+    assert!(
+        !screen
+            .find_occurences(common::testdata::ATTACHMENT_1.attachment_filename)
+            .is_empty()
+    );
+
+    // Press 'd' to download — since there's 1 attachment, goes directly to file browser
+    input.send(Some(Event::Char('d')))?;
+    let screen = wait_until_string_visible("Save attachment", output)?;
+    // Verify the default filename is pre-filled
+    assert!(
+        !screen
+            .find_occurences(common::testdata::ATTACHMENT_1.attachment_filename)
+            .is_empty()
+    );
+
+    // Determine expected save directory (same logic as file browser's default_start_dir)
+    let save_dir = {
+        let mut dir = std::env::temp_dir();
+        if let Some(user_dirs) = directories_next::UserDirs::new() {
+            if user_dirs.download_dir().is_some_and(|d| d.is_dir()) {
+                dir = user_dirs.download_dir().unwrap().to_path_buf();
+            } else if user_dirs.home_dir().is_dir() {
+                dir = user_dirs.home_dir().to_path_buf();
+            }
+        }
+        dir
+    };
+
+    // Use a unique filename to avoid conflicts
+    let unique_filename = format!("wden_test_{}.txt", uuid::Uuid::new_v4());
+    let expected_save_path = save_dir.join(&unique_filename);
+
+    // Tab to the filename EditView (from the directory list)
+    input.send(Some(Event::Key(Key::Tab)))?;
+    // Select all text in the edit field and replace with our unique filename
+    input.send(Some(Event::CtrlChar('u')))?;
+    send_string(&unique_filename, input)?;
+
+    // Tab to Save button and press Enter
+    input.send(Some(Event::Key(Key::Tab)))?;
+    input.send(Some(Event::Key(Key::Enter)))?;
+
+    // Wait for download to complete
+    wait_until_string_visible("Download complete", output)?;
+
+    // Verify file content matches original
+    let saved_content = std::fs::read(&expected_save_path).unwrap_or_else(|e| {
+        panic!(
+            "Failed to read saved file {}: {e}",
+            expected_save_path.display()
+        )
+    });
+    assert_eq!(
+        saved_content,
+        common::testdata::ATTACHMENT_1.attachment_content,
+        "Downloaded file content does not match original"
+    );
+
+    // Clean up the downloaded file
+    let _ = std::fs::remove_file(&expected_save_path);
+
+    // Dismiss the download complete dialog
+    input.send(Some(Event::Key(Key::Enter)))?;
 
     input.send_timeout(Some(Event::Exit), Duration::from_secs(1))?;
 
@@ -144,6 +230,8 @@ mod helpers {
 
         Err(RecvTimeoutError::Timeout)
     }
+
+
 
     #[cfg(feature = "puppet-integration-tests")]
     pub(super) fn send_string(
