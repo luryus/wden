@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use reqwest::{RequestBuilder, Url};
+use reqwest::{RequestBuilder, Url, multipart};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use wden::bitwarden::{
     api::{ApiClient, CipherData, CipherItem, TokenResponseSuccess},
@@ -51,6 +51,12 @@ pub struct CreateCollectionRequest {
 
 #[derive(Deserialize)]
 pub struct CreateCollectionResponse {
+    pub id: String,
+}
+
+#[derive(Deserialize)]
+pub struct CreateCipherResponse {
+    #[serde(alias = "Id")]
     pub id: String,
 }
 
@@ -126,6 +132,8 @@ impl VaultwardenClient {
         self.access_token = Some(access_token);
     }
 
+
+
     pub async fn post<T: Serialize>(&self, path: &str, body: &T) -> Result<(), anyhow::Error> {
         self.get_post_req(path, body)?
             .send()
@@ -167,6 +175,42 @@ impl VaultwardenClient {
         } else {
             Ok(req)
         }
+    }
+
+    pub async fn upload_attachment(
+        &self,
+        cipher_id: &str,
+        encrypted_filename: &Cipher,
+        attachment_key: &Cipher,
+        encrypted_data: Vec<u8>,
+    ) -> Result<(), anyhow::Error> {
+        let url = self
+            .base_url
+            .join(&format!("api/ciphers/{cipher_id}/attachment"))?;
+
+        let enc_filename_str = encrypted_filename.encode();
+
+        let data_part = multipart::Part::bytes(encrypted_data)
+            .file_name(enc_filename_str.clone())
+            .mime_str("application/octet-stream")?;
+
+        let form = multipart::Form::new()
+            .text("key", attachment_key.encode())
+            .part("data", data_part);
+
+        let mut req = self
+            .reqwest
+            .post(url)
+            .header("Bitwarden-Client-Name", "cli")
+            .header("Bitwarden-Client-Version", "2024.6.2")
+            .multipart(form);
+
+        if let Some(acctok) = &self.access_token {
+            req = req.bearer_auth(acctok);
+        }
+
+        req.send().await?.error_for_status()?;
+        Ok(())
     }
 
     pub async fn get_token(

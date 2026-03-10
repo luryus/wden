@@ -38,6 +38,24 @@ pub struct CardItem {
     number: &'static str,
 }
 
+pub struct AttachmentItem {
+    pub attachment_filename: &'static str,
+    pub attachment_content: &'static [u8],
+}
+
+pub const PERSONAL_LOGIN_WITH_ATTACHMENT: LoginItem = LoginItem {
+    name: "Login With Attachment",
+    notes: "Has an attachment",
+    username: "attachuser@example.com",
+    password: "attachpass",
+    uri: "attach.example.com",
+};
+
+pub const ATTACHMENT_1: AttachmentItem = AttachmentItem {
+    attachment_filename: "testfile.txt",
+    attachment_content: b"This is the attachment content for testing.",
+};
+
 pub struct Organization {
     pub name: &'static str,
     collection_name: &'static str,
@@ -332,6 +350,70 @@ pub fn items(
         .chain(coll2_items)
         .chain(coll3_items)
         .collect())
+}
+
+/// Returned data needed for uploading an attachment via the API.
+pub struct AttachmentUploadData {
+    pub encrypted_filename: Cipher,
+    pub encrypted_key: Cipher,
+    pub encrypted_data: Vec<u8>,
+}
+
+/// Encrypt file data in binary attachment format:
+/// byte 0: enc type (2 = AesCbc256HmacSha256)
+/// bytes 1..17: IV (16 bytes)
+/// bytes 17..49: MAC (32 bytes)
+/// bytes 49..: ciphertext
+fn encrypt_attachment_binary(
+    plaintext: &[u8],
+    attachment_key: &EncMacKeys,
+) -> Result<Vec<u8>, CipherError> {
+    let cipher = Cipher::encrypt(plaintext, attachment_key)?;
+    match cipher {
+        Cipher::Value {
+            enc_type,
+            iv,
+            ct,
+            mac,
+        } => {
+            let mut data = Vec::with_capacity(1 + iv.len() + mac.len() + ct.len());
+            data.push(enc_type as u8);
+            data.extend_from_slice(&iv);
+            data.extend_from_slice(&mac);
+            data.extend_from_slice(&ct);
+            Ok(data)
+        }
+        Cipher::Empty => unreachable!(),
+    }
+}
+
+pub fn prepare_attachment(
+    item_keys: &EncMacKeys,
+    attachment: &AttachmentItem,
+) -> Result<AttachmentUploadData, CipherError> {
+    // Generate a random attachment key
+    let attachment_key = EncMacKeys::secure_generate();
+
+    // Encrypt the file data with the attachment key in binary format
+    let encrypted_data = encrypt_attachment_binary(attachment.attachment_content, &attachment_key)?;
+
+    // Encrypt the filename with the item keys
+    let encrypted_filename = Cipher::encrypt(attachment.attachment_filename.as_bytes(), item_keys)?;
+
+    // Encrypt the attachment key with the item keys
+    let encrypted_key = attachment_key.encrypt_serialized(item_keys)?;
+
+    Ok(AttachmentUploadData {
+        encrypted_filename,
+        encrypted_key,
+        encrypted_data,
+    })
+}
+
+pub fn items_with_attachment(
+    user_keys: &EncMacKeys,
+) -> Result<CreateOrgCipherRequest, CipherError> {
+    encrypt_login(user_keys, &PERSONAL_LOGIN_WITH_ATTACHMENT, None, None)
 }
 
 fn encrypt_card(

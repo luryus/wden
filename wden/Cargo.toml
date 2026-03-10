@@ -77,5 +77,6 @@ simple_pam_auth = { path = "../crates/simple_pam_auth" }
 nix = { version = "0.31", features = ["user"] }
 
 [dev-dependencies]
+reqwest = { version = "0.13", features = ["multipart"] }
 testcontainers = "0.27"
 tokio-test-shutdown-timeout = "0.0.2"
