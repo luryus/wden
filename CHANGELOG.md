@@ -7,6 +7,7 @@
   - Only store decrypted keys and other secrets in memory that's not swapped to disk
   - Use a zeroizing allocator that should help keep sensitive data out of memory
   - When the vault is locked, encrypt everything in memory (previously access tokens were kept unencrypted in memory)
+- Added support for downloading attachment files (#14)
 
 ## 0.14.0
 
