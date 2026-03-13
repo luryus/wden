@@ -69,11 +69,7 @@ fn show_attachment_selection(siv: &mut Cursive, item_id: &str) {
     siv.add_layer(dialog);
 }
 
-fn show_file_browser_for_attachment(
-    siv: &mut Cursive,
-    item_id: &str,
-    attachment_id: &str,
-) {
+fn show_file_browser_for_attachment(siv: &mut Cursive, item_id: &str, attachment_id: &str) {
     let ud = siv.get_user_data().with_unlocked_state().unwrap();
     let vault_data = Arc::clone(ud.vault_data());
     let item = &vault_data[item_id];
@@ -104,12 +100,7 @@ fn show_file_browser_for_attachment(
     siv.add_layer(dialog);
 }
 
-fn do_download(
-    siv: &mut Cursive,
-    item_id: &str,
-    attachment_id: &str,
-    save_path: PathBuf,
-) {
+fn do_download(siv: &mut Cursive, item_id: &str, attachment_id: &str, save_path: PathBuf) {
     siv.add_layer(Dialog::text("Downloading..."));
 
     let ud = siv.get_user_data().with_unlocked_state().unwrap();
@@ -130,15 +121,19 @@ fn do_download(
                 global_settings.accept_invalid_certs,
             );
 
-            client
-                .download_attachment(&item_id, &attachment_id)
-                .await
+            client.download_attachment(&item_id, &attachment_id).await
         },
         move |siv, result| {
             siv.pop_layer(); // pop "Downloading..." dialog
             match result {
                 Ok(encrypted_data) => {
-                    decrypt_and_save(siv, &item_id_cb, &attachment_id_cb, &encrypted_data, &save_path);
+                    decrypt_and_save(
+                        siv,
+                        &item_id_cb,
+                        &attachment_id_cb,
+                        &encrypted_data,
+                        &save_path,
+                    );
                 }
                 Err(e) => {
                     log::error!("Attachment download error: {e:?}");

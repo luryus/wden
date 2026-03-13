@@ -132,8 +132,6 @@ impl VaultwardenClient {
         self.access_token = Some(access_token);
     }
 
-
-
     pub async fn post<T: Serialize>(&self, path: &str, body: &T) -> Result<(), anyhow::Error> {
         self.get_post_req(path, body)?
             .send()

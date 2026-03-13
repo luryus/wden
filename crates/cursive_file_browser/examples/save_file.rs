@@ -19,12 +19,9 @@ fn main() {
                                     "another_file.txt",
                                     |siv, path| {
                                         siv.add_layer(
-                                            Dialog::text(format!(
-                                                "Selected: {}",
-                                                path.display()
-                                            ))
-                                            .title("Result")
-                                            .dismiss_button("OK"),
+                                            Dialog::text(format!("Selected: {}", path.display()))
+                                                .title("Result")
+                                                .dismiss_button("OK"),
                                         );
                                     },
                                 );

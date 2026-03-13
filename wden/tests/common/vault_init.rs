@@ -1,8 +1,7 @@
 use wden::bitwarden::cipher::{self};
 
 use super::api::{
-    CreateCipherResponse, CreateCollectionResponse, CreateOrganizationResponse,
-    VaultwardenClient,
+    CreateCipherResponse, CreateCollectionResponse, CreateOrganizationResponse, VaultwardenClient,
 };
 
 pub async fn init_vault_data(
@@ -54,10 +53,8 @@ pub async fn init_vault_data(
         .post_response("/api/ciphers", &attachment_login.cipher)
         .await?;
 
-    let attachment_data = super::testdata::prepare_attachment(
-        &enc_mac,
-        &super::testdata::ATTACHMENT_1,
-    )?;
+    let attachment_data =
+        super::testdata::prepare_attachment(&enc_mac, &super::testdata::ATTACHMENT_1)?;
     client
         .upload_attachment(
             &resp.id,

@@ -24,8 +24,7 @@ pub fn save_file_dialog(
 ) -> impl View {
     let start_dir = default_start_dir();
 
-    let path_display =
-        TextView::new(start_dir.display().to_string()).with_name(PATH_DISPLAY_NAME);
+    let path_display = TextView::new(start_dir.display().to_string()).with_name(PATH_DISPLAY_NAME);
 
     let mut dir_list = SelectView::<PathBuf>::new();
     populate_dir_list(&mut dir_list, &start_dir);

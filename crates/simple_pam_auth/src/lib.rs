@@ -3,7 +3,7 @@
 use std::{
     error::Error,
     ffi::{CStr, CString},
-    fmt::Display
+    fmt::Display,
 };
 
 type InputCallback = dyn FnMut(bool, &str) -> String + Send;
@@ -48,7 +48,10 @@ impl<'a> SimplePamAuthClientBuilder<'a> {
         self
     }
 
-    pub fn msg_callback(mut self, callback: impl for <'b> FnMut(bool, &'b str) + Send + 'static) -> Self {
+    pub fn msg_callback(
+        mut self,
+        callback: impl for<'b> FnMut(bool, &'b str) + Send + 'static,
+    ) -> Self {
         self.msg_callback = Some(Box::new(callback));
         self
     }
@@ -195,7 +198,10 @@ unsafe extern "C" fn converse(
     // will free this (and the individual resp strings) with free(3).
     // SAFETY: calloc is safe to call with any valid size arguments and returns null on failure.
     let resp_alloc = unsafe {
-        libc::calloc(num_msg as usize, std::mem::size_of::<pam_sys::pam_response>())
+        libc::calloc(
+            num_msg as usize,
+            std::mem::size_of::<pam_sys::pam_response>(),
+        )
     } as *mut pam_sys::pam_response;
     if resp_alloc.is_null() {
         return pam_sys::PAM_BUF_ERR;
@@ -243,10 +249,7 @@ unsafe extern "C" fn converse(
             }
             pam_sys::PAM_ERROR_MSG | pam_sys::PAM_TEXT_INFO => {
                 if let Some(msg_callback) = &mut auth_client.msg_callback {
-                    msg_callback(
-                        msg.msg_style == pam_sys::PAM_ERROR_MSG,
-                        msg_str,
-                    );
+                    msg_callback(msg.msg_style == pam_sys::PAM_ERROR_MSG, msg_str);
                 } else {
                     return pam_sys::PAM_CONV_ERR;
                 }

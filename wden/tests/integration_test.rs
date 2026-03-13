@@ -231,8 +231,6 @@ mod helpers {
         Err(RecvTimeoutError::Timeout)
     }
 
-
-
     #[cfg(feature = "puppet-integration-tests")]
     pub(super) fn send_string(
         text: &str,
