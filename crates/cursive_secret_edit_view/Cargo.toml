@@ -5,7 +5,7 @@ version = "0.1.0"
 
 [dependencies]
 cursive_core = { version = "0.4" }
-tinyvec = "1.10"
+tinyvec = "1.11"
 unicode-segmentation = "1.10.1"
 secure_buffer = { path = "../secure_buffer" }
 
