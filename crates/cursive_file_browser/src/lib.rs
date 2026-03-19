@@ -86,18 +86,36 @@ fn default_start_dir() -> PathBuf {
     std::env::temp_dir()
 }
 
+/// Sentinel path representing the Windows drive list virtual level.
+#[cfg(windows)]
+fn drives_sentinel() -> PathBuf {
+    PathBuf::new()
+}
+
+#[cfg(windows)]
+fn is_drives_sentinel(path: &Path) -> bool {
+    path.as_os_str().is_empty()
+}
+
 fn populate_dir_list(list: &mut SelectView<PathBuf>, dir: &Path) {
     list.clear();
 
-    if let Some(parent) = dir.parent() {
-        list.add_item("../", parent.to_path_buf());
-    } else {
-        // At filesystem root — on Windows, show available drives
-        #[cfg(windows)]
+    // On Windows, handle the virtual drive-list level
+    #[cfg(windows)]
+    if is_drives_sentinel(dir) {
         for drive in get_windows_drives() {
             let label = drive.display().to_string();
             list.add_item(label, drive);
         }
+        return;
+    }
+
+    if let Some(parent) = dir.parent() {
+        list.add_item("../", parent.to_path_buf());
+    } else {
+        // At a filesystem root (e.g. C:\) — go up to the drive list
+        #[cfg(windows)]
+        list.add_item("../", drives_sentinel());
     }
 
     // Read and sort directory entries
@@ -138,6 +156,11 @@ fn on_dir_selected(siv: &mut Cursive, path: &Path) {
         populate_dir_list(view, &path);
     });
     siv.call_on_name(PATH_DISPLAY_NAME, |view: &mut TextView| {
+        #[cfg(windows)]
+        if is_drives_sentinel(&path) {
+            view.set_content("This PC");
+            return;
+        }
         view.set_content(path.display().to_string());
     });
 }
