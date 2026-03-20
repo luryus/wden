@@ -7,5 +7,5 @@ edition = "2024"
 pam-sys = "1.0.0-alpha5"
 libc = "0.2"
 
-[dev-dependencies]
+[target.'cfg(target_os = "linux")'.dev-dependencies]
 rpassword = "7.3.1"
