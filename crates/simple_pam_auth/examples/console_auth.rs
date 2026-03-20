@@ -1,9 +1,8 @@
-#![cfg(target_os = "linux")]
 
 use std::{env::args, io::Write};
 
+#[cfg(target_os = "linux")]
 fn main() {
-
     let username = args().nth(1);
 
     let mut cb = simple_pam_auth::SimplePamAuthClientBuilder::new("login");
@@ -36,4 +35,9 @@ fn main() {
         Ok(()) => println!("Authentication successful!"),
         Err(e) => println!("Authentication failed: {:?}", e),
     }
+}
+
+#[cfg(not(target_os = "linux"))]
+fn main() {
+    println!("The current OS / platform is not supported.")
 }
