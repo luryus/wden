@@ -2,12 +2,15 @@
 
 ## next
 
+## 0.15.0
+
 - Added experimental support for unlocking the vault with biometric auth (Windows Hello / PAM). For details, see [doc/biometric_unlock.md](doc/biometric_unlock.md)
 - Improved key handling and memory hygiene in many ways
   - Only store decrypted keys and other secrets in memory that's not swapped to disk
   - Use a zeroizing allocator that should help keep sensitive data out of memory
   - When the vault is locked, encrypt everything in memory (previously access tokens were kept unencrypted in memory)
 - Added support for downloading attachment files (#14)
+- Lots of dependency crate updates
 
 ## 0.14.0
 
