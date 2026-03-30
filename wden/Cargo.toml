@@ -23,7 +23,7 @@ sha-1 = "0.10"
 sha2 = "0.10"
 hmac = "0.12"
 pbkdf2 = "0.12"
-hkdf = "0.12"
+hkdf = "0.13"
 argon2 = { version = "0.5", features = ["zeroize"] }
 
 # Pin generic-array to a specific version. RustCrypto depends on 0.14, but the newer
