@@ -21,7 +21,7 @@ cbc = { version = "0.1", features = ["zeroize", "alloc"] }
 rsa = "0.9"
 sha-1 = "0.10"
 sha2 = "0.10"
-hmac = "0.12"
+hmac = "0.13"
 pbkdf2 = "0.12"
 hkdf = "0.12"
 argon2 = { version = "0.5", features = ["zeroize"] }
