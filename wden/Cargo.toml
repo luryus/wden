@@ -16,7 +16,7 @@ base64 = "0.22"
 rand = "0.8"
 
 # Crypto crates (RustCrypto)
-aes = { version = "0.8", features = ["zeroize"] }
+aes = { version = "0.9", features = ["zeroize"] }
 cbc = { version = "0.1", features = ["zeroize", "alloc"] }
 rsa = "0.9"
 sha-1 = "0.10"
