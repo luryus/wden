@@ -86,13 +86,14 @@ Configuration files, one for each profile, are stored under the user's config di
     - Bypasses clipboard history in Windows and KDE Plasma
 - View organization items
 - Fuzzy search
+- Download attachment files from items
 - 2FA login (only authenticator code apps and email supported as 2FA methods)
 - Connect to self-hosted Bitwarden-compatible instances (configurable URLs)
 - Automatic vault locking after a configurable period
 - Multiple profiles (configurations)
+- Experimental support for unlocking the vault via biometric auth (PAM or Windows Hello)
 
 ## Todo
 
 - Folder support
 - Local vault caching / offline support?
-- Attachment support
