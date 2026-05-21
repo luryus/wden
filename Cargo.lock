@@ -3332,12 +3332,11 @@ dependencies = [
 
 [[package]]
 name = "simsearch"
-version = "0.3.0"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "629d21c4ebf25655995cda9eb93e85539fa68b0438acb85e9e5d10f6fe2404bc"
+checksum = "9100df46c8621c12a949ad4f64793600d28b56a07d60d9f5b68b876651d5c570"
 dependencies = [
  "strsim",
- "triple_accel",
 ]
 
 [[package]]
@@ -3860,12 +3859,6 @@ dependencies = [
  "nom 8.0.0",
  "petgraph",
 ]
-
-[[package]]
-name = "triple_accel"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "22048bc95dfb2ffd05b1ff9a756290a009224b60b2f0e7525faeee7603851e63"
 
 [[package]]
 name = "try-lock"

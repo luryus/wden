@@ -20,7 +20,7 @@ use cursive::{
 };
 use cursive_table_view::{TableView, TableViewItem};
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
-use simsearch::SimSearch;
+use simsearch::Index;
 use zeroize::ZeroizeOnDrop;
 
 use super::{
@@ -39,7 +39,7 @@ use super::{
 struct VaultView {
     view: OnEventView<LinearLayout>,
     rows: Vec<Row>,
-    simsearch: SimSearch<String>,
+    simsearch: Index<String>,
     search_term: String,
     collection_selection: CollectionSelection,
 }

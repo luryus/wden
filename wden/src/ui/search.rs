@@ -1,30 +1,29 @@
 use std::collections::HashMap;
 
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
-use simsearch::SimSearch;
+use simsearch::Index;
 
 use crate::bitwarden::{self, api::CipherData};
 
 use super::data::{StatefulUserData, Unlocked};
 
-pub fn search_items(term: &str, simsearch: &SimSearch<String>) -> Option<Vec<String>> {
+pub fn search_items(term: &str, simsearch: &Index<String>) -> Option<Vec<String>> {
     if term.is_empty() {
         return None;
     }
 
-    Some(simsearch.search(term))
+    Some(simsearch.search(term).into_iter().map(|hit| hit.id).collect())
 }
 
-pub fn get_search_index(ud: &StatefulUserData<Unlocked>) -> SimSearch<String> {
-    let mut ss = SimSearch::new();
+pub fn get_search_index(ud: &StatefulUserData<Unlocked>) -> Index<String> {
+    let mut ss = Index::new();
 
     if let Some(tokenized_rows) = get_tokenized_rows(ud) {
         for (k, tokens) in tokenized_rows {
             // SimSearch will still tokenize (split) each of the tokens
             // that are passed here. Passing them this way just avoids
             // concatenating them into a string.
-            let tokens: Vec<_> = tokens.iter().map(|s| s.as_str()).collect();
-            ss.insert_tokens(k.clone(), &tokens);
+            ss.insert_parts(k.clone(), &tokens);
         }
     }
 
