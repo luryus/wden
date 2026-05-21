@@ -172,13 +172,15 @@ fn start_biometric_unlock(c: &mut Cursive) {
         if success {
             unlock_with_biometric_keys(siv);
         } else {
-            let mut error_label = siv
-                .find_name::<TextView>(VIEW_NAME_BIOMETRIC_ERROR)
-                .unwrap();
-            error_label.set_content("Error unlocking the vault using biometrics.\nPlease unlock using the master password.");
-            let mut unlock_dialog = siv.find_name::<Dialog>(VIEW_NAME_UNLOCK_DIALOG).unwrap();
-            if unlock_dialog.buttons_len() > 1 {
-                unlock_dialog.remove_button(0);
+            // Update error message
+            if let Some(mut error_label) = siv.find_name::<TextView>(VIEW_NAME_BIOMETRIC_ERROR) {
+                error_label.set_content("Error unlocking the vault using biometrics.\nPlease unlock using the master password.");
+            }
+            // Remove the biometric button to prevent retries
+            if let Some(mut unlock_dialog) = siv.find_name::<Dialog>(VIEW_NAME_UNLOCK_DIALOG) {
+                if unlock_dialog.buttons_len() > 1 {
+                    unlock_dialog.remove_button(0);
+                }
             }
         }
     });
@@ -266,6 +268,11 @@ fn derive_and_check_master_key(
 }
 
 fn unlock_with_biometric_keys(cursive: &mut Cursive) {
+    // Guard: if vault was already unlocked by another callback, do nothing
+    if cursive.get_user_data().with_locked_state().is_none() {
+        return;
+    }
+
     cursive.pop_layer();
     cursive.add_layer(Dialog::text("Unlocking..."));
 
