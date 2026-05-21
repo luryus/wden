@@ -1,10 +1,11 @@
 use aes::Aes256;
-use aes::cipher::block_padding::{Pkcs7, UnpadError};
+use aes::cipher::{BlockModeDecrypt, BlockModeEncrypt};
+use aes::cipher::block_padding::{Pkcs7, Error as UnpadError};
 use anyhow::Context;
 use base64::prelude::*;
-use cbc::cipher::{BlockDecryptMut, BlockEncryptMut, KeyIvInit};
+use cbc::cipher::{KeyIvInit};
 use hmac::digest::{InvalidLength, MacError};
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, KeyInit, Mac};
 use rsa::{Oaep, RsaPublicKey};
 use rsa::{RsaPrivateKey, pkcs8::DecodePrivateKey};
 use serde::{Deserialize, Deserializer};
@@ -211,7 +212,7 @@ impl Cipher {
         let aes = Aes256CbcEnc::new_from_slices(keys.enc().data(), &iv)
             .map_err(CipherError::InvalidKeyOrIvLength)?;
 
-        let ct = aes.encrypt_padded_vec_mut::<Pkcs7>(content);
+        let ct = aes.encrypt_padded_vec::<Pkcs7>(content);
 
         let mut hmac = HmacSha256::new_from_slice(keys.mac().data())
             .map_err(CipherError::InvalidKeyOrIvLength)?;
@@ -307,7 +308,7 @@ impl Cipher {
                 .context("Initializing AES failed")?;
 
             let decrypted = aes
-                .decrypt_padded_vec_mut::<Pkcs7>(ct.as_slice())
+                .decrypt_padded_vec::<Pkcs7>(ct.as_slice())
                 .map_err(CipherError::InvalidPadding)?;
 
             Ok(decrypted)
@@ -336,7 +337,7 @@ impl Cipher {
                 .context("Initializing AES failed")?;
 
             let decrypted = aes
-                .decrypt_padded_b2b_mut::<Pkcs7>(ct.as_slice(), buf)
+                .decrypt_padded_b2b::<Pkcs7>(ct.as_slice(), buf)
                 .map_err(CipherError::InvalidPadding)?;
 
             Ok(decrypted)

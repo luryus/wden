@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use aes::cipher::generic_array::GenericArray;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256, digest::OutputSizeUser};
 
@@ -77,7 +76,7 @@ pub struct Argon2id {
 }
 
 impl Argon2id {
-    fn hashed_salt(salt: &[u8]) -> GenericArray<u8, <Sha256 as OutputSizeUser>::OutputSize> {
+    fn hashed_salt(salt: &[u8]) -> aes::cipher::Array<u8, <Sha256 as OutputSizeUser>::OutputSize> {
         // With Argon2id, bitwarden first hashes the salt (here email) with SHA-256
         // to ensure the salt is long enough for Argon2
         let mut sha = Sha256::new();

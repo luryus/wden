@@ -1,7 +1,7 @@
 use base64::Engine;
 use rand::RngCore;
 use rsa::pkcs8::{EncodePrivateKey, EncodePublicKey};
-use sha1::Digest;
+use sha2::Digest;
 use wden::bitwarden::{
     self,
     api::{CipherData, CipherItem, LoginItemUri, SecureNoteItem},
