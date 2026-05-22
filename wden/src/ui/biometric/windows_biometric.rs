@@ -9,7 +9,7 @@ use windows::Security::Credentials::UI::{
     UserConsentVerificationResult, UserConsentVerifier, UserConsentVerifierAvailability,
 };
 
-use crate::ui::util::cursive_ext::CursiveExt;
+use crate::ui::util::cursive_ext::{CursiveCallbackExt, CursiveExt};
 
 const HELLO_DIALOG_NAME: &str = "hello_in_progress";
 
