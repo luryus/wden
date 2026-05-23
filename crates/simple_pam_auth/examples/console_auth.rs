@@ -1,4 +1,3 @@
-
 use std::{env::args, io::Write};
 
 #[cfg(target_os = "linux")]
@@ -15,7 +14,9 @@ fn main() {
             std::io::stdout().flush().expect("Failed to flush stdout");
             if echoed {
                 let mut buf = String::new();
-                std::io::stdin().read_line(&mut buf).expect("Failed to read input");
+                std::io::stdin()
+                    .read_line(&mut buf)
+                    .expect("Failed to read input");
                 buf.trim_end().to_string()
             } else {
                 rpassword::read_password().expect("Failed to read password from tty")

@@ -12,7 +12,13 @@ pub fn search_items(term: &str, simsearch: &Index<String>) -> Option<Vec<String>
         return None;
     }
 
-    Some(simsearch.search(term).into_iter().map(|hit| hit.id).collect())
+    Some(
+        simsearch
+            .search(term)
+            .into_iter()
+            .map(|hit| hit.id)
+            .collect(),
+    )
 }
 
 pub fn get_search_index(ud: &StatefulUserData<Unlocked>) -> Index<String> {

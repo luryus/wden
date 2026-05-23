@@ -25,11 +25,13 @@ pub fn start_verify_biometric_auth<F: FnOnce(&mut Cursive, bool) + Send + 'stati
     {
         let cancel_flag = Arc::clone(&cancelled);
         cb_sink.send_msg(Box::new(move |siv| {
-            let dialog = Dialog::text("Waiting for Windows Hello verification...")
-                .button("Cancel", move |siv| {
+            let dialog = Dialog::text("Waiting for Windows Hello verification...").button(
+                "Cancel",
+                move |siv| {
                     siv.pop_layer();
                     cancel_flag.store(true, Ordering::Relaxed);
-                });
+                },
+            );
             siv.add_layer(dialog.with_name(HELLO_DIALOG_NAME));
         }));
     }
