@@ -8,7 +8,7 @@ use reqwest::Url;
 use serde::{Deserialize, Serialize};
 use serde_repr::Deserialize_repr;
 use std::convert::TryInto;
-use std::time::{Duration, Instant};
+use std::time::{Duration, SystemTime};
 use std::{collections::HashMap, convert::TryFrom};
 use zeroize::ZeroizeOnDrop;
 
@@ -401,9 +401,9 @@ pub struct TokenResponseSuccess {
     #[serde(alias = "TwoFactorToken")]
     #[serde(alias = "twoFactorToken")]
     pub two_factor_token: Option<String>,
-    #[serde(skip, default = "token_response_timestamp")]
+    #[serde(default = "token_response_timestamp")]
     #[zeroize(skip)]
-    token_timestamp: Instant,
+    token_timestamp: SystemTime,
 
     #[serde(default, flatten)]
     #[zeroize(skip)]
@@ -414,7 +414,7 @@ pub struct TokenResponseSuccess {
 impl TokenResponseSuccess {
     pub fn time_to_expiry(&self) -> Option<Duration> {
         let expires_at = self.token_timestamp + Duration::from_secs(self.expires_in as u64);
-        expires_at.checked_duration_since(Instant::now())
+        expires_at.duration_since(SystemTime::now()).ok()
     }
 
     pub fn should_refresh(&self) -> bool {
@@ -430,8 +430,8 @@ impl TokenResponseSuccess {
     }
 }
 
-fn token_response_timestamp() -> Instant {
-    Instant::now()
+fn token_response_timestamp() -> SystemTime {
+    SystemTime::now()
 }
 
 #[derive(PartialEq, Eq, Copy, Clone, Debug)]
