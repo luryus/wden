@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
-use simsearch::Index;
+use simsearch::{Index, Options};
 
 use crate::bitwarden::{self, api::CipherData};
 
@@ -22,7 +22,7 @@ pub fn search_items(term: &str, simsearch: &Index<String>) -> Option<Vec<String>
 }
 
 pub fn get_search_index(ud: &StatefulUserData<Unlocked>) -> Index<String> {
-    let mut ss = Index::new();
+    let mut ss = Index::with_options(Options::new().limit(30).separators(['@', '/', '\\', '.']));
 
     if let Some(tokenized_rows) = get_tokenized_rows(ud) {
         for (k, tokens) in tokenized_rows {
