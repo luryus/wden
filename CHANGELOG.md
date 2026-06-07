@@ -2,6 +2,11 @@
 
 ## next
 
+- Updated simsearch to a new release. This affects how search works; hopefully the results are now better
+- Fixed access token refresh not working after locking and unlocking the vault
+- Fixed Windows Hello unlocking crashing if multiple Hello flows were started and canceled or submitted
+- Updated dependency crates, including most of the RustCrypto libraries
+
 ## 0.15.0
 
 - Added experimental support for unlocking the vault with biometric auth (Windows Hello / PAM). For details, see [doc/biometric_unlock.md](doc/biometric_unlock.md)
