@@ -1,6 +1,6 @@
 # Changelog
 
-## next
+## 0.15.1
 
 - Updated simsearch to a new release. This affects how search works; hopefully the results are now better
 - Fixed access token refresh not working after locking and unlocking the vault
