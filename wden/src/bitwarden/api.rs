@@ -181,7 +181,7 @@ impl ApiClient {
             .await?;
 
         if res.status() == 400 {
-            log::info!("{:?}", &res);
+            log::info!("{:?}", res);
             let body = res.json::<HashMap<String, serde_json::Value>>().await?;
             // The error models often include the error message,
             // so try to get and show it.
@@ -261,7 +261,7 @@ impl ApiClient {
             .await?;
 
         if res.status() == 400 {
-            log::info!("{:?}", &res);
+            log::info!("{:?}", res);
             let body = res.json::<HashMap<String, serde_json::Value>>().await?;
             // The error models often include the error message,
             // so try to get and show it.

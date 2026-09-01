@@ -73,7 +73,7 @@ impl ApiKey {
 }
 
 fn encryption_key_salt(profile: &str, email: &str) -> String {
-    format!("APIKEYENCRYPTION:{}:{}", &profile, email)
+    format!("APIKEYENCRYPTION:{}:{}", profile, email)
 }
 
 fn get_encryption_keys(

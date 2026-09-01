@@ -40,7 +40,7 @@ pub fn item_detail_dialog(
     }
     let keys = keys?;
 
-    log::info!("Item: {:?}", &item);
+    log::info!("Item: {:?}", item);
 
     let dialog_contents = match item.data {
         CipherData::Login(..) => login_dialog_contents(item, &keys),

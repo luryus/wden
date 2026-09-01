@@ -271,7 +271,7 @@ async fn store_api_keys(
     );
     println!(
         "wden will encrypt the API key with an encryption key derived from your master password, and store it in profile `{}`\n",
-        &global_settings.profile
+        global_settings.profile
     );
 
     let mut password: String;

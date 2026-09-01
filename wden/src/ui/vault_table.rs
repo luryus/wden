@@ -484,7 +484,7 @@ pub fn show_vault_with_filters(
         VaultView::new_with_filters(&ud, collection_selection, search_term).with_name("vault_view");
 
     let panel = Panel::new(view)
-        .title(format!("Vault ({})", &global_settings.profile))
+        .title(format!("Vault ({})", global_settings.profile))
         .full_screen();
 
     // Clear all, and add the vault
