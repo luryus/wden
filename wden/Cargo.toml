@@ -12,7 +12,7 @@ license = "MIT"
 puppet-integration-tests = []
 
 [dependencies]
-base64 = "0.22"
+base64 = "0.23"
 rand = "0.8"
 
 # Crypto crates (RustCrypto)
@@ -24,7 +24,7 @@ sha2 = "0.11"
 hmac = "0.13"
 pbkdf2 = "0.13"
 hkdf = "0.13"
-argon2 = { version = "0.5", features = ["zeroize"] }
+argon2 = { version = "0.6", features = ["zeroize"] }
 
 uuid = { version = "1.23", features = ["v4"] }
 
@@ -73,5 +73,5 @@ nix = { version = "0.31", features = ["user"] }
 
 [dev-dependencies]
 reqwest = { version = "0.13", features = ["multipart"] }
-testcontainers = "0.27"
+testcontainers = "0.28"
 tokio-test-shutdown-timeout = "0.0.2"
