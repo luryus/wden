@@ -5,7 +5,7 @@ version = "0.1.0"
 
 [dependencies]
 zeroize = { version = "1.7" }
-region = "3.0.2"
+region = "4"
 tinyvec = "1.11"
 ouroboros = "0.18"
 
