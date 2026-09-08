@@ -44,7 +44,6 @@ directories-next = "2.0"
 thiserror = "2.0"
 anyhow = "1.0"
 zeroize = { version = "1.7", features = ["zeroize_derive"] }
-arrayvec = "0.7"
 simsearch = "0.4"
 tabled = "0.21"
 maybe-owned = "0.3.4"
