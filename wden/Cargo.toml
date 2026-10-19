@@ -45,7 +45,7 @@ thiserror = "2.0"
 anyhow = "1.0"
 zeroize = { version = "1.7", features = ["zeroize_derive"] }
 simsearch = "0.4"
-tabled = "0.21"
+tabled = "0.22"
 maybe-owned = "0.3.4"
 indicatif = "0.18.2"
 console = "0.16.3"
