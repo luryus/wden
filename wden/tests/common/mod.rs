@@ -30,15 +30,15 @@ pub async fn setup() -> anyhow::Result<IntegrationTestContext> {
     let http_port = container.get_host_port_ipv4(80.tcp()).await?;
     let mut client = VaultwardenClient::new(http_port);
 
-    user_init::init_users(&client).await?;
-
-    vault_init::init_vault_data(
-        &mut client,
-        PBKDF2_USER_EMAIL,
-        PBKDF2_USER_MASTER_PW_HASH,
-        PBKDF2_USER_PASSWORD.as_bytes(),
-    )
-    .await?;
+    if let Err(e) = prepare_data(&mut client).await {
+        println!("Preparing Vaultwarden data failed. Printing logs...");
+        let mut test_stdout = tokio::io::stdout();
+        let mut vw_stdout = container.stdout(false);
+        tokio::io::copy_buf(&mut vw_stdout, &mut test_stdout).await?;
+        let mut vw_stderr = container.stderr(false);
+        tokio::io::copy_buf(&mut vw_stderr, &mut test_stdout).await?;
+        return Err(e);
+    };
 
     let profile_name = format!("integrationtest_{}", uuid::Uuid::new_v4());
 
@@ -48,6 +48,19 @@ pub async fn setup() -> anyhow::Result<IntegrationTestContext> {
         http_port,
         profile_name,
     })
+}
+
+async fn prepare_data(client: &mut VaultwardenClient) -> anyhow::Result<()> {
+    user_init::init_users(client).await?;
+    vault_init::init_vault_data(
+        client,
+        PBKDF2_USER_EMAIL,
+        PBKDF2_USER_MASTER_PW_HASH,
+        PBKDF2_USER_PASSWORD.as_bytes(),
+    )
+    .await?;
+
+    Ok(())
 }
 
 // When dropping IntegrationTestContext, try to remove profile file

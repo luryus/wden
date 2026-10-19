@@ -13,6 +13,8 @@ pub async fn init_vault_data(
     let mut token = client.get_token(email, pw_hash).await?;
     client.set_access_token(std::mem::take(&mut token.access_token));
 
+    let user_id = client.get_user_id().await?;
+
     let master_key =
         cipher::create_master_key(email, password, &token.pbkdf_parameters().unwrap())?;
     let enc_mac = cipher::decrypt_symmetric_keys(&token.key, &master_key)?;
@@ -36,7 +38,7 @@ pub async fn init_vault_data(
         collection_ids.push(coll_resp.id);
     }
 
-    let items = super::testdata::items(&enc_mac, &org_ids_keys, &collection_ids)?;
+    let items = super::testdata::items(&user_id, &enc_mac, &org_ids_keys, &collection_ids)?;
     for item in items {
         if item.collection_ids.is_empty() {
             // Personal
@@ -48,7 +50,7 @@ pub async fn init_vault_data(
     }
 
     // Create a login item with an attachment
-    let attachment_login = super::testdata::items_with_attachment(&enc_mac)?;
+    let attachment_login = super::testdata::items_with_attachment(&user_id, &enc_mac)?;
     let resp: CreateCipherResponse = client
         .post_response("/api/ciphers", &attachment_login.cipher)
         .await?;

@@ -8,6 +8,8 @@ use wden::bitwarden::{
     cipher::{Cipher, CipherError, EncMacKeys},
 };
 
+use crate::common::api::CreatePersonalCipherRequest;
+
 use super::api::{
     CreateCollectionRequest, CreateOrgCipherRequest, CreateOrganizationRequest, OrganizationKeyPair,
 };
@@ -265,6 +267,7 @@ pub fn collections(org_ids_keys: &[(String, EncMacKeys)]) -> Vec<CreateCollectio
 }
 
 pub fn items(
+    user_id: &str,
     user_keys: &EncMacKeys,
     org_ids_keys: &[(String, EncMacKeys)],
     collection_ids: &[String],
@@ -273,28 +276,31 @@ pub fn items(
     assert_eq!(3, collection_ids.len());
 
     let user_items = [
-        encrypt_card(user_keys, &PERSONAL_CARD_1, None, None)?,
-        encrypt_login(user_keys, &PERSONAL_LOGIN_1, None, None)?,
-        encrypt_login(user_keys, &PERSONAL_LOGIN_2, None, None)?,
-        encrypt_login(user_keys, &PERSONAL_LOGIN_3, None, None)?,
-        encrypt_note(user_keys, &PERSONAL_NOTE_1, None, None)?,
-        encrypt_note(user_keys, &PERSONAL_NOTE_2, None, None)?,
+        encrypt_card(user_id, user_keys, &PERSONAL_CARD_1, None, None)?,
+        encrypt_login(user_id, user_keys, &PERSONAL_LOGIN_1, None, None)?,
+        encrypt_login(user_id, user_keys, &PERSONAL_LOGIN_2, None, None)?,
+        encrypt_login(user_id, user_keys, &PERSONAL_LOGIN_3, None, None)?,
+        encrypt_note(user_id, user_keys, &PERSONAL_NOTE_1, None, None)?,
+        encrypt_note(user_id, user_keys, &PERSONAL_NOTE_2, None, None)?,
     ];
 
     let coll1_items = [
         encrypt_login(
+            user_id,
             &org_ids_keys[0].1,
             &ORG_1_COLL_1_LOGIN_1,
             Some(&collection_ids[0]),
             Some(&org_ids_keys[0].0),
         )?,
         encrypt_login(
+            user_id,
             &org_ids_keys[0].1,
             &ORG_1_COLL_1_LOGIN_2,
             Some(&collection_ids[0]),
             Some(&org_ids_keys[0].0),
         )?,
         encrypt_login(
+            user_id,
             &org_ids_keys[0].1,
             &ORG_1_COLL_1_LOGIN_3,
             Some(&collection_ids[0]),
@@ -304,18 +310,21 @@ pub fn items(
 
     let coll2_items = [
         encrypt_login(
+            user_id,
             &org_ids_keys[0].1,
             &ORG_1_COLL_2_LOGIN_1,
             Some(&collection_ids[1]),
             Some(&org_ids_keys[0].0),
         )?,
         encrypt_login(
+            user_id,
             &org_ids_keys[0].1,
             &ORG_1_COLL_2_LOGIN_2,
             Some(&collection_ids[1]),
             Some(&org_ids_keys[0].0),
         )?,
         encrypt_login(
+            user_id,
             &org_ids_keys[0].1,
             &ORG_1_COLL_2_LOGIN_3,
             Some(&collection_ids[1]),
@@ -325,18 +334,21 @@ pub fn items(
 
     let coll3_items = [
         encrypt_login(
+            user_id,
             &org_ids_keys[1].1,
             &ORG_2_COLL_3_LOGIN_1,
             Some(&collection_ids[2]),
             Some(&org_ids_keys[1].0),
         )?,
         encrypt_login(
+            user_id,
             &org_ids_keys[1].1,
             &ORG_2_COLL_3_LOGIN_2,
             Some(&collection_ids[2]),
             Some(&org_ids_keys[1].0),
         )?,
         encrypt_login(
+            user_id,
             &org_ids_keys[1].1,
             &ORG_2_COLL_3_LOGIN_3,
             Some(&collection_ids[2]),
@@ -411,12 +423,20 @@ pub fn prepare_attachment(
 }
 
 pub fn items_with_attachment(
+    user_id: &str,
     user_keys: &EncMacKeys,
 ) -> Result<CreateOrgCipherRequest, CipherError> {
-    encrypt_login(user_keys, &PERSONAL_LOGIN_WITH_ATTACHMENT, None, None)
+    encrypt_login(
+        user_id,
+        user_keys,
+        &PERSONAL_LOGIN_WITH_ATTACHMENT,
+        None,
+        None,
+    )
 }
 
 fn encrypt_card(
+    user_id: &str,
     keys: &EncMacKeys,
     item: &CardItem,
     collection_id: Option<&str>,
@@ -452,7 +472,8 @@ fn encrypt_card(
         })),
     };
 
-    let personal_cipher = item.into();
+    let mut personal_cipher: CreatePersonalCipherRequest = item.into();
+    personal_cipher.encrypted_for = Some(user_id.to_owned());
     let collection_ids = collection_id.into_iter().map(|x| x.to_owned()).collect();
     Ok(CreateOrgCipherRequest {
         cipher: personal_cipher,
@@ -461,6 +482,7 @@ fn encrypt_card(
 }
 
 fn encrypt_login(
+    user_id: &str,
     keys: &EncMacKeys,
     item: &LoginItem,
     collection_id: Option<&str>,
@@ -502,7 +524,8 @@ fn encrypt_login(
         })),
     };
 
-    let personal_cipher = item.into();
+    let mut personal_cipher: CreatePersonalCipherRequest = item.into();
+    personal_cipher.encrypted_for = Some(user_id.to_owned());
     let collection_ids = collection_id.into_iter().map(|x| x.to_owned()).collect();
     Ok(CreateOrgCipherRequest {
         cipher: personal_cipher,
@@ -511,6 +534,7 @@ fn encrypt_login(
 }
 
 fn encrypt_note(
+    user_id: &str,
     keys: &EncMacKeys,
     item: &NoteItem,
     collection_id: Option<&str>,
@@ -535,7 +559,8 @@ fn encrypt_note(
         })),
     };
 
-    let personal_cipher = item.into();
+    let mut personal_cipher: CreatePersonalCipherRequest = item.into();
+    personal_cipher.encrypted_for = Some(user_id.to_owned());
     let collection_ids = collection_id.into_iter().map(|x| x.to_owned()).collect();
     Ok(CreateOrgCipherRequest {
         cipher: personal_cipher,

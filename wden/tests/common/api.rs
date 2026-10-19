@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use anyhow::Context;
 use reqwest::{RequestBuilder, Url, multipart};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use wden::bitwarden::{
@@ -76,6 +77,7 @@ pub struct CreatePersonalCipherRequest {
     pub organization_id: Option<String>,
     pub last_known_revision_date: Option<String>,
     pub reprompt: u8,
+    pub encrypted_for: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -108,6 +110,7 @@ impl From<CipherItem> for CreatePersonalCipherRequest {
             organization_id: item.organization_id,
             reprompt: 0,
             last_known_revision_date: None,
+            encrypted_for: None,
         }
     }
 }
@@ -140,6 +143,26 @@ impl VaultwardenClient {
         Ok(())
     }
 
+    pub async fn get<R: DeserializeOwned>(&self, path: &str) -> Result<R, anyhow::Error> {
+
+            let url = self.base_url.join(path)?;
+            let mut req = self
+                    .reqwest
+                    .get(url)
+                    .header("Bitwarden-Client-Name", "cli")
+                    .header("Bitwarden-Client-Version", "2024.6.2")
+                    .header("Accept", "application/json");
+            if let Some(acctok) = &self.access_token {
+                    req = req.bearer_auth(acctok);
+                } 
+            let resp = req.send()
+            .await?
+            .error_for_status()?
+            .json()
+            .await?;
+        Ok(resp)
+    }
+
     pub async fn post_response<T: Serialize, R: DeserializeOwned>(
         &self,
         path: &str,
@@ -166,6 +189,7 @@ impl VaultwardenClient {
             .post(url)
             .header("Bitwarden-Client-Name", "cli")
             .header("Bitwarden-Client-Version", "2024.6.2")
+            .header("Accept", "application/json")
             .json(&body);
 
         if let Some(acctok) = &self.access_token {
@@ -227,5 +251,15 @@ impl VaultwardenClient {
             wden::bitwarden::api::TokenResponse::TwoFactorRequired(_) => unreachable!(),
             wden::bitwarden::api::TokenResponse::DeviceVerificationRequired => unreachable!(),
         }
+    }
+
+    pub async fn get_user_id( &self,) -> anyhow::Result<String> {
+        let profile = self.get_profile().await?;
+        let id = profile.get("id").and_then(|i| i.as_str()).context("id not found in profile response")?.to_owned();
+        Ok(id)
+    }
+
+    async fn get_profile(&self) -> anyhow::Result<serde_json::Value> {
+        self.get::<serde_json::Value>("api/accounts/profile").await
     }
 }

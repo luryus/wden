@@ -26,9 +26,19 @@ static PBKDF2_TEST_USER_JSON: LazyLock<serde_json::Value> = LazyLock::new(|| {
     })
 });
 
-pub async fn init_users(client: &VaultwardenClient) -> anyhow::Result<()> {
-    client
-        .post("/identity/accounts/register", PBKDF2_TEST_USER_JSON.deref())
+pub async fn init_users(client: &VaultwardenClient) -> anyhow::Result<()> {    
+    // Part 1: get verification token
+    let tok: String = client
+        .post_response("/identity/accounts/register/send-verification-email", PBKDF2_TEST_USER_JSON.deref())
         .await?;
+
+    let mut finish_payload: serde_json::Value = PBKDF2_TEST_USER_JSON.clone();
+    finish_payload.as_object_mut().unwrap().insert("emailVerificationToken".into(), tok.into());
+    
+    // Part 2: finish registration with the token
+    client
+        .post("/identity/accounts/register/finish", &finish_payload)
+        .await?;
+
     Ok(())
 }
