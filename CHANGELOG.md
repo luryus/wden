@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.15.2
+
+- Security: update `rustls-webpki` to remove eMudhra certs from trust store
+- Update other dependencies, too
+
 ## 0.15.1
 
 - Updated simsearch to a new release. This affects how search works; hopefully the results are now better
