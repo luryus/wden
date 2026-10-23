@@ -2745,7 +2745,6 @@ version = "0.8.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e058c7de0b26af77780c769414d6257830bb240f3c38477dbc2c16e5f54d6d4c"
 dependencies = [
- "libc",
  "rand_chacha",
  "rand_core 0.6.4",
 ]
@@ -4242,7 +4241,7 @@ dependencies = [
  "maybe-owned",
  "nix",
  "pbkdf2",
- "rand 0.8.8",
+ "rand 0.10.3",
  "rayon",
  "reqwest",
  "rpassword",
