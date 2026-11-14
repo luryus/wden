@@ -6,10 +6,8 @@ use base64::prelude::*;
 use cbc::cipher::KeyIvInit;
 use hmac::digest::{InvalidLength, MacError};
 use hmac::{Hmac, KeyInit, Mac};
-use rsa::{Oaep, RsaPublicKey};
-use rsa::{RsaPrivateKey, pkcs8::DecodePrivateKey};
-use serde::{Deserialize, Deserializer};
-use serde::{Serialize, Serializer, de};
+use rsa::{Oaep, PublicKey, PrivateKey, pkcs8::DecodePrivateKey};
+use serde::{Deserialize, Deserializer, Serialize, Serializer, de};
 use sha1::Sha1;
 use sha2::Sha256;
 use std::fmt;
@@ -228,10 +226,10 @@ impl Cipher {
         })
     }
 
-    pub fn encrypt_pub_key(content: &[u8], public_key: &RsaPublicKey) -> Result<Self, CipherError> {
+    pub fn encrypt_pub_key(content: &[u8], public_key: &PublicKey) -> Result<Self, CipherError> {
         // Rsa2048OaepSha1B64 is what the Bitwarden frontend uses
-        let oaep = rsa::oaep::Oaep::new::<Sha1>();
-        let mut rng = rand::thread_rng();
+        let oaep = rsa::oaep::Oaep::<Sha1>::new();
+        let mut rng = rand::rng();
         let enc_data = public_key.encrypt(&mut rng, oaep, content)?;
 
         Ok(Self::Value {
@@ -357,10 +355,10 @@ impl Cipher {
         private_key: &DerPrivateKey,
     ) -> Result<Vec<u8>, CipherError> {
         if let Self::Value { ct, .. } = self {
-            let rsa_key = RsaPrivateKey::from_pkcs8_der(private_key.data())
+            let rsa_key = PrivateKey::from_pkcs8_der(private_key.data())
                 .context("Reading RSA private key failed")?;
 
-            let padding = Oaep::new::<sha1::Sha1>();
+            let padding = Oaep::<Sha1>::new();
             let res = rsa_key
                 .decrypt(padding, ct.as_slice())
                 .context("RSA decryption failed")?;

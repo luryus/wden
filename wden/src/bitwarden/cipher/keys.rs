@@ -1,7 +1,7 @@
 use base64::prelude::*;
 use hkdf::Hkdf;
-use rand::RngCore;
-use rsa::{RsaPublicKey, pkcs8::DecodePrivateKey};
+use rand::Rng;
+use rsa::{PublicKey, pkcs8::DecodePrivateKey};
 use secure_buffer::SecureBuffer;
 use serde::{Deserialize, Serialize, de::Visitor};
 use sha2::Sha256;
@@ -158,7 +158,7 @@ impl EncMacKeys {
         let mut enc = EncryptionKey::new();
         let mut mac = MacKey::new();
 
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         rng.fill_bytes(enc.0.as_mut_slice());
         rng.fill_bytes(mac.0.as_mut_slice());
 
@@ -233,8 +233,8 @@ impl DerPrivateKey {
         &self.0
     }
 
-    pub fn public_key(&self) -> Result<RsaPublicKey, rsa::Error> {
-        let priv_key = rsa::RsaPrivateKey::from_pkcs8_der(self.data())?;
+    pub fn public_key(&self) -> Result<PublicKey, rsa::Error> {
+        let priv_key = rsa::PrivateKey::from_pkcs8_der(self.data())?;
         Ok(priv_key.to_public_key())
     }
 }

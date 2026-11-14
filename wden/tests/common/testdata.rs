@@ -1,5 +1,5 @@
 use base64::Engine;
-use rand::RngCore;
+use rand::Rng;
 use rsa::pkcs8::{EncodePrivateKey, EncodePublicKey};
 use sha2::Digest;
 use wden::bitwarden::{
@@ -203,12 +203,13 @@ pub fn organizations(
             let user_pub_key = user_priv_key.public_key().unwrap();
 
             let mut org_share_key = Box::pin([0u8; 512 / 8]);
-            rand::thread_rng().fill_bytes(org_share_key.as_mut_slice());
+            let mut rng = rand::rng();
+            rng.fill_bytes(org_share_key.as_mut_slice());
 
             let enc_org_share_key =
                 Cipher::encrypt_pub_key(org_share_key.as_slice(), &user_pub_key).unwrap();
 
-            let org_priv_key = rsa::RsaPrivateKey::new(&mut rsa::rand_core::OsRng, 2048).unwrap();
+            let org_priv_key = rsa::PrivateKey::new(&mut rng, 2048).unwrap();
             let org_enc_mac_keys = EncMacKeys::from_slice(org_share_key.as_slice()).unwrap();
             let org_priv_key_encoded = org_priv_key.to_pkcs8_der().unwrap();
             let enc_org_priv_key =

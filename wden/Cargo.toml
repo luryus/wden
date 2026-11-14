@@ -13,13 +13,13 @@ puppet-integration-tests = []
 
 [dependencies]
 base64 = "0.23"
-rand = "0.8"
+rand = "0.10"
 
 # Crypto crates (RustCrypto)
 aes = { version = "0.9", features = ["zeroize"] }
 cbc = { version = "0.2", features = ["zeroize", "alloc"] }
-rsa = "0.9"
-sha1 = "0.10"
+rsa = "0.10"
+sha1 = "0.11"
 sha2 = "0.11"
 hmac = "0.13"
 pbkdf2 = "0.13"
