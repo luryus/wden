@@ -68,7 +68,7 @@ x11rb = "0.13"
 wl-clipboard-rs = { version = "0.9", features = ["native_lib"] }
 linux-keyutils = { version = "0.2", features = ["std"] }
 simple_pam_auth = { path = "../crates/simple_pam_auth" }
-nix = { version = "0.31", features = ["user"] }
+nix = { version = "0.32", features = ["user"] }
 
 [dev-dependencies]
 reqwest = { version = "0.13", features = ["multipart"] }
